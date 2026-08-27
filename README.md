@@ -1,6 +1,6 @@
 # 💬 ***CHAT PROJECT***
 ### 🔊 프로젝트 소개
-STOMP 기반의 일대일 채팅을 구현한 프로젝트 입니다.
+STOMP 기반의 다대다 채팅을 구현한 프로젝트 입니다.
 ##
 ### 🎨 Dependencies
 - *Spring Web*
