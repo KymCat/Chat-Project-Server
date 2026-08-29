@@ -1,0 +1,16 @@
+spring:
+    application:
+        name: ChatProject
+    datasource:
+        password: ${DB_PASSWORD}
+        url: ${DB_URL}
+        username: ${DB_USERNAME}
+    flyway:
+        enabled: true
+        locations: classpath:db/migration
+        validate-on-migrate: true
+        validate-migration-naming: true
+    jpa:
+        hibernate:
+            ddl-auto: validate
+        open-in-view: false
