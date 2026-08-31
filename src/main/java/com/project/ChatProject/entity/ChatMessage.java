@@ -44,7 +44,7 @@ public class ChatMessage extends BaseCreatedTimeEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sender_id")
-    private Member member;
+    private Member sender;
 
     @Column(name = "client_message_id")
     private UUID clientMessageId;

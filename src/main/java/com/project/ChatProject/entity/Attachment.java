@@ -28,7 +28,7 @@ public class Attachment extends BaseCreatedTimeEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "uploader_id", nullable = false)
-    private Member member;
+    private Member uploader;
 
     @Column(name = "original_name",
             nullable = false,
