@@ -11,27 +11,33 @@ import java.time.Instant;
 
 @Getter
 @Entity
-@Table(name = "members")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "members")
 public class Member extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "email", nullable = false, length = 254)
+    @Column(name = "email",
+            nullable = false,
+            length = 254)
     private String email;
 
     @Column(name = "email_verified_at")
     private Instant emailVerifiedAt;
 
-    @Column(name = "nickname", nullable = false, length = 30)
+    @Column(name = "nickname",
+            nullable = false,
+            length = 30)
     private String nickname;
 
     @Column(name = "profile_image_url", length = 2048)
     private String profileImageUrl;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status",
+            nullable = false,
+            length = 20)
     private MemberStatus status;
 
     @Column(name = "last_login_at")

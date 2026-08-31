@@ -10,8 +10,8 @@ import java.time.Instant;
 
 @Getter
 @Entity
-@Table(name = "member_credentials")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "member_credentials")
 public class MemberCredential extends BaseCreatedTimeEntity {
 
     @Id
@@ -23,7 +23,9 @@ public class MemberCredential extends BaseCreatedTimeEntity {
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
-    @Column(name = "password_hash", nullable = false, length = 255)
+    @Column(name = "password_hash",
+            nullable = false,
+            length = 255)
     private String passwordHash;
 
     @Column(name = "password_changed_at", nullable = false)
