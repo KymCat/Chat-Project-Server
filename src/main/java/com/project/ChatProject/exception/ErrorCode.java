@@ -11,6 +11,7 @@ public enum ErrorCode {
 
     // 공통 Exception
     INTERNAL_SERVER_ERROR   (HttpStatus.INTERNAL_SERVER_ERROR, "COMMON-001", "서버 내부 오류가 발생했습니다"),
+    NO_SUCH_ALGORITHM       (HttpStatus.INTERNAL_SERVER_ERROR, "COMMON-002", "해당 알고리즘을 사용할 수 없습니다."),
 
     // Validation Exception
     INVALID_REQUEST_VALUE           (HttpStatus.BAD_REQUEST, "VALID-001", "잘못된 요청 파라미터입니다."),
