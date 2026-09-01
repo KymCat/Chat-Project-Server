@@ -45,4 +45,22 @@ public class Member extends BaseTimeEntity {
 
     @Column(name = "withdrawn_at")
     private Instant withdrawnAt;
+
+    public static Member create(
+        String profileImageUrl,
+        String email,
+        String nickname
+    )
+    {
+        Member member = new Member();
+        member.profileImageUrl = profileImageUrl;
+        member.email = email;
+        member.nickname = nickname;
+        member.emailVerifiedAt = null;
+        member.status = MemberStatus.ACTIVE;
+        member.lastLoginAt = null;
+        member.withdrawnAt = null;
+
+        return member;
+    }
 }
