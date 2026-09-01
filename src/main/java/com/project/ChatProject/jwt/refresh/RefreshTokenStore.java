@@ -112,7 +112,7 @@ public class RefreshTokenStore {
     // 모든 기기 세션 삭제
     public void deleteAllByMemberId(Long memberId) {
         String memberSessionsKey = createMemberSessionsKey(memberId);
-        Set<String> sessionIds=  redisTemplate
+        Set<String> sessionIds = redisTemplate
                 .opsForSet()
                 .members(memberSessionsKey);
 
