@@ -44,6 +44,9 @@ dependencies {
 
 	// password hashing
 	implementation 'org.springframework.security:spring-security-crypto'
+
+	// Redis, Valkey
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
 
 tasks.named('test') {
