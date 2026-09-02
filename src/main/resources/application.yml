@@ -14,3 +14,14 @@ spring:
         hibernate:
             ddl-auto: validate
         open-in-view: false
+    data:
+        redis:
+            host: ${REDIS_HOST}
+            port: ${REDIS_PORT}
+            ssl:
+                enabled: false
+jwt:
+    access-token-expiration: ${ACCESS_TOKEN_EXPIRATION}
+    secret: ${JWT_SECRET}
+refresh-token:
+    expiration: ${REFRESH_TOKEN_EXPIRATION}
