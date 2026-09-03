@@ -71,6 +71,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        if (!request.getMethod().equals("POST")) {
+            return false;
+        }
+
+        String uri = request.getRequestURI();
+
+        return uri.equals("/member/signup")
+                || uri.equals("/auth/login")
+                || uri.equals("/auth/reissue");
+    }
+
     private String resolveAccessToken(HttpServletRequest request) {
         String authorization =
                 request.getHeader(AUTHORIZATION_HEADER);
