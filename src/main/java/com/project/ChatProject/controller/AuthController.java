@@ -3,6 +3,7 @@ package com.project.ChatProject.controller;
 import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.LoginResponse;
+import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenProperties;
 import com.project.ChatProject.service.AuthService;
 import jakarta.validation.Valid;
@@ -11,10 +12,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.Duration;
 
 @RestController
 @RequestMapping("/auth")
@@ -25,6 +27,7 @@ public class AuthController {
 
     private static final String SESSION_ID_COOKIE_NAME = "sessionId";
     private static final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
+    private static final String DEL_COOKIE_STR = "";
 
     @Value("${cookie.secure}")
     private boolean secure;
@@ -35,9 +38,10 @@ public class AuthController {
     ) {
         LoginResponse result = authService.login(request);
         String accessToken = result.accessToken();
-        String sessionIdCookie = sessionIdCookie(result.sessionId()).toString();
+        String sessionIdCookie
+                = setCookie(SESSION_ID_COOKIE_NAME, result.sessionId()).toString();
         String refreshTokenCookie
-                = refreshTokenCookie(result.refreshToken()).toString();
+                = setCookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken()).toString();
 
 
         return ResponseEntity
@@ -47,30 +51,45 @@ public class AuthController {
                 .body(ApiResponse.success(accessToken));
     }
 
-    private ResponseCookie refreshTokenCookie(String refreshToken) {
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+
+        authService.logout(claims);
+
+        String delSessionIdCookie =
+                setCookie(SESSION_ID_COOKIE_NAME, DEL_COOKIE_STR).toString();
+
+        String delRefreshTokenCookie =
+            setCookie(REFRESH_TOKEN_COOKIE_NAME, DEL_COOKIE_STR).toString();
+
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.SET_COOKIE, delSessionIdCookie)
+                .header(HttpHeaders.SET_COOKIE, delRefreshTokenCookie)
+                .body(ApiResponse.success(null));
+    }
+
+    private ResponseCookie setCookie(
+            String cookieName,
+            String refreshToken
+    )
+    {
+        Duration expiration = StringUtils.hasLength(refreshToken)
+                ? refreshTokenProperties.expiration()
+                : Duration.ZERO;
+
         return ResponseCookie
                 .from(
-                        REFRESH_TOKEN_COOKIE_NAME,
+                        cookieName,
                         refreshToken
                 )
                 .httpOnly(true)
                 .secure(secure)
                 .path("/")
-                .maxAge(refreshTokenProperties.expiration())
-                .sameSite("Lax")
-                .build();
-    }
-
-    private ResponseCookie sessionIdCookie(String sessionId) {
-        return ResponseCookie
-                .from(
-                        SESSION_ID_COOKIE_NAME,
-                        sessionId
-                )
-                .httpOnly(true)
-                .secure(secure)
-                .path("/")
-                .maxAge(refreshTokenProperties.expiration())
+                .maxAge(expiration)
                 .sameSite("Lax")
                 .build();
     }
