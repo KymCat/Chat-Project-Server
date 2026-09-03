@@ -23,6 +23,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtProvider jwtProvider;
+    private final AccessTokenBlacklistStore accessTokenBlacklistStore;
     private final JwtAuthenticationEntryPoint authenticationEntryPoint;
 
     @Override
@@ -38,6 +39,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (accessToken != null) {
                 AccessTokenClaims claims =
                         jwtProvider.parseAccessToken(accessToken);
+
+                if (accessTokenBlacklistStore.exists(claims.tokenId()))
+                    throw new BadCredentialsException("Blacklisted access token");
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
@@ -65,6 +69,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        if (!request.getMethod().equals("POST")) {
+            return false;
+        }
+
+        String uri = request.getRequestURI();
+
+        return uri.equals("/member/signup")
+                || uri.equals("/auth/login")
+                || uri.equals("/auth/reissue");
     }
 
     private String resolveAccessToken(HttpServletRequest request) {
