@@ -11,6 +11,7 @@ public enum ErrorCode {
     DUPLICATE_MEMBER_EMAIL  (HttpStatus.CONFLICT, "MEMBER-001","이미 존재하는 이메일입니다."),
     MEMBER_BLOCKED          (HttpStatus.FORBIDDEN, "MEMBER-002", "이용이 제한된 계정입니다"),
     MEMBER_WITHDRAWN        (HttpStatus.FORBIDDEN, "MEMBER-003", "탈퇴한 회원입니다."),
+    MEMBER_NOT_FOUND         (HttpStatus.NOT_FOUND, "MEMBER-004", "존재하지 않은 유저입니다."),
 
     // Auth Exception
     INVALID_CREDENTIALS     (HttpStatus.UNAUTHORIZED, "AUTH-001", "이메일 또는 비밀번호가 올바르지 않습니다."),
@@ -25,7 +26,8 @@ public enum ErrorCode {
     INVALID_REQUEST_PARAM_MISSING   (HttpStatus.BAD_REQUEST, "VALID-003", "누락된 요청 파라미터가 있습니다."),
 
     // JWT Exception
-    INVALID_ACCESS_TOKEN            (HttpStatus.UNAUTHORIZED, "JWT-001", "유효하지 않은 AccessToken입니다.");
+    INVALID_ACCESS_TOKEN        (HttpStatus.UNAUTHORIZED, "JWT-001", "유효하지 않은 AccessToken입니다."),
+    INVALID_REFRESH_TOKEN       (HttpStatus.UNAUTHORIZED, "JWT-002", "유효하지 않은 RefreshToken입니다.");
 
     private final HttpStatus status;
     private final String code;

@@ -2,7 +2,7 @@ package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
-import com.project.ChatProject.dto.response.LoginResponse;
+import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenProperties;
 import com.project.ChatProject.service.AuthService;
@@ -36,12 +36,12 @@ public class AuthController {
     public ResponseEntity<ApiResponse<String>> login(
             @RequestBody @Valid LoginRequest request
     ) {
-        LoginResponse result = authService.login(request);
-        String accessToken = result.accessToken();
+        TokenResponse response = authService.login(request);
+        String accessToken = response.accessToken();
         String sessionIdCookie
-                = setCookie(SESSION_ID_COOKIE_NAME, result.sessionId()).toString();
+                = setCookie(SESSION_ID_COOKIE_NAME, response.sessionId());
         String refreshTokenCookie
-                = setCookie(REFRESH_TOKEN_COOKIE_NAME, result.refreshToken()).toString();
+                = setCookie(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken());
 
 
         return ResponseEntity
@@ -56,14 +56,13 @@ public class AuthController {
             @AuthenticationPrincipal AccessTokenClaims claims
     )
     {
-
         authService.logout(claims);
 
         String delSessionIdCookie =
-                setCookie(SESSION_ID_COOKIE_NAME, DEL_COOKIE_STR).toString();
+                setCookie(SESSION_ID_COOKIE_NAME, DEL_COOKIE_STR);
 
         String delRefreshTokenCookie =
-            setCookie(REFRESH_TOKEN_COOKIE_NAME, DEL_COOKIE_STR).toString();
+            setCookie(REFRESH_TOKEN_COOKIE_NAME, DEL_COOKIE_STR);
 
         return ResponseEntity
                 .ok()
@@ -72,25 +71,46 @@ public class AuthController {
                 .body(ApiResponse.success(null));
     }
 
-    private ResponseCookie setCookie(
-            String cookieName,
-            String refreshToken
+    @PostMapping("/reissue")
+    public ResponseEntity<ApiResponse<String>> reissue(
+            @CookieValue(name = SESSION_ID_COOKIE_NAME) String sessionId,
+            @CookieValue(name = REFRESH_TOKEN_COOKIE_NAME) String refreshToken
     )
     {
-        Duration expiration = StringUtils.hasLength(refreshToken)
+        TokenResponse response = authService.reissue(sessionId, refreshToken);
+        String accessToken = response.accessToken();
+        String sessionIdCookie
+                = setCookie(SESSION_ID_COOKIE_NAME, response.sessionId());
+        String refreshTokenCookie
+                = setCookie(REFRESH_TOKEN_COOKIE_NAME, response.refreshToken());
+
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.SET_COOKIE, sessionIdCookie)
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookie)
+                .body(ApiResponse.success(accessToken));
+    }
+
+    private String setCookie(
+            String cookieName,
+            String value
+    )
+    {
+        Duration expiration = StringUtils.hasLength(value)
                 ? refreshTokenProperties.expiration()
                 : Duration.ZERO;
 
         return ResponseCookie
                 .from(
                         cookieName,
-                        refreshToken
+                        value
                 )
                 .httpOnly(true)
                 .secure(secure)
                 .path("/")
                 .maxAge(expiration)
                 .sameSite("Lax")
-                .build();
+                .build()
+                .toString();
     }
 }
