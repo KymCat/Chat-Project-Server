@@ -63,4 +63,8 @@ public class Member extends BaseTimeEntity {
 
         return member;
     }
+
+    public void updateLastLoginAt() {
+        this.lastLoginAt = Instant.now();
+    }
 }

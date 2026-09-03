@@ -44,7 +44,8 @@ public class SecurityConfig {
                         authorize
                                 .requestMatchers(
                                         HttpMethod.POST,
-                                        "/member/signup"
+                                        "/member/signup",
+                                        "/auth/login"
                                 ).permitAll()
 
                                 .requestMatchers(
