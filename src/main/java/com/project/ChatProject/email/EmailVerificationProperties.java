@@ -8,6 +8,7 @@ import java.time.Duration;
 public record EmailVerificationProperties(
         Duration codeExpiration,
         Duration resendCooldown,
-        int maxAttempts
+        int maxAttempts,
+        String sender
 ) {
 }
