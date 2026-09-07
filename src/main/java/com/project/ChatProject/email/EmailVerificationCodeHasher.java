@@ -24,7 +24,7 @@ public class EmailVerificationCodeHasher {
     private final SecretKeySpec secretKey;
 
     public EmailVerificationCodeHasher(
-            @Value(("email-verification.hash-secret"))
+            @Value("${email-verification.hash-secret}")
             String encodedSecret
     )
     {
