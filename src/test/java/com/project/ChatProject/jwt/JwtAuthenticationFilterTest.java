@@ -118,6 +118,11 @@ class JwtAuthenticationFilterTest {
         assertThat(shouldNotFilter("POST", "/auth/reissue")).isTrue();
 
         assertThat(shouldNotFilter("POST", "/auth/logout")).isFalse();
+        assertThat(shouldNotFilter("POST", "/auth/email-verifications")).isFalse();
+        assertThat(shouldNotFilter(
+                "POST",
+                "/auth/email-verifications/confirm"
+        )).isFalse();
         assertThat(shouldNotFilter("GET", "/auth/reissue")).isFalse();
         assertThat(shouldNotFilter("GET", "/members/me")).isFalse();
     }
