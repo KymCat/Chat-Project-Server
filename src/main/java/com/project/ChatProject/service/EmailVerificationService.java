@@ -7,10 +7,12 @@ import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailVerificationService {
@@ -48,7 +50,18 @@ public class EmailVerificationService {
                     member.getEmail(),
                     code
             );
+
+            log.info(
+                    "event=email_verification_send_accepted memberId = {}",
+                    memberId
+            );
         } catch (MailException exception) {
+            log.error(
+                    "event=email_verification_send_failed memberId={} exceptionType={}",
+                    memberId,
+                    exception.getClass().getSimpleName()
+            );
+
             verificationStore.deleteByMemberId(memberId);
             verificationStore.deleteResendCooldown(memberId);
 
@@ -78,6 +91,11 @@ public class EmailVerificationService {
 
         member.verifyEmail();
         verificationStore.deleteByMemberId(memberId);
+
+        log.info(
+                "event=email_verification_confirmed memberId={}",
+                memberId
+        );
     }
 
     private void handleVerificationFailure(Long memberId) {
@@ -88,6 +106,12 @@ public class EmailVerificationService {
                                 ErrorCode.EMAIL_VERIFICATION_NOT_FOUND
                         ));
         if (attemptCount >= properties.maxAttempts()) {
+            log.warn(
+                    "event=email_verification_attempts_exceeded memberId={} attempts={}",
+                    memberId,
+                    attemptCount
+            );
+
             verificationStore.deleteByMemberId(memberId);
         }
 
