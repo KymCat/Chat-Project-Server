@@ -5,6 +5,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -29,17 +30,14 @@ public class RefreshTokenStore {
         String memberSessionsKey = createMemberSessionsKey(memberId);
         Duration expiration = refreshTokenProperties.expiration();
 
-        // put(Key, HashKey, Value)
-        redisTemplate.opsForHash().put(
+        redisTemplate.opsForHash().putAll(
                 refreshTokenKey,
-                MEMBER_ID_FIELD,
-                memberId.toString()
-        );
-
-        redisTemplate.opsForHash().put(
-                refreshTokenKey,
-                REFRESH_TOKEN_HASH_FIELD,
-                refreshTokenHash
+                Map.of(
+                        MEMBER_ID_FIELD,
+                        memberId.toString(),
+                        REFRESH_TOKEN_HASH_FIELD,
+                        refreshTokenHash
+                )
         );
 
         redisTemplate.expire(
