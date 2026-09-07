@@ -27,3 +27,5 @@ refresh-token:
     expiration: ${REFRESH_TOKEN_EXPIRATION}
 cookie:
     secure: ${COOKIE_SECURE}
+email-verification:
+    hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}
