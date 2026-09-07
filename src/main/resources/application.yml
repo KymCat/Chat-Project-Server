@@ -20,6 +20,15 @@ spring:
             port: ${REDIS_PORT}
             ssl:
                 enabled: false
+    mail:
+        host: ${MAIL_HOST:localhost}
+        port: ${MAIL_PORT:1025}
+        properties:
+            mail:
+                smtp:
+                    auth: ${MAIL_SMTP_AUTH:false}
+                    starttls:
+                        enable: ${MAIL_SMTP_STARTTLS_ENABLE:false}
 jwt:
     access-token-expiration: ${ACCESS_TOKEN_EXPIRATION}
     secret: ${JWT_SECRET}
@@ -27,3 +36,9 @@ refresh-token:
     expiration: ${REFRESH_TOKEN_EXPIRATION}
 cookie:
     secure: ${COOKIE_SECURE}
+email-verification:
+    hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}
+    code-expiration: ${CODE_EXPIRATION}
+    resend-cooldown: ${RESEND_COOLDOWN}
+    max-attempts: ${MAX_ATTEMPTS}
+    sender: ${MAIL_FROM}

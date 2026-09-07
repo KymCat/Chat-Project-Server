@@ -1,11 +1,13 @@
 package com.project.ChatProject.controller;
 
+import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
 import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenProperties;
 import com.project.ChatProject.service.AuthService;
+import com.project.ChatProject.service.EmailVerificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +25,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
     private final RefreshTokenProperties refreshTokenProperties;
 
     private static final String SESSION_ID_COOKIE_NAME = "sessionId";
@@ -89,6 +92,34 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, sessionIdCookie)
                 .header(HttpHeaders.SET_COOKIE, refreshTokenCookie)
                 .body(ApiResponse.success(accessToken));
+    }
+
+    @PostMapping("/email-verifications")
+    public ResponseEntity<ApiResponse<Void>> request(
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        emailVerificationService.request(memberId);
+
+        return ResponseEntity
+                .ok()
+                .body(ApiResponse.success(null));
+    }
+
+    @PostMapping("/email-verifications/confirm")
+    public ResponseEntity<ApiResponse<Void>> confirmEmailVerification(
+            @AuthenticationPrincipal AccessTokenClaims claims,
+            @RequestBody @Valid EmailVerificationConfirmRequest request
+    )
+    {
+        Long memberId = claims.memberId();
+        String code = request.code();
+        emailVerificationService.confirm(memberId, code);
+
+        return ResponseEntity
+                .ok()
+                .body(ApiResponse.success(null));
     }
 
     private String setCookie(

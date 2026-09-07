@@ -1,11 +1,13 @@
 package com.project.ChatProject.controller;
 
+import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
 import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenProperties;
 import com.project.ChatProject.service.AuthService;
+import com.project.ChatProject.service.EmailVerificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,12 +30,16 @@ class AuthControllerTest {
     @Mock
     private AuthService authService;
 
+    @Mock
+    private EmailVerificationService emailVerificationService;
+
     private AuthController authController;
 
     @BeforeEach
     void setUp() {
         authController = new AuthController(
                 authService,
+                emailVerificationService,
                 new RefreshTokenProperties(Duration.ofDays(14))
         );
     }
@@ -150,5 +156,49 @@ class AuthControllerTest {
                 .doesNotContain("current-refresh-token")
                 .contains("Max-Age=1209600")
                 .contains("HttpOnly");
+    }
+
+    @Test
+    void requestEmailVerificationDelegatesAuthenticatedMemberId() {
+        AccessTokenClaims claims = claims();
+
+        ResponseEntity<ApiResponse<Void>> response =
+                authController.request(claims);
+
+        verify(emailVerificationService).request(1L);
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).isNull();
+    }
+
+    @Test
+    void confirmEmailVerificationDelegatesMemberIdAndCode() {
+        AccessTokenClaims claims = claims();
+        EmailVerificationConfirmRequest request =
+                new EmailVerificationConfirmRequest("123456");
+
+        ResponseEntity<ApiResponse<Void>> response =
+                authController.confirmEmailVerification(
+                        claims,
+                        request
+                );
+
+        verify(emailVerificationService).confirm(1L, "123456");
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).isNull();
+    }
+
+    private AccessTokenClaims claims() {
+        return new AccessTokenClaims(
+                1L,
+                "token-id",
+                "session-id",
+                false,
+                Instant.now(),
+                Instant.now().plusSeconds(600)
+        );
     }
 }
