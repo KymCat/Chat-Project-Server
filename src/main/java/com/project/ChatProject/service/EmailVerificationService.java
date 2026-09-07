@@ -1,41 +1,127 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.email.*;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.mail.MailException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class EmailVerificationService {
+
     private final MemberRepository memberRepository;
+    private final EmailVerificationCodeGenerator codeGenerator;
+    private final EmailVerificationCodeHasher codeHasher;
+    private final EmailVerificationStore verificationStore;
+    private final EmailVerificationProperties properties;
+    private final EmailSender emailSender;
+
+    public void request(Long memberId) {
+        Member member = findActiveMember(memberId);
+        validateEmailNotVerified(member);
+
+        boolean cooldownStarted =
+                verificationStore.tryStartResendCooldown(memberId);
+
+        if (!cooldownStarted) {
+            throw new CustomException(
+                    ErrorCode.EMAIL_VERIFICATION_REQUEST_TOO_FREQUENT
+            );
+        }
+
+        String code = codeGenerator.generate();
+        String codeHash = codeHasher.hash(code);
+
+        verificationStore.save(
+                memberId,
+                codeHash
+        );
+
+        try {
+            emailSender.sendVerificationCode(
+                    member.getEmail(),
+                    code
+            );
+        } catch (MailException exception) {
+            verificationStore.deleteByMemberId(memberId);
+            verificationStore.deleteResendCooldown(memberId);
+
+            throw new CustomException(ErrorCode.EMAIL_SEND_FAILED);
+        }
+    }
 
     @Transactional
-    public void request(Long memberId) {
+    public void confirm(
+            Long memberId,
+            String code
+    )
+    {
+        Member member = findActiveMember(memberId);
+        validateEmailNotVerified(member);
+
+        String savedCodeHash = verificationStore
+                .findCodeHashByMemberId(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.EMAIL_VERIFICATION_NOT_FOUND
+                        ));
+
+        if (!codeHasher.matches(code, savedCodeHash)) {
+            handleVerificationFailure(memberId);
+        }
+
+        member.verifyEmail();
+        verificationStore.deleteByMemberId(memberId);
+    }
+
+    private void handleVerificationFailure(Long memberId) {
+        long attemptCount = verificationStore
+                .incrementAttemptCount(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.EMAIL_VERIFICATION_NOT_FOUND
+                        ));
+        if (attemptCount >= properties.maxAttempts()) {
+            verificationStore.deleteByMemberId(memberId);
+        }
+
+        throw new CustomException(
+                ErrorCode.INVALID_EMAIL_VERIFICATION_CODE
+        );
+    }
+
+    private Member findActiveMember(Long memberId) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() ->
                         new CustomException(ErrorCode.MEMBER_NOT_FOUND));
 
-        isMemberSuspendOrWithdrawn(member);
-        // 재발송 제한 확인
-        // 인증 코드 생성
-        // Redis 저장
-        // 이메일 발송
-        // 발송 실패 시 저장한 인증 정보 삭제
-
+        validateMemberStatus(member);
+        return member;
     }
 
-    private void isMemberSuspendOrWithdrawn(Member member) {
-        if (member.getStatus() != MemberStatus.ACTIVE) {
-            if (member.getStatus() == MemberStatus.SUSPENDED)
-                throw new CustomException(ErrorCode.MEMBER_BLOCKED);
+    private void validateEmailNotVerified(Member member) {
+        if (member.getEmailVerifiedAt() != null) {
+            throw new CustomException(ErrorCode.EMAIL_ALREADY_VERIFIED);
+        }
+    }
 
-            if (member.getStatus() == MemberStatus.WITHDRAWN)
-                throw new CustomException(ErrorCode.MEMBER_WITHDRAWN);
+    private void validateMemberStatus(Member member) {
+        if (member.getStatus() == MemberStatus.SUSPENDED) {
+            throw new CustomException(
+                    ErrorCode.MEMBER_BLOCKED
+            );
+        }
+
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new CustomException(
+                    ErrorCode.MEMBER_WITHDRAWN
+            );
         }
     }
 }

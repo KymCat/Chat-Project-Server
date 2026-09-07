@@ -1,5 +1,6 @@
 package com.project.ChatProject.controller;
 
+import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
 import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
@@ -100,6 +101,21 @@ public class AuthController {
     {
         Long memberId = claims.memberId();
         emailVerificationService.request(memberId);
+
+        return ResponseEntity
+                .ok()
+                .body(ApiResponse.success(null));
+    }
+
+    @PostMapping("/email-verifications/confirm")
+    public ResponseEntity<ApiResponse<Void>> confirmEmailVerification(
+            @AuthenticationPrincipal AccessTokenClaims claims,
+            @RequestBody @Valid EmailVerificationConfirmRequest request
+    )
+    {
+        Long memberId = claims.memberId();
+        String code = request.code();
+        emailVerificationService.confirm(memberId, code);
 
         return ResponseEntity
                 .ok()
