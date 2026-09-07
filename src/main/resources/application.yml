@@ -31,4 +31,4 @@ email-verification:
     hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}
     code-expiration: ${CODE_EXPIRATION}
     resend-cooldown: ${RESEND_COOLDOWN}
-    amx-attempts: ${MAX_ATTEMPTS}
+    max-attempts: ${MAX_ATTEMPTS}
