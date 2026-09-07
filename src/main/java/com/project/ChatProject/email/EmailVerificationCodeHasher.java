@@ -59,7 +59,7 @@ public class EmailVerificationCodeHasher {
                     actualHash,
                     savedHash
             );
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException exception) {
             return false;
         }
     }
@@ -72,9 +72,9 @@ public class EmailVerificationCodeHasher {
             return mac.doFinal(
                     code.getBytes(StandardCharsets.UTF_8)
             );
-        } catch (GeneralSecurityException e) {
+        } catch (GeneralSecurityException exception) {
             throw new IllegalStateException(
-                    "Failed to hash email verification code", e
+                    "Failed to hash email verification code", exception
             );
         }
     }
