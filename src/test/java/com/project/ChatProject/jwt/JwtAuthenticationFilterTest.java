@@ -10,13 +10,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,10 +28,7 @@ import static org.mockito.Mockito.when;
 class JwtAuthenticationFilterTest {
 
     @Mock
-    private JwtProvider jwtProvider;
-
-    @Mock
-    private AccessTokenBlacklistStore accessTokenBlacklistStore;
+    private AccessTokenAuthenticator authenticator;
 
     @Mock
     private JwtAuthenticationEntryPoint authenticationEntryPoint;
@@ -43,8 +43,7 @@ class JwtAuthenticationFilterTest {
     @BeforeEach
     void setUp() {
         jwtAuthenticationFilter = new JwtAuthenticationFilter(
-                jwtProvider,
-                accessTokenBlacklistStore,
+                authenticator,
                 authenticationEntryPoint
         );
         request = new MockHttpServletRequest();
@@ -59,11 +58,15 @@ class JwtAuthenticationFilterTest {
     @Test
     void validAccessTokenStoresAuthenticationInSecurityContext() throws Exception {
         AccessTokenClaims claims = claims();
+        Authentication authentication =
+                new UsernamePasswordAuthenticationToken(
+                        claims,
+                        null,
+                        List.of()
+                );
         request.addHeader("Authorization", "Bearer access-token");
-        when(jwtProvider.parseAccessToken("access-token"))
-                .thenReturn(claims);
-        when(accessTokenBlacklistStore.exists("token-id"))
-                .thenReturn(false);
+        when(authenticator.authenticate("access-token"))
+                .thenReturn(authentication);
 
         jwtAuthenticationFilter.doFilterInternal(
                 request,
@@ -71,13 +74,8 @@ class JwtAuthenticationFilterTest {
                 filterChain
         );
 
-        Authentication authentication = SecurityContextHolder
-                .getContext()
-                .getAuthentication();
-
-        assertThat(authentication).isNotNull();
-        assertThat(authentication.getPrincipal()).isSameAs(claims);
-        assertThat(authentication.isAuthenticated()).isTrue();
+        assertThat(SecurityContextHolder.getContext().getAuthentication())
+                .isSameAs(authentication);
         verify(filterChain).doFilter(request, response);
         verify(authenticationEntryPoint, never()).commence(
                 any(),
@@ -87,13 +85,14 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    void blacklistedAccessTokenIsRejected() throws Exception {
-        AccessTokenClaims claims = claims();
+    void invalidAccessTokenIsRejected() throws Exception {
         request.addHeader("Authorization", "Bearer access-token");
-        when(jwtProvider.parseAccessToken("access-token"))
-                .thenReturn(claims);
-        when(accessTokenBlacklistStore.exists("token-id"))
-                .thenReturn(true);
+        when(authenticator.authenticate("access-token"))
+                .thenThrow(
+                        new BadCredentialsException(
+                                "Blacklisted access token"
+                        )
+                );
 
         jwtAuthenticationFilter.doFilterInternal(
                 request,
@@ -104,8 +103,8 @@ class JwtAuthenticationFilterTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication())
                 .isNull();
         verify(authenticationEntryPoint).commence(
-                org.mockito.ArgumentMatchers.eq(request),
-                org.mockito.ArgumentMatchers.eq(response),
+                eq(request),
+                eq(response),
                 any(BadCredentialsException.class)
         );
         verify(filterChain, never()).doFilter(any(), any());

@@ -1,4 +1,4 @@
-package com.project.ChatProject.config.WebSocket;
+package com.project.ChatProject.config.websocket;
 
 import com.project.ChatProject.jwt.AccessTokenAuthenticator;
 import io.jsonwebtoken.JwtException;
