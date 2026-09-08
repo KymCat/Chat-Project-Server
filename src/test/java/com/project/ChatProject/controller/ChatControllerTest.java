@@ -1,7 +1,8 @@
 package com.project.ChatProject.controller;
 
-import com.project.ChatProject.dto.ChatMessageDto;
-import com.project.ChatProject.jwt.AccessTokenClaims;
+import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
+import com.project.ChatProject.dto.request.ChatMessageRequest;
+import com.project.ChatProject.dto.response.ChatMessageResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,7 +12,6 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
-import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,66 +31,79 @@ class ChatControllerTest {
     }
 
     @Test
-    void enterOverwritesSenderAndBroadcastsEntryMessage() {
-        ChatMessageDto message = new ChatMessageDto(
+    void enterCreatesAuthenticatedMemberResponseAndBroadcastsEntryMessage() {
+        ChatMessageRequest request = new ChatMessageRequest(
                 "",
-                "forged-sender",
-                "ENTER",
                 "room-1"
         );
-        Authentication authentication = authentication(1L);
+        Authentication authentication = authentication(
+                1L,
+                "홍길동"
+        );
 
-        ChatMessageDto result = chatController.enter(
-                message,
+        ChatMessageResponse result = chatController.enter(
+                request,
                 authentication
         );
 
-        assertThat(result).isSameAs(message);
-        assertThat(result.getSender()).isEqualTo("member-1");
-        assertThat(result.getContent())
-                .isEqualTo("member-1님이 입장하였습니다.");
+        assertThat(result).isEqualTo(
+                new ChatMessageResponse(
+                        "홍길동님이 입장하였습니다.",
+                        1L,
+                        "홍길동",
+                        "ENTER",
+                        "room-1"
+                )
+        );
         verify(template).convertAndSend(
                 "/sub/enter/room-1",
-                message
+                result
         );
     }
 
     @Test
-    void sendOverwritesSenderAndBroadcastsChatMessage() {
-        ChatMessageDto message = new ChatMessageDto(
+    void sendCreatesAuthenticatedMemberResponseAndBroadcastsChatMessage() {
+        ChatMessageRequest request = new ChatMessageRequest(
                 "안녕하세요",
-                "forged-sender",
-                "CHAT",
                 "room-1"
         );
-        Authentication authentication = authentication(1L);
+        Authentication authentication = authentication(
+                1L,
+                "홍길동"
+        );
 
-        ChatMessageDto result = chatController.send(
-                message,
+        ChatMessageResponse result = chatController.send(
+                request,
                 authentication
         );
 
-        assertThat(result).isSameAs(message);
-        assertThat(result.getSender()).isEqualTo("member-1");
-        assertThat(result.getContent()).isEqualTo("안녕하세요");
+        assertThat(result).isEqualTo(
+                new ChatMessageResponse(
+                        "안녕하세요",
+                        1L,
+                        "홍길동",
+                        "CHAT",
+                        "room-1"
+                )
+        );
         verify(template).convertAndSend(
                 "/sub/msg/room-1",
-                message
+                result
         );
     }
 
-    private Authentication authentication(Long memberId) {
-        AccessTokenClaims claims = new AccessTokenClaims(
+    private Authentication authentication(
+            Long memberId,
+            String nickname
+    ) {
+        WebSocketMemberPrincipal principal =
+                new WebSocketMemberPrincipal(
                 memberId,
-                "token-id",
-                "session-id",
-                true,
-                Instant.now(),
-                Instant.now().plusSeconds(600)
-        );
+                        nickname
+                );
 
         return new UsernamePasswordAuthenticationToken(
-                claims,
+                principal,
                 null,
                 List.of()
         );
