@@ -1,9 +1,12 @@
 package com.project.ChatProject.controller;
 
-import com.project.ChatProject.Dto.ChatMessageDto;
+import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
+import com.project.ChatProject.dto.request.ChatMessageRequest;
+import com.project.ChatProject.dto.response.ChatMessageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -13,21 +16,69 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 public class ChatController {
-    // 특정 사용자에게 메시지를 보내는데 사용되는 STOMP을 이용한 템플릿
+
+    private static final String ENTER_TYPE = "ENTER";
+    private static final String CHAT_TYPE = "CHAT";
+
     private final SimpMessagingTemplate template;
 
     @MessageMapping("/enter")
-    public ChatMessageDto ender(ChatMessageDto chatMessageDto) {
-        chatMessageDto.setContent(chatMessageDto.getSender() + " 님이 입장하였습니다.");
-        template.convertAndSend("/sub/enter/" + chatMessageDto.getRoomId(), chatMessageDto);
-        return chatMessageDto;
+    public ChatMessageResponse enter(
+            ChatMessageRequest request,
+            Authentication authentication
+    )
+    {
+        WebSocketMemberPrincipal principal =
+                resolvePrincipal(authentication);
+
+        ChatMessageResponse response =
+                new ChatMessageResponse(
+                        principal.nickname() + "님이 입장하였습니다.",
+                        principal.memberId(),
+                        principal.nickname(),
+                        ENTER_TYPE,
+                        request.roomId()
+                );
+
+        template.convertAndSend(
+                "/sub/enter/" + request.roomId(),
+                response
+        );
+
+        return response;
     }
 
     @MessageMapping("/msg")
-    public ChatMessageDto send(ChatMessageDto chatMessageDto) {
+    public ChatMessageResponse send(
+            ChatMessageRequest request,
+            Authentication authentication
+    )
+    {
+        WebSocketMemberPrincipal principal
+                = resolvePrincipal(authentication);
 
-        // convertAndSend() : STOMP 브로커를 통해 메세지를 발행(pub)할 때 쓰는 메서드
-        template.convertAndSend("/sub/msg/" + chatMessageDto.getRoomId() , chatMessageDto);
-        return chatMessageDto;
+        ChatMessageResponse response =
+                new ChatMessageResponse(
+                        request.content(),
+                        principal.memberId(),
+                        principal.nickname(),
+                        CHAT_TYPE,
+                        request.roomId()
+                );
+
+        template.convertAndSend(
+                "/sub/msg/" + request.roomId(),
+                response
+        );
+
+        return response;
+    }
+
+    private WebSocketMemberPrincipal resolvePrincipal(
+            Authentication authentication
+    )
+    {
+        return (WebSocketMemberPrincipal)
+                authentication.getPrincipal();
     }
 }
