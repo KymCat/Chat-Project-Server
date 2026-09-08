@@ -1,7 +1,9 @@
 package com.project.ChatProject.config.websocket;
 
+import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.jwt.AccessTokenAuthenticator;
 import com.project.ChatProject.jwt.AccessTokenClaims;
+import com.project.ChatProject.repository.MemberRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +19,7 @@ import org.springframework.security.core.Authentication;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,12 +34,19 @@ class WebSocketAuthenticationInterceptorTest {
     @Mock
     private AccessTokenAuthenticator authenticator;
 
+    @Mock
+    private MemberRepository memberRepository;
+
+    @Mock
+    private Member member;
+
     private WebSocketAuthenticationInterceptor interceptor;
 
     @BeforeEach
     void setUp() {
         interceptor = new WebSocketAuthenticationInterceptor(
-                authenticator
+                authenticator,
+                memberRepository
         );
     }
 
@@ -49,16 +59,36 @@ class WebSocketAuthenticationInterceptorTest {
                 "Bearer access-token"
         );
         Message<byte[]> message = createMessage(accessor);
-        Authentication authentication = authentication();
+        Authentication accessTokenAuthentication = authentication();
         when(authenticator.authenticate("access-token"))
-                .thenReturn(authentication);
+                .thenReturn(accessTokenAuthentication);
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(member.getId()).thenReturn(1L);
+        when(member.getNickname()).thenReturn("홍길동");
 
         Message<?> interceptedMessage =
                 interceptor.preSend(message, null);
 
         assertThat(interceptedMessage).isSameAs(message);
-        assertThat(accessor.getUser()).isSameAs(authentication);
+        assertThat(accessor.getUser())
+                .isInstanceOf(Authentication.class);
+
+        Authentication webSocketAuthentication =
+                (Authentication) accessor.getUser();
+        assertThat(webSocketAuthentication.getPrincipal())
+                .isEqualTo(
+                        new WebSocketMemberPrincipal(
+                                1L,
+                                "홍길동"
+                        )
+                );
+        assertThat(webSocketAuthentication.getAuthorities())
+                .isEqualTo(
+                        accessTokenAuthentication.getAuthorities()
+                );
         verify(authenticator).authenticate("access-token");
+        verify(memberRepository).findById(1L);
     }
 
     @Test
@@ -72,7 +102,7 @@ class WebSocketAuthenticationInterceptorTest {
 
         assertThat(interceptedMessage).isSameAs(message);
         assertThat(accessor.getUser()).isNull();
-        verifyNoInteractions(authenticator);
+        verifyNoInteractions(authenticator, memberRepository);
     }
 
     @Test
@@ -89,6 +119,7 @@ class WebSocketAuthenticationInterceptorTest {
                 .hasCauseInstanceOf(BadCredentialsException.class);
 
         verify(authenticator, never()).authenticate("access-token");
+        verifyNoInteractions(memberRepository);
     }
 
     @Test
@@ -108,7 +139,7 @@ class WebSocketAuthenticationInterceptorTest {
                 .hasMessage("Invalid access token")
                 .hasCauseInstanceOf(BadCredentialsException.class);
 
-        verifyNoInteractions(authenticator);
+        verifyNoInteractions(authenticator, memberRepository);
     }
 
     @Test
@@ -128,7 +159,7 @@ class WebSocketAuthenticationInterceptorTest {
                 .hasMessage("Invalid access token")
                 .hasCauseInstanceOf(BadCredentialsException.class);
 
-        verifyNoInteractions(authenticator);
+        verifyNoInteractions(authenticator, memberRepository);
     }
 
     @Test
@@ -153,6 +184,33 @@ class WebSocketAuthenticationInterceptorTest {
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Invalid access token")
                 .hasCauseInstanceOf(BadCredentialsException.class);
+
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    void missingAuthenticatedMemberRejectsConnect() {
+        StompHeaderAccessor accessor =
+                createAccessor(StompCommand.CONNECT);
+        accessor.setNativeHeader(
+                "Authorization",
+                "Bearer access-token"
+        );
+        Message<byte[]> message = createMessage(accessor);
+        when(authenticator.authenticate("access-token"))
+                .thenReturn(authentication());
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                interceptor.preSend(message, null)
+        )
+                .isInstanceOf(BadCredentialsException.class)
+                .hasMessage("Invalid access token")
+                .hasCauseInstanceOf(BadCredentialsException.class);
+
+        assertThat(accessor.getUser()).isNull();
+        verify(memberRepository).findById(1L);
     }
 
     private StompHeaderAccessor createAccessor(

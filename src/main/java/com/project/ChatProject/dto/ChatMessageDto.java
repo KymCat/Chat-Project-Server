@@ -1,4 +1,4 @@
-package com.project.ChatProject.Dto;
+package com.project.ChatProject.dto;
 
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;

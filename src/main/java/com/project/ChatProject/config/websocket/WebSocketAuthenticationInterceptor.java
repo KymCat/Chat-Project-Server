@@ -1,6 +1,9 @@
 package com.project.ChatProject.config.websocket;
 
+import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.jwt.AccessTokenAuthenticator;
+import com.project.ChatProject.jwt.AccessTokenClaims;
+import com.project.ChatProject.repository.MemberRepository;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.Message;
@@ -10,6 +13,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -22,6 +26,7 @@ public class WebSocketAuthenticationInterceptor implements ChannelInterceptor {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final AccessTokenAuthenticator authenticator;
+    private final MemberRepository memberRepository;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -39,10 +44,33 @@ public class WebSocketAuthenticationInterceptor implements ChannelInterceptor {
         try {
             String accessToken = resolveAccessToken(accessor);
 
-            Authentication authentication =
+            Authentication accessTokenAuthentication =
                     authenticator.authenticate(accessToken);
 
-            accessor.setUser(authentication);
+            AccessTokenClaims claims =
+                    (AccessTokenClaims) accessTokenAuthentication.getPrincipal();
+
+            Member member = memberRepository.findById(claims.memberId())
+                            .orElseThrow(() ->
+                                    new BadCredentialsException(
+                                            "Authenticated member not found"
+                                    )
+                            );
+
+            WebSocketMemberPrincipal principal =
+                    new WebSocketMemberPrincipal(
+                            member.getId(),
+                            member.getNickname()
+                    );
+
+            Authentication webSocketAuthentication =
+                    new UsernamePasswordAuthenticationToken(
+                            principal,
+                            null,
+                            accessTokenAuthentication.getAuthorities()
+                    );
+
+            accessor.setUser(webSocketAuthentication);
             return message;
         } catch (
                 JwtException
