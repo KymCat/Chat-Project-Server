@@ -58,4 +58,20 @@ public class ChatRoomMember {
 
     @Column(name = "left_at")
     private Instant leftAt;
+
+    private ChatRoomMember(ChatRoom chatRoom, Member owner) {
+        this.chatRoom = chatRoom;
+        this.member = owner;
+        this.role = ChatRoomMemberRole.OWNER;
+        this.lastReadMessage = null;
+        this.joinedAt = Instant.now();
+        this.leftAt = null;
+    }
+
+    public static ChatRoomMember create(ChatRoom chatRoom, Member owner) {
+        return new ChatRoomMember(
+                chatRoom,
+                owner
+        );
+    }
 }

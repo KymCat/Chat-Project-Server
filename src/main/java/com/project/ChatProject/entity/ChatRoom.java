@@ -41,4 +41,23 @@ public class ChatRoom extends BaseTimeEntity {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    private ChatRoom(
+            ChatRoomType type,
+            String name
+    )
+    {
+        this.type = type;
+        this.name = name;
+        this.directKey = null;
+        this.lastMessageAt = null;
+        this.deletedAt = null;
+    }
+
+    public static ChatRoom create(String name) {
+        return new ChatRoom(
+                ChatRoomType.GROUP,
+                name
+        );
+    }
 }

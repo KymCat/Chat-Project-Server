@@ -62,6 +62,11 @@ public enum ErrorCode {
             "EMAIL-005",
             "인증 메일을 발송하지 못했습니다."
     ),
+    EMAIL_VERIFICATION_REQUIRED(
+            HttpStatus.FORBIDDEN,
+            "EMAIL-006",
+            "이메일 인증이 필요합니다."
+    ),
 
     // Common Exception
     INTERNAL_SERVER_ERROR(
