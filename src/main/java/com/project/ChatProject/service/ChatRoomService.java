@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
+import com.project.ChatProject.dto.response.ChatRoomResponse;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
@@ -14,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Slf4j
 @Service
@@ -59,5 +62,22 @@ public class ChatRoomService {
         if (member.getEmailVerifiedAt() == null) {
             throw new CustomException(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChatRoomResponse> getChatRooms(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+
+        List<ChatRoomMember> lists = 
+                chatRoomMemberRepository.findAllActiveByMemberId(member.getId());
+
+        return lists.stream()
+                        .map(ChatRoomResponse::of)
+                        .toList();
     }
 }
