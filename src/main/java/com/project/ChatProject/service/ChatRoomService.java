@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -31,12 +32,7 @@ public class ChatRoomService {
 
     @Transactional
     public ChatRoomCreateResponse create(Long memberId, String name) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.MEMBER_NOT_FOUND
-                        )
-                );
+        Member member = findMember(memberId);
         validateMember(member);
 
         ChatRoom chatRoom = ChatRoom.create(name);
@@ -54,12 +50,7 @@ public class ChatRoomService {
 
     @Transactional(readOnly = true)
     public List<ChatRoomResponse> getChatRooms(Long memberId) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.MEMBER_NOT_FOUND
-                        )
-                );
+        Member member = findMember(memberId);
 
         List<ChatRoomMember> lists = 
                 chatRoomMemberRepository.findAllActiveByMemberId(member.getId());
@@ -71,11 +62,7 @@ public class ChatRoomService {
 
     @Transactional(readOnly = true)
     public List<GroupChatRoomResponse> getGroupChatRooms(Long memberId) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() ->
-                        new CustomException(ErrorCode.MEMBER_NOT_FOUND)
-                );
-
+        Member member = findMember(memberId);
         validateMember(member);
 
         List<ChatRoom> lists =
@@ -87,6 +74,69 @@ public class ChatRoomService {
         return lists.stream()
                 .map(GroupChatRoomResponse::of)
                 .toList();
+    }
+
+    @Transactional
+    public GroupChatRoomResponse join(Long memberId, Long roomId) {
+        Member member = findMember(memberId);
+        validateMember(member);
+
+        // 채팅방조회 - 삭제안됐는지도 확인해야함
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_NOT_FOUND
+                        )
+                );
+        validateJoinableChatRoom(chatRoom);
+
+        Optional<ChatRoomMember> existingMember =
+                chatRoomMemberRepository.findByChatRoomIdAndMemberId(
+                        chatRoom.getId(),
+                        memberId
+                );
+
+        if (existingMember.isEmpty()) {
+            ChatRoomMember newMember
+                    = ChatRoomMember.createMember(chatRoom, member);
+            chatRoomMemberRepository.save(newMember);
+        }
+        else
+            rejoin(existingMember.get());
+
+        return GroupChatRoomResponse.of(chatRoom);
+    }
+
+    private void validateJoinableChatRoom(ChatRoom chatRoom) {
+        if (chatRoom.getDeletedAt() != null) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_DELETED
+            );
+        }
+
+        if (chatRoom.getType() != ChatRoomType.GROUP) {
+            throw new CustomException(
+                    ErrorCode.INVALID_CHAT_ROOM_TYPE
+            );
+        }
+    }
+
+    private void rejoin(ChatRoomMember chatRoomMember) {
+        if (chatRoomMember.isParticipating())
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_ALREADY_JOINED
+            );
+
+        chatRoomMember.rejoin();
+    }
+
+    private Member findMember(Long memberId) {
+        return memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
     }
 
     private void validateMember(Member member) {

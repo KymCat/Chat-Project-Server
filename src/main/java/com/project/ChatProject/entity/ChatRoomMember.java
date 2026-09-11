@@ -59,10 +59,15 @@ public class ChatRoomMember {
     @Column(name = "left_at")
     private Instant leftAt;
 
-    private ChatRoomMember(ChatRoom chatRoom, Member owner) {
+    private ChatRoomMember(
+            ChatRoom chatRoom,
+            Member owner,
+            ChatRoomMemberRole role
+    )
+    {
         this.chatRoom = chatRoom;
         this.member = owner;
-        this.role = ChatRoomMemberRole.OWNER;
+        this.role = role;
         this.lastReadMessage = null;
         this.joinedAt = Instant.now();
         this.leftAt = null;
@@ -71,7 +76,30 @@ public class ChatRoomMember {
     public static ChatRoomMember create(ChatRoom chatRoom, Member owner) {
         return new ChatRoomMember(
                 chatRoom,
-                owner
+                owner,
+                ChatRoomMemberRole.OWNER
         );
+    }
+
+    public static ChatRoomMember createMember(
+            ChatRoom chatRoom,
+            Member member
+    )
+    {
+        return new ChatRoomMember(
+                chatRoom,
+                member,
+                ChatRoomMemberRole.MEMBER
+        );
+    }
+
+    public boolean isParticipating() {
+        return leftAt == null;
+    }
+
+    public void rejoin() {
+        this.lastReadMessage = null;
+        this.joinedAt = Instant.now();
+        this.leftAt = null;
     }
 }

@@ -64,4 +64,19 @@ public class ChatRoomController {
                 .ok()
                 .body(ApiResponse.success(response));
     }
+
+    @PostMapping("/{roomId}/members")
+    public ResponseEntity<ApiResponse<GroupChatRoomResponse>> join(
+            @AuthenticationPrincipal AccessTokenClaims claims,
+            @PathVariable Long roomId
+    )
+    {
+        Long memberId = claims.memberId();
+        GroupChatRoomResponse response =
+                chatRoomService.join(memberId, roomId);
+
+        return ResponseEntity
+                .ok()
+                .body(ApiResponse.success(response));
+    }
 }

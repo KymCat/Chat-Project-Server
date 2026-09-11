@@ -29,6 +29,28 @@ public enum ErrorCode {
             "존재하지 않은 유저입니다."
     ),
 
+    // ChatRoom Exception
+    CHAT_ROOM_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "CHAT_ROOM_001",
+            "존재하지 않은 채팅방입니다."
+    ),
+    CHAT_ROOM_ALREADY_JOINED(
+            HttpStatus.CONFLICT,
+            "CHAT_ROOM_002",
+            "이미 참여한 채팅방입니다."
+    ),
+    CHAT_ROOM_DELETED(
+            HttpStatus.GONE,
+            "CHAT_ROOM_003",
+            "이미 삭제된 채팅방입니다."
+    ),
+    INVALID_CHAT_ROOM_TYPE(
+            HttpStatus.BAD_REQUEST,
+            "CHAT_ROOM_004",
+            "잘못된 채팅방 유형입니다."
+    ),
+
     // Auth Exception
     INVALID_CREDENTIALS(
             HttpStatus.UNAUTHORIZED,
