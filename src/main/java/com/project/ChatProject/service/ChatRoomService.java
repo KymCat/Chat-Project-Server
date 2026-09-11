@@ -2,9 +2,11 @@ package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatRoomResponse;
+import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
@@ -50,20 +52,6 @@ public class ChatRoomService {
         );
     }
 
-    private void validateMember(Member member) {
-        if (member.getStatus() == MemberStatus.SUSPENDED) {
-            throw new CustomException(ErrorCode.MEMBER_BLOCKED);
-        }
-
-        if (member.getStatus() == MemberStatus.WITHDRAWN) {
-            throw new CustomException(ErrorCode.MEMBER_WITHDRAWN);
-        }
-
-        if (member.getEmailVerifiedAt() == null) {
-            throw new CustomException(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
-        }
-    }
-
     @Transactional(readOnly = true)
     public List<ChatRoomResponse> getChatRooms(Long memberId) {
         Member member = memberRepository.findById(memberId)
@@ -79,5 +67,39 @@ public class ChatRoomService {
         return lists.stream()
                         .map(ChatRoomResponse::of)
                         .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<GroupChatRoomResponse> getGroupChatRooms(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(ErrorCode.MEMBER_NOT_FOUND)
+                );
+
+        validateMember(member);
+
+        List<ChatRoom> lists =
+                chatRoomRepository.findAllGroupChatRoom(
+                        memberId,
+                        ChatRoomType.GROUP
+                );
+
+        return lists.stream()
+                .map(GroupChatRoomResponse::of)
+                .toList();
+    }
+
+    private void validateMember(Member member) {
+        if (member.getStatus() == MemberStatus.SUSPENDED) {
+            throw new CustomException(ErrorCode.MEMBER_BLOCKED);
+        }
+
+        if (member.getStatus() == MemberStatus.WITHDRAWN) {
+            throw new CustomException(ErrorCode.MEMBER_WITHDRAWN);
+        }
+
+        if (member.getEmailVerifiedAt() == null) {
+            throw new CustomException(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
+        }
     }
 }

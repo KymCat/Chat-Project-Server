@@ -4,6 +4,7 @@ import com.project.ChatProject.dto.request.ChatRoomCreateRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatRoomResponse;
+import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatRoomService;
 import jakarta.validation.Valid;
@@ -42,7 +43,22 @@ public class ChatRoomController {
             @AuthenticationPrincipal AccessTokenClaims claims
     ) {
         Long memberId = claims.memberId();
-        List<ChatRoomResponse> response = chatRoomService.getChatRooms(memberId);
+        List<ChatRoomResponse> response
+                = chatRoomService.getChatRooms(memberId);
+
+        return ResponseEntity
+                .ok()
+                .body(ApiResponse.success(response));
+    }
+
+    @GetMapping("/available")
+    public ResponseEntity<ApiResponse<List<GroupChatRoomResponse>>> getGroupChatRooms(
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        List<GroupChatRoomResponse> response
+                = chatRoomService.getGroupChatRooms(memberId);
 
         return ResponseEntity
                 .ok()

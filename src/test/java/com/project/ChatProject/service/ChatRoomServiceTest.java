@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
+import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
@@ -21,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -131,6 +133,86 @@ class ChatRoomServiceTest {
         assertCreationRejected(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
     }
 
+    @Test
+    void getGroupChatRoomsReturnsAvailableRooms() {
+        Instant lastMessageAt = Instant.parse("2026-09-11T01:00:00Z");
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom activeRoom = ChatRoom.create("Backend");
+        ChatRoom emptyRoom = ChatRoom.create("Java");
+        ReflectionTestUtils.setField(activeRoom, "id", 10L);
+        ReflectionTestUtils.setField(
+                activeRoom,
+                "lastMessageAt",
+                lastMessageAt
+        );
+        ReflectionTestUtils.setField(emptyRoom, "id", 11L);
+
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomRepository.findAllGroupChatRoom(
+                1L,
+                ChatRoomType.GROUP
+        )).thenReturn(List.of(activeRoom, emptyRoom));
+
+        List<GroupChatRoomResponse> response =
+                chatRoomService.getGroupChatRooms(1L);
+
+        assertThat(response).containsExactly(
+                new GroupChatRoomResponse(
+                        10L,
+                        "Backend",
+                        lastMessageAt
+                ),
+                new GroupChatRoomResponse(
+                        11L,
+                        "Java",
+                        null
+                )
+        );
+        verify(chatRoomRepository).findAllGroupChatRoom(
+                1L,
+                ChatRoomType.GROUP
+        );
+    }
+
+    @Test
+    void getGroupChatRoomsRejectsUnknownMember() {
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.empty());
+
+        assertAvailableRoomsRejected(ErrorCode.MEMBER_NOT_FOUND);
+    }
+
+    @Test
+    void getGroupChatRoomsRejectsSuspendedMember() {
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(
+                        member(MemberStatus.SUSPENDED, Instant.now())
+                ));
+
+        assertAvailableRoomsRejected(ErrorCode.MEMBER_BLOCKED);
+    }
+
+    @Test
+    void getGroupChatRoomsRejectsWithdrawnMember() {
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(
+                        member(MemberStatus.WITHDRAWN, Instant.now())
+                ));
+
+        assertAvailableRoomsRejected(ErrorCode.MEMBER_WITHDRAWN);
+    }
+
+    @Test
+    void getGroupChatRoomsRejectsMemberWhoseEmailIsNotVerified() {
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(
+                        member(MemberStatus.ACTIVE, null)
+                ));
+
+        assertAvailableRoomsRejected(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
+    }
+
     private void assertCreationRejected(ErrorCode expectedErrorCode) {
         assertThatThrownBy(() -> chatRoomService.create(1L, "Backend"))
                 .isInstanceOfSatisfying(
@@ -142,6 +224,20 @@ class ChatRoomServiceTest {
         verify(chatRoomRepository, never()).save(any(ChatRoom.class));
         verify(chatRoomMemberRepository, never())
                 .save(any(ChatRoomMember.class));
+    }
+
+    private void assertAvailableRoomsRejected(ErrorCode expectedErrorCode) {
+        assertThatThrownBy(() -> chatRoomService.getGroupChatRooms(1L))
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(expectedErrorCode)
+                );
+
+        verify(chatRoomRepository, never()).findAllGroupChatRoom(
+                any(Long.class),
+                any(ChatRoomType.class)
+        );
     }
 
     private Member member(

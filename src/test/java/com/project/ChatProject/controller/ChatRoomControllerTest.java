@@ -1,6 +1,7 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
+import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatRoomService;
@@ -20,11 +21,13 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -94,6 +97,38 @@ class ChatRoomControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(chatRoomService, never()).create(1L, name);
+    }
+
+    @Test
+    void getAvailableGroupChatRoomsReturnsAuthenticatedMemberRooms()
+            throws Exception {
+        Instant lastMessageAt = Instant.parse("2026-09-11T01:00:00Z");
+        when(chatRoomService.getGroupChatRooms(1L))
+                .thenReturn(List.of(
+                        new GroupChatRoomResponse(
+                                10L,
+                                "Backend",
+                                lastMessageAt
+                        ),
+                        new GroupChatRoomResponse(
+                                11L,
+                                "Java",
+                                null
+                        )
+                ));
+
+        mockMvc.perform(get("/chat-rooms/available"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].roomId").value(10L))
+                .andExpect(jsonPath("$.data[0].name").value("Backend"))
+                .andExpect(jsonPath("$.data[0].lastMessageAt").exists())
+                .andExpect(jsonPath("$.data[1].roomId").value(11L))
+                .andExpect(jsonPath("$.data[1].name").value("Java"))
+                .andExpect(jsonPath("$.data[1].lastMessageAt").doesNotExist());
+
+        verify(chatRoomService).getGroupChatRooms(1L);
     }
 
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(
