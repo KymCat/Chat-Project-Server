@@ -1,15 +1,19 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.response.ChatRoomJoinResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
+import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
 import com.project.ChatProject.repository.MemberRepository;
@@ -43,6 +47,9 @@ class ChatRoomServiceTest {
 
     @Mock
     private ChatRoomMemberRepository chatRoomMemberRepository;
+
+    @Mock
+    private ChatMessageRepository chatMessageRepository;
 
     @InjectMocks
     private ChatRoomService chatRoomService;
@@ -213,6 +220,106 @@ class ChatRoomServiceTest {
         assertAvailableRoomsRejected(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
     }
 
+    @Test
+    void joinStoresNewMemberAndSystemMessage() {
+        Instant createdAt = Instant.parse("2026-09-12T06:00:00Z");
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.empty());
+        stubSavedMessage(createdAt);
+
+        ChatRoomJoinResponse response = chatRoomService.join(1L, 10L);
+
+        ArgumentCaptor<ChatRoomMember> memberCaptor =
+                ArgumentCaptor.forClass(ChatRoomMember.class);
+        ArgumentCaptor<ChatMessage> messageCaptor =
+                ArgumentCaptor.forClass(ChatMessage.class);
+        verify(chatRoomMemberRepository).save(memberCaptor.capture());
+        verify(chatMessageRepository).save(messageCaptor.capture());
+
+        ChatRoomMember savedMember = memberCaptor.getValue();
+        assertThat(savedMember.getChatRoom()).isSameAs(chatRoom);
+        assertThat(savedMember.getMember()).isSameAs(member);
+        assertThat(savedMember.getRole()).isEqualTo(ChatRoomMemberRole.MEMBER);
+        assertThat(savedMember.isParticipating()).isTrue();
+
+        ChatMessage savedMessage = messageCaptor.getValue();
+        assertThat(savedMessage.getChatRoom()).isSameAs(chatRoom);
+        assertThat(savedMessage.getSender()).isNull();
+        assertThat(savedMessage.getClientMessageId()).isNull();
+        assertThat(savedMessage.getType()).isEqualTo(ChatMessageType.SYSTEM);
+        assertThat(savedMessage.getContent()).isEqualTo("사용자님이 입장하였습니다.");
+        assertThat(chatRoom.getLastMessageAt()).isEqualTo(createdAt);
+
+        assertThat(response.chatRoom()).isEqualTo(
+                new GroupChatRoomResponse(10L, "Backend", createdAt)
+        );
+        assertThat(response.chatMessage().messageId()).isEqualTo(100L);
+        assertThat(response.chatMessage().senderId()).isNull();
+        assertThat(response.chatMessage().senderNickname()).isNull();
+        assertThat(response.chatMessage().type()).isEqualTo(ChatMessageType.SYSTEM);
+        assertThat(response.chatMessage().createdAt()).isEqualTo(createdAt);
+    }
+
+    @Test
+    void joinReactivatesFormerMemberAndStoresSystemMessage() {
+        Instant createdAt = Instant.parse("2026-09-12T06:00:00Z");
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember formerMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(formerMember, "leftAt", Instant.now());
+        ReflectionTestUtils.setField(
+                formerMember,
+                "lastReadMessage",
+                ChatMessage.createText(chatRoom, member, "이전 메시지")
+        );
+
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(formerMember));
+        stubSavedMessage(createdAt);
+
+        ChatRoomJoinResponse response = chatRoomService.join(1L, 10L);
+
+        assertThat(formerMember.isParticipating()).isTrue();
+        assertThat(formerMember.getLastReadMessage()).isNull();
+        verify(chatRoomMemberRepository, never()).save(any(ChatRoomMember.class));
+        verify(chatMessageRepository).save(any(ChatMessage.class));
+        assertThat(response.chatMessage().type()).isEqualTo(ChatMessageType.SYSTEM);
+    }
+
+    @Test
+    void joinRejectsActiveMemberWithoutStoringSystemMessage() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember activeMember = ChatRoomMember.createMember(chatRoom, member);
+
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(activeMember));
+
+        assertThatThrownBy(() -> chatRoomService.join(1L, 10L))
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_ALREADY_JOINED)
+                );
+
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+    }
+
     private void assertCreationRejected(ErrorCode expectedErrorCode) {
         assertThatThrownBy(() -> chatRoomService.create(1L, "Backend"))
                 .isInstanceOfSatisfying(
@@ -249,6 +356,7 @@ class ChatRoomServiceTest {
                 "user@example.com",
                 "사용자"
         );
+        ReflectionTestUtils.setField(member, "id", 1L);
         ReflectionTestUtils.setField(member, "status", status);
         ReflectionTestUtils.setField(
                 member,
@@ -256,5 +364,21 @@ class ChatRoomServiceTest {
                 emailVerifiedAt
         );
         return member;
+    }
+
+    private ChatRoom chatRoom() {
+        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ReflectionTestUtils.setField(chatRoom, "id", 10L);
+        return chatRoom;
+    }
+
+    private void stubSavedMessage(Instant createdAt) {
+        when(chatMessageRepository.save(any(ChatMessage.class)))
+                .thenAnswer(invocation -> {
+                    ChatMessage message = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(message, "id", 100L);
+                    ReflectionTestUtils.setField(message, "createdAt", createdAt);
+                    return message;
+                });
     }
 }

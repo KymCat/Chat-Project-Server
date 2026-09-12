@@ -27,45 +27,10 @@ public class ChatMessageService {
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final ChatMessageRepository chatMessageRepository;
 
-    public ChatMessageResponse enter(
-            Long memberId,
-            String nickname,
-            Long roomId,
-            String chatType
-    )
-    {
-        String content = nickname + "님이 입장하였습니다.";
-        Member sender = findMember(memberId);
-        validateMember(sender);
-
-        ChatRoom chatRoom = chatRoomRepository
-                .findById(roomId)
-                .orElseThrow(()->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_NOT_FOUND
-                        )
-                );
-
-        if (chatRoom.getDeletedAt() != null) {
-            throw new CustomException(ErrorCode.CHAT_ROOM_DELETED);
-        }
-        validateParticipation(roomId, memberId);
-
-        return new ChatMessageResponse(
-                content,
-                memberId,
-                nickname,
-                chatType,
-                roomId
-        );
-
-    }
-
     @Transactional
     public ChatMessageResponse save(
             Long memberId,
-            ChatMessageRequest request,
-            String chatType
+            ChatMessageRequest request
     )
     {
         Long roomId = request.roomId();
@@ -94,11 +59,7 @@ public class ChatMessageService {
         chatMessageRepository.save(message);
 
         chatRoom.updateLastMessageAt(message.getCreatedAt());
-        return ChatMessageResponse.of(
-                message,
-                sender,
-                chatType
-        );
+        return ChatMessageResponse.of(message);
     }
 
     // == Private Method ==

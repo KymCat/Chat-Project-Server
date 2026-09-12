@@ -1,16 +1,14 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.request.ChatRoomCreateRequest;
-import com.project.ChatProject.dto.response.ApiResponse;
-import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
-import com.project.ChatProject.dto.response.ChatRoomResponse;
-import com.project.ChatProject.dto.response.GroupChatRoomResponse;
+import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatRoomService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ChatRoomController {
 
+    private final SimpMessagingTemplate template;
     private final ChatRoomService chatRoomService;
 
     @PostMapping
@@ -72,11 +71,16 @@ public class ChatRoomController {
     )
     {
         Long memberId = claims.memberId();
-        GroupChatRoomResponse response =
+        ChatRoomJoinResponse response =
                 chatRoomService.join(memberId, roomId);
+
+        template.convertAndSend(
+                "/sub/msg/" + roomId,
+                response.chatMessage()
+        );
 
         return ResponseEntity
                 .ok()
-                .body(ApiResponse.success(response));
+                .body(ApiResponse.success(response.chatRoom()));
     }
 }

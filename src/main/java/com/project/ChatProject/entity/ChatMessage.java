@@ -99,4 +99,18 @@ public class ChatMessage extends BaseCreatedTimeEntity {
                 null
         );
     }
+
+    public static ChatMessage createSystem(
+            ChatRoom chatRoom,
+            String content
+    ) {
+        return new ChatMessage(
+                chatRoom,
+                null,
+                null,
+                ChatMessageType.SYSTEM,
+                content,
+                null
+        );
+    }
 }

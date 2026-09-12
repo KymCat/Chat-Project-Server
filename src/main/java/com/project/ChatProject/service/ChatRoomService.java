@@ -1,8 +1,7 @@
 package com.project.ChatProject.service;
 
-import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
-import com.project.ChatProject.dto.response.ChatRoomResponse;
-import com.project.ChatProject.dto.response.GroupChatRoomResponse;
+import com.project.ChatProject.dto.response.*;
+import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
@@ -10,6 +9,7 @@ import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
 import com.project.ChatProject.repository.MemberRepository;
@@ -29,6 +29,7 @@ public class ChatRoomService {
     private final MemberRepository memberRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
     @Transactional
     public ChatRoomCreateResponse create(Long memberId, String name) {
@@ -77,7 +78,7 @@ public class ChatRoomService {
     }
 
     @Transactional
-    public GroupChatRoomResponse join(Long memberId, Long roomId) {
+    public ChatRoomJoinResponse join(Long memberId, Long roomId) {
         Member member = findMember(memberId);
         validateMember(member);
 
@@ -103,7 +104,18 @@ public class ChatRoomService {
         else
             rejoin(existingMember.get());
 
-        return GroupChatRoomResponse.of(chatRoom);
+        ChatMessage enterMessage =
+                ChatMessage.createSystem(
+                        chatRoom,
+                        member.getNickname() + "님이 입장하였습니다."
+                );
+        chatMessageRepository.save(enterMessage);
+        chatRoom.updateLastMessageAt(enterMessage.getCreatedAt());
+
+        return new ChatRoomJoinResponse(
+                GroupChatRoomResponse.of(chatRoom),
+                ChatMessageResponse.of(enterMessage)
+        );
     }
 
     private void validateJoinableChatRoom(ChatRoom chatRoom) {

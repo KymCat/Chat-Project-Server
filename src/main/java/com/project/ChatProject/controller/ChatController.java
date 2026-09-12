@@ -1,7 +1,6 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
-import com.project.ChatProject.dto.request.ChatEnterRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.service.ChatMessageService;
@@ -20,36 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ChatController {
 
-    private static final String ENTER_TYPE = "ENTER";
-    private static final String CHAT_TYPE = "CHAT";
-
     private final SimpMessagingTemplate template;
     private final ChatMessageService chatMessageService;
-
-    @MessageMapping("/enter")
-    public ChatMessageResponse enter(
-            @Valid ChatEnterRequest request,
-            Authentication authentication
-    )
-    {
-        WebSocketMemberPrincipal principal =
-                resolvePrincipal(authentication);
-
-        ChatMessageResponse response =
-               chatMessageService.enter(
-                       principal.memberId(),
-                       principal.nickname(),
-                       request.roomId(),
-                       ENTER_TYPE
-               );
-
-        template.convertAndSend(
-                "/sub/enter/" + request.roomId(),
-                response
-        );
-
-        return response;
-    }
 
     @MessageMapping("/msg")
     public ChatMessageResponse send(
@@ -63,8 +34,7 @@ public class ChatController {
         ChatMessageResponse response =
                 chatMessageService.save(
                         principal.memberId(),
-                        request,
-                        CHAT_TYPE
+                        request
                 );
 
         template.convertAndSend(

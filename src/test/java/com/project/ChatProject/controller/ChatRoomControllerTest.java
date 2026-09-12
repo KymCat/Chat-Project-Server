@@ -1,7 +1,10 @@
 package com.project.ChatProject.controller;
 
+import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
+import com.project.ChatProject.dto.response.ChatRoomJoinResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
+import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatRoomService;
@@ -12,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.MediaType;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -37,12 +41,15 @@ class ChatRoomControllerTest {
     @Mock
     private ChatRoomService chatRoomService;
 
+    @Mock
+    private SimpMessagingTemplate template;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         ChatRoomController controller =
-                new ChatRoomController(chatRoomService);
+                new ChatRoomController(template, chatRoomService);
 
         mockMvc = MockMvcBuilders
                 .standaloneSetup(controller)
@@ -129,6 +136,38 @@ class ChatRoomControllerTest {
                 .andExpect(jsonPath("$.data[1].lastMessageAt").doesNotExist());
 
         verify(chatRoomService).getGroupChatRooms(1L);
+    }
+
+    @Test
+    void joinReturnsRoomAndBroadcastsPersistedSystemMessage() throws Exception {
+        Instant createdAt = Instant.parse("2026-09-12T06:00:00Z");
+        GroupChatRoomResponse chatRoom =
+                new GroupChatRoomResponse(10L, "Backend", createdAt);
+        ChatMessageResponse chatMessage =
+                new ChatMessageResponse(
+                        100L,
+                        10L,
+                        null,
+                        null,
+                        ChatMessageType.SYSTEM,
+                        "사용자님이 입장하였습니다.",
+                        createdAt
+                );
+        when(chatRoomService.join(1L, 10L))
+                .thenReturn(new ChatRoomJoinResponse(chatRoom, chatMessage));
+
+        mockMvc.perform(post("/chat-rooms/10/members"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roomId").value(10L))
+                .andExpect(jsonPath("$.data.name").value("Backend"))
+                .andExpect(jsonPath("$.data.lastMessageAt").exists());
+
+        verify(chatRoomService).join(1L, 10L);
+        verify(template).convertAndSend(
+                "/sub/msg/10",
+                chatMessage
+        );
     }
 
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(
