@@ -50,6 +50,11 @@ public enum ErrorCode {
             "CHAT_ROOM_004",
             "잘못된 채팅방 유형입니다."
     ),
+    CHAT_ROOM_ACCESS_DENIED(
+            HttpStatus.FORBIDDEN,
+            "CHAT_ROOM_005",
+            "현재 참여중인 채팅방이 아닙니다."
+    ),
 
     // Auth Exception
     INVALID_CREDENTIALS(

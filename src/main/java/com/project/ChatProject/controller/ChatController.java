@@ -1,8 +1,11 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
+import com.project.ChatProject.dto.request.ChatEnterRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.service.ChatMessageService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -21,10 +24,11 @@ public class ChatController {
     private static final String CHAT_TYPE = "CHAT";
 
     private final SimpMessagingTemplate template;
+    private final ChatMessageService chatMessageService;
 
     @MessageMapping("/enter")
     public ChatMessageResponse enter(
-            ChatMessageRequest request,
+            @Valid ChatEnterRequest request,
             Authentication authentication
     )
     {
@@ -32,13 +36,12 @@ public class ChatController {
                 resolvePrincipal(authentication);
 
         ChatMessageResponse response =
-                new ChatMessageResponse(
-                        principal.nickname() + "님이 입장하였습니다.",
-                        principal.memberId(),
-                        principal.nickname(),
-                        ENTER_TYPE,
-                        request.roomId()
-                );
+               chatMessageService.enter(
+                       principal.memberId(),
+                       principal.nickname(),
+                       request.roomId(),
+                       ENTER_TYPE
+               );
 
         template.convertAndSend(
                 "/sub/enter/" + request.roomId(),
@@ -50,7 +53,7 @@ public class ChatController {
 
     @MessageMapping("/msg")
     public ChatMessageResponse send(
-            ChatMessageRequest request,
+            @Valid ChatMessageRequest request,
             Authentication authentication
     )
     {
@@ -58,12 +61,10 @@ public class ChatController {
                 = resolvePrincipal(authentication);
 
         ChatMessageResponse response =
-                new ChatMessageResponse(
-                        request.content(),
+                chatMessageService.save(
                         principal.memberId(),
-                        principal.nickname(),
-                        CHAT_TYPE,
-                        request.roomId()
+                        request,
+                        CHAT_TYPE
                 );
 
         template.convertAndSend(

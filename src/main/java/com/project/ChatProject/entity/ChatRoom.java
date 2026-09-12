@@ -60,4 +60,8 @@ public class ChatRoom extends BaseTimeEntity {
                 name
         );
     }
+
+    public void updateLastMessageAt(Instant messageCreatedAt) {
+        this.lastMessageAt = messageCreatedAt;
+    }
 }

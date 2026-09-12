@@ -67,4 +67,36 @@ public class ChatMessage extends BaseCreatedTimeEntity {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    private ChatMessage(
+            ChatRoom chatRoom,
+            Member sender,
+            UUID clientMessageId,
+            ChatMessageType type,
+            String content,
+            Attachment attachment
+    )
+    {
+        this.chatRoom = chatRoom;
+        this.sender = sender;
+        this.clientMessageId = clientMessageId;
+        this.type = type;
+        this.content = content;
+        this.attachment = attachment;
+    }
+
+    public static ChatMessage createText(
+            ChatRoom chatRoom,
+            Member sender,
+            String content
+    ) {
+        return new ChatMessage(
+                chatRoom,
+                sender,
+                UUID.randomUUID(),
+                ChatMessageType.TEXT,
+                content,
+                null
+        );
+    }
 }

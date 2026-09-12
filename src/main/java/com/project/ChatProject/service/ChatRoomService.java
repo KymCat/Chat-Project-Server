@@ -81,7 +81,6 @@ public class ChatRoomService {
         Member member = findMember(memberId);
         validateMember(member);
 
-        // 채팅방조회 - 삭제안됐는지도 확인해야함
         ChatRoom chatRoom = chatRoomRepository.findById(roomId)
                 .orElseThrow(() ->
                         new CustomException(
