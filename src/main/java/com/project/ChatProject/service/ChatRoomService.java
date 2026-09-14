@@ -5,6 +5,7 @@ import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
@@ -180,6 +181,48 @@ public class ChatRoomService {
                 nextCursor,
                 hasNext
         );
+    }
+
+    @Transactional
+    public ChatMessageResponse leave(Long roomId, Long memberId) {
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(()->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_NOT_FOUND
+                        )
+                );
+        validateJoinableChatRoom(chatRoom);
+
+        Member member = findMember(memberId);
+        validateMember(member);
+
+        ChatRoomMember chatRoomMember = chatRoomMemberRepository
+                .findByChatRoomIdAndMemberId(roomId, memberId)
+                .orElseThrow(()->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                        )
+                );
+        if (!chatRoomMember.isParticipating())
+            throw new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
+
+        // 채팅방 OWNER 나가기 방지
+        if (chatRoomMember.getRole() == ChatRoomMemberRole.OWNER) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_OWNER_TRANSFER_REQUIRED
+            );
+        }
+
+        chatRoomMember.leave();
+        ChatMessage leaveMessage =
+                ChatMessage.createSystem(
+                        chatRoom,
+                        member.getNickname() + "님이 퇴장하였습니다."
+                );
+        chatMessageRepository.save(leaveMessage);
+        chatRoom.updateLastMessageAt(leaveMessage.getCreatedAt());
+
+        return ChatMessageResponse.from(leaveMessage);
     }
 
     // == Private Method ==

@@ -55,6 +55,11 @@ public enum ErrorCode {
             "CHAT_ROOM_005",
             "현재 참여중인 채팅방이 아닙니다."
     ),
+    CHAT_ROOM_OWNER_TRANSFER_REQUIRED(
+            HttpStatus.CONFLICT,
+            "CHAT_ROOM_006",
+            "방장은 소유권을 위임한 후 채팅방을 나갈 수 있습니다."
+    ),
 
     // Chat Message Exception
     CHAT_MESSAGE_NOT_FOUND(

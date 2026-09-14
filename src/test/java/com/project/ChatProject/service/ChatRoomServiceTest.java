@@ -452,6 +452,78 @@ class ChatRoomServiceTest {
         );
     }
 
+    @Test
+    void leaveUpdatesMembershipAndStoresSystemMessage() {
+        Instant createdAt = Instant.parse("2026-09-14T09:00:00Z");
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        stubSavedMessage(createdAt);
+
+        ChatMessageResponse response = chatRoomService.leave(10L, 1L);
+
+        assertThat(roomMember.isParticipating()).isFalse();
+
+        ArgumentCaptor<ChatMessage> messageCaptor =
+                ArgumentCaptor.forClass(ChatMessage.class);
+        verify(chatMessageRepository).save(messageCaptor.capture());
+
+        ChatMessage savedMessage = messageCaptor.getValue();
+        assertThat(savedMessage.getChatRoom()).isSameAs(chatRoom);
+        assertThat(savedMessage.getSender()).isNull();
+        assertThat(savedMessage.getType()).isEqualTo(ChatMessageType.SYSTEM);
+        assertThat(savedMessage.getContent()).isEqualTo("사용자님이 퇴장하였습니다.");
+        assertThat(chatRoom.getLastMessageAt()).isEqualTo(createdAt);
+
+        assertThat(response.messageId()).isEqualTo(100L);
+        assertThat(response.roomId()).isEqualTo(10L);
+        assertThat(response.senderId()).isNull();
+        assertThat(response.senderNickname()).isNull();
+        assertThat(response.type()).isEqualTo(ChatMessageType.SYSTEM);
+        assertThat(response.content()).isEqualTo("사용자님이 퇴장하였습니다.");
+        assertThat(response.createdAt()).isEqualTo(createdAt);
+    }
+
+    @Test
+    void leaveRejectsOwnerWithoutStoringSystemMessage() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember owner = ChatRoomMember.create(chatRoom, member);
+
+        stubMessageAccess(member, chatRoom, owner);
+
+        assertThatThrownBy(() -> chatRoomService.leave(10L, 1L))
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_OWNER_TRANSFER_REQUIRED)
+                );
+
+        assertThat(owner.isParticipating()).isTrue();
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+    }
+
+    @Test
+    void leaveRejectsFormerRoomMemberWithoutStoringSystemMessage() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember formerMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(formerMember, "leftAt", Instant.now());
+
+        stubMessageAccess(member, chatRoom, formerMember);
+
+        assertThatThrownBy(() -> chatRoomService.leave(10L, 1L))
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED)
+                );
+
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+    }
+
     private void assertCreationRejected(ErrorCode expectedErrorCode) {
         assertThatThrownBy(() -> chatRoomService.create(1L, "Backend"))
                 .isInstanceOfSatisfying(

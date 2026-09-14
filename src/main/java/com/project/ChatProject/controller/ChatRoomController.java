@@ -106,4 +106,24 @@ public class ChatRoomController {
         return ResponseEntity
                 .ok(ApiResponse.success(response));
     }
+
+    @DeleteMapping("/{roomId}/members")
+    public ResponseEntity<ApiResponse<Void>> leave(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        ChatMessageResponse leaveMessage
+                = chatRoomService.leave(roomId, memberId);
+
+        template.convertAndSend(
+                "/sub/msg/" + roomId,
+                leaveMessage
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
 }

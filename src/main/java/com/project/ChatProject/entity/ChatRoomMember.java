@@ -102,4 +102,8 @@ public class ChatRoomMember {
         this.joinedAt = Instant.now();
         this.leftAt = null;
     }
+
+    public void leave() {
+        this.leftAt = Instant.now();
+    }
 }

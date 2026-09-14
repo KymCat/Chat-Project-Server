@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -216,6 +217,32 @@ class ChatRoomControllerTest {
 
         verify(chatRoomService, never())
                 .getMessages(any(Long.class), any(), any(Long.class), any(Integer.class));
+    }
+
+    @Test
+    void leaveReturnsSuccessAndBroadcastsPersistedSystemMessage() throws Exception {
+        Instant createdAt = Instant.parse("2026-09-14T09:00:00Z");
+        ChatMessageResponse leaveMessage = new ChatMessageResponse(
+                110L,
+                10L,
+                null,
+                null,
+                ChatMessageType.SYSTEM,
+                "사용자님이 퇴장하였습니다.",
+                createdAt
+        );
+        when(chatRoomService.leave(10L, 1L)).thenReturn(leaveMessage);
+
+        mockMvc.perform(delete("/chat-rooms/10/members"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomService).leave(10L, 1L);
+        verify(template).convertAndSend(
+                "/sub/msg/10",
+                leaveMessage
+        );
     }
 
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(
