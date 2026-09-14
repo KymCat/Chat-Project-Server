@@ -15,7 +15,7 @@ public record ChatMessageResponse(
         String content,
         Instant createdAt
 ) {
-    public static ChatMessageResponse of(ChatMessage message) {
+    public static ChatMessageResponse from(ChatMessage message) {
         Member sender = message.getSender();
 
         return new ChatMessageResponse(

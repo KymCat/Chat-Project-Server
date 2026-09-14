@@ -59,7 +59,7 @@ public class ChatMessageService {
         chatMessageRepository.save(message);
 
         chatRoom.updateLastMessageAt(message.getCreatedAt());
-        return ChatMessageResponse.of(message);
+        return ChatMessageResponse.from(message);
     }
 
     // == Private Method ==
