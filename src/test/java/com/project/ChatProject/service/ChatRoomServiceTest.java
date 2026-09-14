@@ -2,6 +2,8 @@ package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.response.ChatRoomJoinResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
+import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
@@ -24,6 +26,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
 import java.util.List;
@@ -32,6 +35,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -320,6 +324,134 @@ class ChatRoomServiceTest {
         verify(chatMessageRepository, never()).save(any(ChatMessage.class));
     }
 
+    @Test
+    void getMessagesReturnsLatestPageInChronologicalOrder() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        List<ChatMessage> queriedMessages = List.of(
+                message(chatRoom, member, 104L, "네 번째", "2026-09-14T04:00:00Z"),
+                message(chatRoom, member, 103L, "세 번째", "2026-09-14T03:00:00Z"),
+                message(chatRoom, member, 102L, "두 번째", "2026-09-14T02:00:00Z"),
+                message(chatRoom, member, 101L, "첫 번째", "2026-09-14T01:00:00Z")
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findLatestMessages(
+                eq(10L),
+                eq(roomMember.getJoinedAt()),
+                any(Pageable.class)
+        ))
+                .thenReturn(queriedMessages);
+
+        CursorPageResponse<ChatMessageResponse> response =
+                chatRoomService.getMessages(10L, null, 1L, 3);
+
+        assertThat(response.content())
+                .extracting(ChatMessageResponse::messageId)
+                .containsExactly(102L, 103L, 104L);
+        assertThat(response.nextCursor()).isEqualTo(102L);
+        assertThat(response.hasNext()).isTrue();
+
+        ArgumentCaptor<Pageable> pageableCaptor =
+                ArgumentCaptor.forClass(Pageable.class);
+        verify(chatMessageRepository)
+                .findLatestMessages(
+                        eq(10L),
+                        eq(roomMember.getJoinedAt()),
+                        pageableCaptor.capture()
+                );
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(4);
+    }
+
+    @Test
+    void getMessagesUsesMessageCursorForNextPage() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ChatMessage cursorMessage = message(
+                chatRoom,
+                member,
+                104L,
+                "커서",
+                "2026-09-14T04:00:00Z"
+        );
+        List<ChatMessage> queriedMessages = List.of(
+                message(chatRoom, member, 103L, "세 번째", "2026-09-14T03:00:00Z"),
+                message(chatRoom, member, 102L, "두 번째", "2026-09-14T02:00:00Z")
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndChatRoomId(104L, 10L))
+                .thenReturn(Optional.of(cursorMessage));
+        when(chatMessageRepository.findMessages(
+                eq(10L),
+                eq(104L),
+                eq(cursorMessage.getCreatedAt()),
+                eq(roomMember.getJoinedAt()),
+                any(Pageable.class)
+        )).thenReturn(queriedMessages);
+
+        CursorPageResponse<ChatMessageResponse> response =
+                chatRoomService.getMessages(10L, 104L, 1L, 3);
+
+        assertThat(response.content())
+                .extracting(ChatMessageResponse::messageId)
+                .containsExactly(102L, 103L);
+        assertThat(response.nextCursor()).isNull();
+        assertThat(response.hasNext()).isFalse();
+    }
+
+    @Test
+    void getMessagesRejectsFormerRoomMember() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember formerMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(formerMember, "leftAt", Instant.now());
+
+        stubMessageAccess(member, chatRoom, formerMember);
+
+        assertThatThrownBy(() -> chatRoomService.getMessages(10L, null, 1L, 30))
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED)
+                );
+
+        verify(chatMessageRepository, never())
+                .findLatestMessages(
+                        any(Long.class),
+                        any(Instant.class),
+                        any(Pageable.class)
+                );
+    }
+
+    @Test
+    void getMessagesRejectsCursorFromAnotherRoom() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndChatRoomId(999L, 10L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> chatRoomService.getMessages(10L, 999L, 1L, 30))
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_MESSAGE_NOT_FOUND)
+                );
+
+        verify(chatMessageRepository, never()).findMessages(
+                any(Long.class),
+                any(Long.class),
+                any(Instant.class),
+                any(Instant.class),
+                any(Pageable.class)
+        );
+    }
+
     private void assertCreationRejected(ErrorCode expectedErrorCode) {
         assertThatThrownBy(() -> chatRoomService.create(1L, "Backend"))
                 .isInstanceOfSatisfying(
@@ -370,6 +502,32 @@ class ChatRoomServiceTest {
         ChatRoom chatRoom = ChatRoom.create("Backend");
         ReflectionTestUtils.setField(chatRoom, "id", 10L);
         return chatRoom;
+    }
+
+    private void stubMessageAccess(
+            Member member,
+            ChatRoom chatRoom,
+            ChatRoomMember roomMember
+    ) {
+        when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(roomMember));
+    }
+
+    private ChatMessage message(
+            ChatRoom chatRoom,
+            Member sender,
+            Long id,
+            String content,
+            String createdAt
+    ) {
+        ChatMessage message = ChatMessage.createText(chatRoom, sender, content);
+        ReflectionTestUtils.setField(message, "id", id);
+        ReflectionTestUtils.setField(message, "createdAt", Instant.parse(createdAt));
+        return message;
     }
 
     private void stubSavedMessage(Instant createdAt) {

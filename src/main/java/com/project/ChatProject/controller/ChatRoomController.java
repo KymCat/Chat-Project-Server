@@ -5,6 +5,8 @@ import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatRoomService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -82,5 +84,26 @@ public class ChatRoomController {
         return ResponseEntity
                 .ok()
                 .body(ApiResponse.success(response.chatRoom()));
+    }
+
+    @GetMapping("/{roomId}/messages")
+    public ResponseEntity<ApiResponse<CursorPageResponse<ChatMessageResponse>>> getMessages(
+            @PathVariable Long roomId,
+            @RequestParam(required = false) Long beforeMessageId,
+            @RequestParam(defaultValue = "30") @Min(1) @Max(60) int size,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+
+        Long memberId = claims.memberId();
+        CursorPageResponse<ChatMessageResponse> response =
+                chatRoomService.getMessages(
+                        roomId,
+                        beforeMessageId,
+                        memberId,
+                        size
+                );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
     }
 }

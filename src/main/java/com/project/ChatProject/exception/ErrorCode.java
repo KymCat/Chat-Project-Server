@@ -56,6 +56,13 @@ public enum ErrorCode {
             "현재 참여중인 채팅방이 아닙니다."
     ),
 
+    // Chat Message Exception
+    CHAT_MESSAGE_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "CHAT_MESSAGE_001",
+            "존재하지 않은 채팅 메세지입니다."
+    ),
+
     // Auth Exception
     INVALID_CREDENTIALS(
             HttpStatus.UNAUTHORIZED,

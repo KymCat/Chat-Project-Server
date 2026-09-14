@@ -28,8 +28,8 @@ import java.util.UUID;
         },
         indexes = {
                 @Index(
-                        name = "idx_chat_messages_room_id_id_desc",
-                        columnList = "room_id, id DESC"
+                        name = "idx_chat_messages_room_created_at_id_desc",
+                        columnList = "room_id, created_at DESC, id DESC"
                 )
         }
 )

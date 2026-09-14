@@ -3,10 +3,12 @@ package com.project.ChatProject.controller;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatRoomJoinResponse;
+import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.jwt.AccessTokenClaims;
+import com.project.ChatProject.exception.GlobalExceptionHandler;
 import com.project.ChatProject.service.ChatRoomService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 import java.time.Instant;
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +56,7 @@ class ChatRoomControllerTest {
 
         mockMvc = MockMvcBuilders
                 .standaloneSetup(controller)
+                .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(
                         authenticationPrincipalResolver(claims())
                 )
@@ -168,6 +172,50 @@ class ChatRoomControllerTest {
                 "/sub/msg/10",
                 chatMessage
         );
+    }
+
+    @Test
+    void getMessagesReturnsCursorPage() throws Exception {
+        Instant createdAt = Instant.parse("2026-09-14T06:00:00Z");
+        ChatMessageResponse message = new ChatMessageResponse(
+                90L,
+                10L,
+                1L,
+                "사용자",
+                ChatMessageType.TEXT,
+                "안녕하세요",
+                createdAt
+        );
+        CursorPageResponse<ChatMessageResponse> response =
+                CursorPageResponse.of(List.of(message), 90L, true);
+        when(chatRoomService.getMessages(10L, 100L, 1L, 20))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/chat-rooms/10/messages")
+                        .param("beforeMessageId", "100")
+                        .param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content[0].messageId").value(90L))
+                .andExpect(jsonPath("$.data.content[0].content").value("안녕하세요"))
+                .andExpect(jsonPath("$.data.nextCursor").value(90L))
+                .andExpect(jsonPath("$.data.hasNext").value(true));
+
+        verify(chatRoomService).getMessages(10L, 100L, 1L, 20);
+    }
+
+    @Test
+    void getMessagesRejectsSizeOutsideAllowedRange() throws Exception {
+        mockMvc.perform(get("/chat-rooms/10/messages").param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/chat-rooms/10/messages").param("size", "61"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(chatRoomService, never())
+                .getMessages(any(Long.class), any(), any(Long.class), any(Integer.class));
     }
 
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(

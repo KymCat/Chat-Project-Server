@@ -15,9 +15,14 @@ import com.project.ChatProject.repository.ChatRoomRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -114,10 +119,122 @@ public class ChatRoomService {
 
         return new ChatRoomJoinResponse(
                 GroupChatRoomResponse.of(chatRoom),
-                ChatMessageResponse.of(enterMessage)
+                ChatMessageResponse.from(enterMessage)
         );
     }
 
+    @Transactional(readOnly = true)
+    public CursorPageResponse<ChatMessageResponse> getMessages(
+            Long roomId,
+            Long beforeMessageId,
+            Long memberId,
+            int size
+    )
+    {
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(()->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_NOT_FOUND
+                        )
+                );
+        validateJoinableChatRoom(chatRoom);
+
+        Member member = findMember(memberId);
+        validateMember(member);
+
+        ChatRoomMember chatRoomMember = chatRoomMemberRepository
+                .findByChatRoomIdAndMemberId(chatRoom.getId(), memberId)
+                .orElseThrow(()->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                        )
+                );
+        if (!chatRoomMember.isParticipating())
+            throw new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
+
+        List<ChatMessage> messages = findMessages(
+                chatRoom.getId(),
+                beforeMessageId,
+                chatRoomMember.getJoinedAt(),
+                size
+        );
+
+        boolean hasNext = messages.size() > size;
+        if (hasNext) {
+            messages = new ArrayList<>(messages.subList(0, size));
+        }
+
+        Long nextCursor = hasNext && !messages.isEmpty()
+                ? messages.get(messages.size() - 1).getId()
+                : null;
+
+        List<ChatMessage> orderedMessages  = new ArrayList<>(messages);
+        Collections.reverse(orderedMessages);
+
+        List<ChatMessageResponse> content = orderedMessages.stream()
+                .map(ChatMessageResponse::from)
+                .toList();
+
+        return CursorPageResponse.of(
+                content,
+                nextCursor,
+                hasNext
+        );
+    }
+
+    // == Private Method ==
+
+    /**
+     * 채팅방에서 메세지 조회
+     * beforeMessageId의 null에 따라 조회방식을 구분
+     *
+     * @param chatRoomId
+     * @param beforeMessageId
+     * @param size
+     * @return 조회된 채팅 메세지 반환
+     */
+    private List<ChatMessage> findMessages(
+            Long chatRoomId,
+            Long beforeMessageId,
+            Instant joinedAt,
+            int size
+    )
+    {
+        Pageable pageable =
+                PageRequest.of(0, size+1);
+
+        Instant beforeCreatedAt = null;
+        if (beforeMessageId != null) {
+            ChatMessage beforeMessage =
+                    chatMessageRepository
+                            .findByIdAndChatRoomId(beforeMessageId, chatRoomId)
+                            .orElseThrow(()->
+                                    new CustomException(
+                                            ErrorCode.CHAT_MESSAGE_NOT_FOUND
+                                    )
+                            );
+            beforeCreatedAt = beforeMessage.getCreatedAt();
+        }
+
+        return beforeMessageId != null
+                ? chatMessageRepository.findMessages(
+                        chatRoomId,
+                        beforeMessageId,
+                        beforeCreatedAt,
+                        joinedAt,
+                        pageable
+                )
+                : chatMessageRepository.findLatestMessages(
+                        chatRoomId,
+                        joinedAt,
+                        pageable
+                );
+    }
+
+    /**
+     * 해당 채팅방이 참여가능한 채팅방인지 검증
+     * @param chatRoom
+     */
     private void validateJoinableChatRoom(ChatRoom chatRoom) {
         if (chatRoom.getDeletedAt() != null) {
             throw new CustomException(
@@ -132,6 +249,10 @@ public class ChatRoomService {
         }
     }
 
+    /**
+     * 한번 퇴장했던 채팅방으로 재참여
+     * @param chatRoomMember
+     */
     private void rejoin(ChatRoomMember chatRoomMember) {
         if (chatRoomMember.isParticipating())
             throw new CustomException(
@@ -141,6 +262,11 @@ public class ChatRoomService {
         chatRoomMember.rejoin();
     }
 
+    /**
+     * 유저 정보를 찾아서 반환
+     * @param memberId
+     * @return 유저 정보(Entity)
+     */
     private Member findMember(Long memberId) {
         return memberRepository.findById(memberId)
                 .orElseThrow(() ->
@@ -150,6 +276,10 @@ public class ChatRoomService {
                 );
     }
 
+    /**
+     * 해당 유저의 정지, 탈퇴, 이메일 인증에 대한 검증
+     * @param member
+     */
     private void validateMember(Member member) {
         if (member.getStatus() == MemberStatus.SUSPENDED) {
             throw new CustomException(ErrorCode.MEMBER_BLOCKED);
