@@ -12,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import java.util.stream.Collectors;
 
@@ -101,5 +102,26 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.failure(code, msg));
+    }
+
+    // Controller method parameter 검증 예외
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHandlerMethodValidationException(
+            HandlerMethodValidationException e,
+            HttpServletRequest request
+    ) {
+        log.warn(
+                "Controller 파라미터 검증 예외, path={}",
+                request.getRequestURI()
+        );
+
+        ErrorCode errorCode = ErrorCode.INVALID_REQUEST_VALUE;
+
+        return ResponseEntity
+                .status(errorCode.getStatus())
+                .body(ApiResponse.failure(
+                        errorCode.getCode(),
+                        errorCode.getMessage()
+                ));
     }
 }

@@ -3,6 +3,8 @@ package com.project.ChatProject.controller;
 import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.entity.enums.ChatMessageType;
+import com.project.ChatProject.service.ChatMessageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,9 +14,11 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -23,71 +27,57 @@ class ChatControllerTest {
     @Mock
     private SimpMessagingTemplate template;
 
+    @Mock
+    private ChatMessageService chatMessageService;
+
     private ChatController chatController;
 
     @BeforeEach
     void setUp() {
-        chatController = new ChatController(template);
-    }
-
-    @Test
-    void enterCreatesAuthenticatedMemberResponseAndBroadcastsEntryMessage() {
-        ChatMessageRequest request = new ChatMessageRequest(
-                "",
-                "room-1"
-        );
-        Authentication authentication = authentication(
-                1L,
-                "홍길동"
-        );
-
-        ChatMessageResponse result = chatController.enter(
-                request,
-                authentication
-        );
-
-        assertThat(result).isEqualTo(
-                new ChatMessageResponse(
-                        "홍길동님이 입장하였습니다.",
-                        1L,
-                        "홍길동",
-                        "ENTER",
-                        "room-1"
-                )
-        );
-        verify(template).convertAndSend(
-                "/sub/enter/room-1",
-                result
+        chatController = new ChatController(
+                template,
+                chatMessageService
         );
     }
 
     @Test
     void sendCreatesAuthenticatedMemberResponseAndBroadcastsChatMessage() {
+        Instant createdAt = Instant.parse("2026-09-12T06:00:00Z");
         ChatMessageRequest request = new ChatMessageRequest(
-                "안녕하세요",
-                "room-1"
+                10L,
+                "안녕하세요"
         );
         Authentication authentication = authentication(
                 1L,
                 "홍길동"
         );
+        ChatMessageResponse expectedResponse =
+                new ChatMessageResponse(
+                        100L,
+                        10L,
+                        1L,
+                        "홍길동",
+                        ChatMessageType.TEXT,
+                        "안녕하세요",
+                        createdAt
+                );
+        when(chatMessageService.save(
+                1L,
+                request
+        )).thenReturn(expectedResponse);
 
         ChatMessageResponse result = chatController.send(
                 request,
                 authentication
         );
 
-        assertThat(result).isEqualTo(
-                new ChatMessageResponse(
-                        "안녕하세요",
-                        1L,
-                        "홍길동",
-                        "CHAT",
-                        "room-1"
-                )
+        assertThat(result).isEqualTo(expectedResponse);
+        verify(chatMessageService).save(
+                1L,
+                request
         );
         verify(template).convertAndSend(
-                "/sub/msg/room-1",
+                "/sub/msg/10",
                 result
         );
     }
