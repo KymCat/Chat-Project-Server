@@ -3,10 +3,12 @@ package com.project.ChatProject.controller;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatRoomJoinResponse;
+import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatRoomType;
+import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.exception.GlobalExceptionHandler;
 import com.project.ChatProject.service.ChatRoomService;
@@ -243,6 +245,38 @@ class ChatRoomControllerTest {
                 "/sub/msg/10",
                 leaveMessage
         );
+    }
+
+    @Test
+    void getMembersReturnsChatRoomMemberList() throws Exception {
+        Instant joinedAt = Instant.parse("2026-09-14T09:00:00Z");
+        List<ChatRoomMemberResponse> response = List.of(
+                new ChatRoomMemberResponse(
+                        1L,
+                        "사용자",
+                        ChatRoomMemberRole.OWNER,
+                        joinedAt
+                ),
+                new ChatRoomMemberResponse(
+                        2L,
+                        "비활성화된 회원",
+                        ChatRoomMemberRole.MEMBER,
+                        joinedAt.plusSeconds(60)
+                )
+        );
+        when(chatRoomService.getMembers(10L, 1L)).thenReturn(response);
+
+        mockMvc.perform(get("/chat-rooms/10/members"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].memberId").value(1L))
+                .andExpect(jsonPath("$.data[0].displayName").value("사용자"))
+                .andExpect(jsonPath("$.data[0].role").value("OWNER"))
+                .andExpect(jsonPath("$.data[0].joinedAt").exists())
+                .andExpect(jsonPath("$.data[1].displayName")
+                        .value("비활성화된 회원"));
+
+        verify(chatRoomService).getMembers(10L, 1L);
     }
 
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(

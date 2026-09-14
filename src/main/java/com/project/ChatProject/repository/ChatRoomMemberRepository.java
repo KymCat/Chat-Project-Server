@@ -28,4 +28,18 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
             Long roomId,
             Long memberId
     );
+
+    @Query(
+            value = """
+                    SELECT crm
+                    FROM ChatRoomMember crm
+                    JOIN FETCH crm.member m
+                    WHERE crm.chatRoom.id = :chatRoomId
+                        AND crm.leftAt IS NULL
+                    ORDER BY m.id DESC
+                    """
+    )
+    List<ChatRoomMember> findAllParticipatingByChatRoomId(
+            @Param("chatRoomId") Long chatRoomId
+    );
 }

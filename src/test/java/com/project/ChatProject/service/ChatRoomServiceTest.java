@@ -3,6 +3,7 @@ package com.project.ChatProject.service;
 import com.project.ChatProject.dto.response.ChatRoomJoinResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.ChatMessage;
@@ -524,6 +525,86 @@ class ChatRoomServiceTest {
         verify(chatMessageRepository, never()).save(any(ChatMessage.class));
     }
 
+    @Test
+    void getMembersReturnsParticipatingMembersWithStatusBasedDisplayNames() {
+        Member requester = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember requesterRoomMember =
+                ChatRoomMember.createMember(chatRoom, requester);
+
+        Member activeMember = member(2L, "활성회원", MemberStatus.ACTIVE);
+        Member suspendedMember = member(3L, "정지회원", MemberStatus.SUSPENDED);
+        Member withdrawnMember = member(4L, "탈퇴회원", MemberStatus.WITHDRAWN);
+
+        ChatRoomMember activeRoomMember =
+                ChatRoomMember.createMember(chatRoom, activeMember);
+        ChatRoomMember suspendedRoomMember =
+                ChatRoomMember.createMember(chatRoom, suspendedMember);
+        ChatRoomMember withdrawnRoomMember =
+                ChatRoomMember.createMember(chatRoom, withdrawnMember);
+
+        stubMessageAccess(requester, chatRoom, requesterRoomMember);
+        when(chatRoomMemberRepository.findAllParticipatingByChatRoomId(10L))
+                .thenReturn(List.of(
+                        activeRoomMember,
+                        suspendedRoomMember,
+                        withdrawnRoomMember
+                ));
+
+        List<ChatRoomMemberResponse> response =
+                chatRoomService.getMembers(10L, 1L);
+
+        assertThat(response)
+                .extracting(
+                        ChatRoomMemberResponse::memberId,
+                        ChatRoomMemberResponse::displayName,
+                        ChatRoomMemberResponse::role
+                )
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                2L,
+                                "활성회원",
+                                ChatRoomMemberRole.MEMBER
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                3L,
+                                "비활성화된 회원",
+                                ChatRoomMemberRole.MEMBER
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                4L,
+                                "탈퇴한 유저",
+                                ChatRoomMemberRole.MEMBER
+                        )
+                );
+
+        verify(chatRoomMemberRepository)
+                .findAllParticipatingByChatRoomId(10L);
+    }
+
+    @Test
+    void getMembersRejectsMemberWhoIsNotParticipating() {
+        Member requester = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+
+        when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(requester));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> chatRoomService.getMembers(10L, 1L))
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED)
+                );
+
+        verify(chatRoomMemberRepository, never())
+                .findAllParticipatingByChatRoomId(any(Long.class));
+    }
+
     private void assertCreationRejected(ErrorCode expectedErrorCode) {
         assertThatThrownBy(() -> chatRoomService.create(1L, "Backend"))
                 .isInstanceOfSatisfying(
@@ -567,6 +648,21 @@ class ChatRoomServiceTest {
                 "emailVerifiedAt",
                 emailVerifiedAt
         );
+        return member;
+    }
+
+    private Member member(
+            Long id,
+            String nickname,
+            MemberStatus status
+    ) {
+        Member member = Member.create(
+                null,
+                nickname + "@example.com",
+                nickname
+        );
+        ReflectionTestUtils.setField(member, "id", id);
+        ReflectionTestUtils.setField(member, "status", status);
         return member;
     }
 

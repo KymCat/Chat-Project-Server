@@ -37,6 +37,15 @@ public class ChatRoomService {
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final ChatMessageRepository chatMessageRepository;
 
+    /**
+     * 채팅방 서비스 로직에서 채팅방, 멤버, 채팅방 멤버 검증 반환 record
+     */
+    private record ChatRoomParticipationContext(
+            ChatRoom chatRoom,
+            Member member,
+            ChatRoomMember chatRoomMember
+    ) {}
+
     @Transactional
     public ChatRoomCreateResponse create(Long memberId, String name) {
         Member member = findMember(memberId);
@@ -132,26 +141,11 @@ public class ChatRoomService {
             int size
     )
     {
-        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
-                .orElseThrow(()->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_NOT_FOUND
-                        )
-                );
-        validateJoinableChatRoom(chatRoom);
+        ChatRoomParticipationContext context =
+                requireParticipation(roomId, memberId);
 
-        Member member = findMember(memberId);
-        validateMember(member);
-
-        ChatRoomMember chatRoomMember = chatRoomMemberRepository
-                .findByChatRoomIdAndMemberId(chatRoom.getId(), memberId)
-                .orElseThrow(()->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
-                        )
-                );
-        if (!chatRoomMember.isParticipating())
-            throw new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
+        ChatRoom chatRoom = context.chatRoom();
+        ChatRoomMember chatRoomMember = context.chatRoomMember();
 
         List<ChatMessage> messages = findMessages(
                 chatRoom.getId(),
@@ -185,26 +179,12 @@ public class ChatRoomService {
 
     @Transactional
     public ChatMessageResponse leave(Long roomId, Long memberId) {
-        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
-                .orElseThrow(()->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_NOT_FOUND
-                        )
-                );
-        validateJoinableChatRoom(chatRoom);
+        ChatRoomParticipationContext context =
+                requireParticipation(roomId, memberId);
 
-        Member member = findMember(memberId);
-        validateMember(member);
-
-        ChatRoomMember chatRoomMember = chatRoomMemberRepository
-                .findByChatRoomIdAndMemberId(roomId, memberId)
-                .orElseThrow(()->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
-                        )
-                );
-        if (!chatRoomMember.isParticipating())
-            throw new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
+        ChatRoom chatRoom = context.chatRoom();
+        Member member = context.member();
+        ChatRoomMember chatRoomMember = context.chatRoomMember();
 
         // 채팅방 OWNER 나가기 방지
         if (chatRoomMember.getRole() == ChatRoomMemberRole.OWNER) {
@@ -225,7 +205,67 @@ public class ChatRoomService {
         return ChatMessageResponse.from(leaveMessage);
     }
 
+    @Transactional(readOnly = true)
+    public List<ChatRoomMemberResponse> getMembers(
+            Long roomId,
+            Long memberId
+    )
+    {
+        ChatRoomParticipationContext context =
+                requireParticipation(roomId, memberId);
+
+        List<ChatRoomMember> chatRoomMembers = chatRoomMemberRepository
+                .findAllParticipatingByChatRoomId(
+                        context.chatRoom.getId()
+                );
+
+        return chatRoomMembers.stream()
+                .map(ChatRoomMemberResponse::from)
+                .toList();
+    }
+
     // == Private Method ==
+
+    /**
+     * 채팅방, 유저, 채팅방멤버에 대한 검증을 한번에 해결하는 로직
+     * @param roomId
+     * @param memberId
+     * @return 채팅방, 유저, 채팅방멤버 객체 Context 반환
+     */
+    private ChatRoomParticipationContext requireParticipation(
+            Long roomId,
+            Long memberId
+    )
+    {
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(()->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_NOT_FOUND
+                        )
+                );
+        validateJoinableChatRoom(chatRoom);
+
+        Member member = findMember(memberId);
+        validateMember(member);
+
+        ChatRoomMember chatRoomMember = chatRoomMemberRepository
+                .findByChatRoomIdAndMemberId(roomId, memberId)
+                .orElseThrow(()->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                        )
+                );
+        if (!chatRoomMember.isParticipating())
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_ACCESS_DENIED
+            );
+
+        return new ChatRoomParticipationContext(
+                chatRoom,
+                member,
+                chatRoomMember
+        );
+    }
 
     /**
      * 채팅방에서 메세지 조회

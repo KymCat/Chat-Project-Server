@@ -126,4 +126,17 @@ public class ChatRoomController {
                 .ok(ApiResponse.success(null));
     }
 
+    @GetMapping("/{roomId}/members")
+    public ResponseEntity<ApiResponse<List<ChatRoomMemberResponse>>> getMembers(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        List<ChatRoomMemberResponse> response
+                = chatRoomService.getMembers(roomId, memberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
+    }
 }
