@@ -38,6 +38,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -277,6 +278,49 @@ class ChatRoomControllerTest {
                         .value("비활성화된 회원"));
 
         verify(chatRoomService).getMembers(10L, 1L);
+    }
+
+    @Test
+    void transferOwnershipReturnsSuccess() throws Exception {
+        Instant createdAt = Instant.parse("2026-09-15T10:00:00Z");
+        ChatMessageResponse ownerTransferMessage = new ChatMessageResponse(
+                120L,
+                10L,
+                null,
+                null,
+                ChatMessageType.SYSTEM,
+                "새방장님이 방장으로 위임되셨습니다.",
+                createdAt
+        );
+        when(chatRoomService.transferOwnership(10L, 1L, 2L))
+                .thenReturn(ownerTransferMessage);
+
+        mockMvc.perform(patch("/chat-rooms/10/owner")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"newOwnerMemberId\":2}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomService).transferOwnership(10L, 1L, 2L);
+        verify(template).convertAndSend(
+                "/sub/msg/10",
+                ownerTransferMessage
+        );
+    }
+
+    @Test
+    void transferOwnershipRejectsMissingTargetMemberId() throws Exception {
+        mockMvc.perform(patch("/chat-rooms/10/owner")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(chatRoomService, never())
+                .transferOwnership(any(Long.class), any(Long.class), any(Long.class));
+        verify(template, never())
+                .convertAndSend(any(String.class), any(Object.class));
     }
 
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(

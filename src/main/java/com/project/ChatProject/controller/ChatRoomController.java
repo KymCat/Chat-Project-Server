@@ -1,6 +1,7 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.request.ChatRoomCreateRequest;
+import com.project.ChatProject.dto.request.ChatRoomOwnerTransferRequest;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatRoomService;
@@ -138,5 +139,29 @@ public class ChatRoomController {
 
         return ResponseEntity
                 .ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{roomId}/owner")
+    public ResponseEntity<ApiResponse<Void>> transferOwnership(
+            @PathVariable Long roomId,
+            @RequestBody @Valid ChatRoomOwnerTransferRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        ChatMessageResponse message
+                = chatRoomService.transferOwnership(
+                        roomId,
+                        memberId,
+                        request.newOwnerMemberId()
+                );
+
+        template.convertAndSend(
+                "/sub/msg/" + roomId,
+                message
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
     }
 }

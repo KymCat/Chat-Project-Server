@@ -37,15 +37,6 @@ public class ChatRoomService {
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final ChatMessageRepository chatMessageRepository;
 
-    /**
-     * 채팅방 서비스 로직에서 채팅방, 멤버, 채팅방 멤버 검증 반환 record
-     */
-    private record ChatRoomParticipationContext(
-            ChatRoom chatRoom,
-            Member member,
-            ChatRoomMember chatRoomMember
-    ) {}
-
     @Transactional
     public ChatRoomCreateResponse create(Long memberId, String name) {
         Member member = findMember(memberId);
@@ -179,8 +170,17 @@ public class ChatRoomService {
 
     @Transactional
     public ChatMessageResponse leave(Long roomId, Long memberId) {
+
+        ChatRoom lockedChatRoom = chatRoomRepository
+                .findByIdForUpdate(roomId)
+                .orElseThrow(()->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_NOT_FOUND
+                        )
+                );
+
         ChatRoomParticipationContext context =
-                requireParticipation(roomId, memberId);
+                requireParticipation(lockedChatRoom, memberId);
 
         ChatRoom chatRoom = context.chatRoom();
         Member member = context.member();
@@ -224,13 +224,78 @@ public class ChatRoomService {
                 .toList();
     }
 
+    @Transactional
+    public ChatMessageResponse transferOwnership(
+            Long roomId,
+            Long memberId,
+            Long newOwnerMemberId)
+    {
+        if (memberId.equals(newOwnerMemberId))
+            throw new CustomException(
+                    ErrorCode.INVALID_OWNER_TRANSFER_TARGET
+            );
+
+        ChatRoom lockedChatRoom = chatRoomRepository
+                .findByIdForUpdate(roomId)
+                .orElseThrow(()->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_NOT_FOUND
+                        )
+                );
+
+        ChatRoomParticipationContext myContext
+                = requireParticipation(lockedChatRoom, memberId);
+
+        if (myContext.chatRoomMember.getRole()
+                != ChatRoomMemberRole.OWNER) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_OWNER_REQUIRED
+            );
+        }
+
+        ChatRoomParticipationContext newOwnerContext
+                = requireParticipation(
+                lockedChatRoom,
+                newOwnerMemberId
+        );
+
+        // 방장 위임
+        myContext.chatRoomMember
+                .transferOwnershipTo(newOwnerContext.chatRoomMember);
+
+        // 시스템 메세지 작성
+        ChatMessage newOwnerMessage
+                = ChatMessage.createSystem(
+                        lockedChatRoom,
+                        newOwnerContext.member.getNickname()
+                                + "님이 방장으로 위임되셨습니다."
+        );
+
+        chatMessageRepository.save(newOwnerMessage);
+        lockedChatRoom.updateLastMessageAt(newOwnerMessage.getCreatedAt());
+
+        return ChatMessageResponse
+                .from(newOwnerMessage);
+
+    }
+
     // == Private Method ==
+
+    /**
+     * 채팅방 서비스 로직에서 채팅방, 멤버, 채팅방 멤버 검증 반환 record
+     */
+    private record ChatRoomParticipationContext(
+            ChatRoom chatRoom,
+            Member member,
+            ChatRoomMember chatRoomMember
+    ) {
+    }
 
     /**
      * 채팅방, 유저, 채팅방멤버에 대한 검증을 한번에 해결하는 로직
      * @param roomId
      * @param memberId
-     * @return 채팅방, 유저, 채팅방멤버 객체 Context 반환
+     * @return
      */
     private ChatRoomParticipationContext requireParticipation(
             Long roomId,
@@ -243,13 +308,27 @@ public class ChatRoomService {
                                 ErrorCode.CHAT_ROOM_NOT_FOUND
                         )
                 );
+        return requireParticipation(chatRoom, memberId);
+    }
+
+    /**
+     * 채팅방, 유저, 채팅방멤버에 대한 검증을 한번에 해결하는 로직 (LOCK)
+     * @param chatRoom : Lock 흭득을 위한 공통 진입점으로 사용할 수 있음
+     * @param memberId
+     * @return 채팅방, 유저, 채팅방멤버 객체 Context 반환
+     */
+    private ChatRoomParticipationContext requireParticipation(
+            ChatRoom chatRoom,
+            Long memberId
+    )
+    {
         validateJoinableChatRoom(chatRoom);
 
         Member member = findMember(memberId);
         validateMember(member);
 
         ChatRoomMember chatRoomMember = chatRoomMemberRepository
-                .findByChatRoomIdAndMemberId(roomId, memberId)
+                .findByChatRoomIdAndMemberId(chatRoom.getId(), memberId)
                 .orElseThrow(()->
                         new CustomException(
                                 ErrorCode.CHAT_ROOM_ACCESS_DENIED

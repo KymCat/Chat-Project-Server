@@ -60,6 +60,16 @@ public enum ErrorCode {
             "CHAT_ROOM_006",
             "방장은 소유권을 위임한 후 채팅방을 나갈 수 있습니다."
     ),
+    CHAT_ROOM_OWNER_REQUIRED(
+            HttpStatus.FORBIDDEN,
+            "CHAT_ROOM_007",
+            "방장만 권한을 위임할 수 있습니다."
+    ),
+    INVALID_OWNER_TRANSFER_TARGET(
+            HttpStatus.BAD_REQUEST,
+            "CHAT_ROOM_008",
+            "방장 권한을 위임할 수 없는 회원입니다."
+    ),
 
     // Chat Message Exception
     CHAT_MESSAGE_NOT_FOUND(

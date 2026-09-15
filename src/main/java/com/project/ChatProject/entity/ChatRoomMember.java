@@ -106,4 +106,9 @@ public class ChatRoomMember {
     public void leave() {
         this.leftAt = Instant.now();
     }
+
+    public void transferOwnershipTo(ChatRoomMember newOwner) {
+        this.role = ChatRoomMemberRole.MEMBER;
+        newOwner.role = ChatRoomMemberRole.OWNER;
+    }
 }

@@ -460,7 +460,7 @@ class ChatRoomServiceTest {
         ChatRoom chatRoom = chatRoom();
         ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
 
-        stubMessageAccess(member, chatRoom, roomMember);
+        stubLockedMessageAccess(member, chatRoom, roomMember);
         stubSavedMessage(createdAt);
 
         ChatMessageResponse response = chatRoomService.leave(10L, 1L);
@@ -493,7 +493,7 @@ class ChatRoomServiceTest {
         ChatRoom chatRoom = chatRoom();
         ChatRoomMember owner = ChatRoomMember.create(chatRoom, member);
 
-        stubMessageAccess(member, chatRoom, owner);
+        stubLockedMessageAccess(member, chatRoom, owner);
 
         assertThatThrownBy(() -> chatRoomService.leave(10L, 1L))
                 .isInstanceOfSatisfying(
@@ -513,7 +513,7 @@ class ChatRoomServiceTest {
         ChatRoomMember formerMember = ChatRoomMember.createMember(chatRoom, member);
         ReflectionTestUtils.setField(formerMember, "leftAt", Instant.now());
 
-        stubMessageAccess(member, chatRoom, formerMember);
+        stubLockedMessageAccess(member, chatRoom, formerMember);
 
         assertThatThrownBy(() -> chatRoomService.leave(10L, 1L))
                 .isInstanceOfSatisfying(
@@ -523,6 +523,147 @@ class ChatRoomServiceTest {
                 );
 
         verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+    }
+
+    @Test
+    void transferOwnershipChangesOwnerAndMemberRoles() {
+        Instant createdAt = Instant.parse("2026-09-15T10:00:00Z");
+        Member ownerMember = member(MemberStatus.ACTIVE, Instant.now());
+        Member newOwnerMember = member(2L, "새방장", MemberStatus.ACTIVE);
+        ReflectionTestUtils.setField(
+                newOwnerMember,
+                "emailVerifiedAt",
+                Instant.now()
+        );
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember owner = ChatRoomMember.create(chatRoom, ownerMember);
+        ChatRoomMember newOwner =
+                ChatRoomMember.createMember(chatRoom, newOwnerMember);
+
+        when(chatRoomRepository.findByIdForUpdate(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(ownerMember));
+        when(memberRepository.findById(2L))
+                .thenReturn(Optional.of(newOwnerMember));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(owner));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 2L))
+                .thenReturn(Optional.of(newOwner));
+        stubSavedMessage(createdAt);
+
+        ChatMessageResponse response =
+                chatRoomService.transferOwnership(10L, 1L, 2L);
+
+        assertThat(owner.getRole()).isEqualTo(ChatRoomMemberRole.MEMBER);
+        assertThat(newOwner.getRole()).isEqualTo(ChatRoomMemberRole.OWNER);
+        assertThat(chatRoom.getLastMessageAt()).isEqualTo(createdAt);
+
+        ArgumentCaptor<ChatMessage> messageCaptor =
+                ArgumentCaptor.forClass(ChatMessage.class);
+        verify(chatMessageRepository).save(messageCaptor.capture());
+
+        ChatMessage savedMessage = messageCaptor.getValue();
+        assertThat(savedMessage.getChatRoom()).isSameAs(chatRoom);
+        assertThat(savedMessage.getSender()).isNull();
+        assertThat(savedMessage.getClientMessageId()).isNull();
+        assertThat(savedMessage.getType()).isEqualTo(ChatMessageType.SYSTEM);
+        assertThat(savedMessage.getContent())
+                .isEqualTo("새방장님이 방장으로 위임되셨습니다.");
+
+        assertThat(response.messageId()).isEqualTo(100L);
+        assertThat(response.roomId()).isEqualTo(10L);
+        assertThat(response.senderId()).isNull();
+        assertThat(response.senderNickname()).isNull();
+        assertThat(response.type()).isEqualTo(ChatMessageType.SYSTEM);
+        assertThat(response.content())
+                .isEqualTo("새방장님이 방장으로 위임되셨습니다.");
+        assertThat(response.createdAt()).isEqualTo(createdAt);
+        verify(chatRoomRepository).findByIdForUpdate(10L);
+    }
+
+    @Test
+    void transferOwnershipRejectsSameMemberWithoutLockingRoom() {
+        assertThatThrownBy(() ->
+                chatRoomService.transferOwnership(10L, 1L, 1L)
+        )
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_OWNER_TRANSFER_TARGET)
+                );
+
+        verify(chatRoomRepository, never()).findByIdForUpdate(any(Long.class));
+    }
+
+    @Test
+    void transferOwnershipRejectsRequestFromMember() {
+        Member requester = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember requesterParticipation =
+                ChatRoomMember.createMember(chatRoom, requester);
+
+        when(chatRoomRepository.findByIdForUpdate(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(requester));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(requesterParticipation));
+
+        assertThatThrownBy(() ->
+                chatRoomService.transferOwnership(10L, 1L, 2L)
+        )
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_OWNER_REQUIRED)
+                );
+
+        assertThat(requesterParticipation.getRole())
+                .isEqualTo(ChatRoomMemberRole.MEMBER);
+        verify(memberRepository, never()).findById(2L);
+        verify(chatRoomMemberRepository, never())
+                .findByChatRoomIdAndMemberId(10L, 2L);
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+    }
+
+    @Test
+    void transferOwnershipRejectsFormerRoomMemberAsTarget() {
+        Member ownerMember = member(MemberStatus.ACTIVE, Instant.now());
+        Member targetMember = member(2L, "이전멤버", MemberStatus.ACTIVE);
+        ReflectionTestUtils.setField(
+                targetMember,
+                "emailVerifiedAt",
+                Instant.now()
+        );
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember owner = ChatRoomMember.create(chatRoom, ownerMember);
+        ChatRoomMember formerMember =
+                ChatRoomMember.createMember(chatRoom, targetMember);
+        ReflectionTestUtils.setField(formerMember, "leftAt", Instant.now());
+
+        when(chatRoomRepository.findByIdForUpdate(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(ownerMember));
+        when(memberRepository.findById(2L))
+                .thenReturn(Optional.of(targetMember));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(owner));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 2L))
+                .thenReturn(Optional.of(formerMember));
+
+        assertThatThrownBy(() ->
+                chatRoomService.transferOwnership(10L, 1L, 2L)
+        )
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED)
+                );
+
+        assertThat(owner.getRole()).isEqualTo(ChatRoomMemberRole.OWNER);
+        assertThat(formerMember.getRole()).isEqualTo(ChatRoomMemberRole.MEMBER);
     }
 
     @Test
@@ -678,6 +819,19 @@ class ChatRoomServiceTest {
             ChatRoomMember roomMember
     ) {
         when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(roomMember));
+    }
+
+    private void stubLockedMessageAccess(
+            Member member,
+            ChatRoom chatRoom,
+            ChatRoomMember roomMember
+    ) {
+        when(chatRoomRepository.findByIdForUpdate(10L))
                 .thenReturn(Optional.of(chatRoom));
         when(memberRepository.findById(1L))
                 .thenReturn(Optional.of(member));
