@@ -10,6 +10,7 @@ import java.util.Optional;
 
 public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, Long> {
 
+    // 현재 Member가 속해있는 모든 채팅방 조회
     @Query(
             value =
                     """
@@ -29,6 +30,7 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
             Long memberId
     );
 
+    // 참여가능한 모든 채팅방 조회
     @Query(
             value = """
                     SELECT crm
