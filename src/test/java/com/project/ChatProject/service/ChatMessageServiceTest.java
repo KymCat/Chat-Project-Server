@@ -107,7 +107,8 @@ class ChatMessageServiceTest {
                         "사용자",
                         ChatMessageType.TEXT,
                         "안녕하세요",
-                        createdAt
+                        createdAt,
+                        false
                 )
         );
     }

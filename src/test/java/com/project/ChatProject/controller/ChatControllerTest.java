@@ -59,7 +59,8 @@ class ChatControllerTest {
                         "홍길동",
                         ChatMessageType.TEXT,
                         "안녕하세요",
-                        createdAt
+                        createdAt,
+                        false
                 );
         when(chatMessageService.save(
                 1L,

@@ -1,9 +1,11 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
 import com.project.ChatProject.dto.response.ChatRoomJoinResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
+import com.project.ChatProject.dto.response.ChatRoomResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.ChatMessage;
@@ -38,6 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -143,6 +146,38 @@ class ChatRoomServiceTest {
                 ));
 
         assertCreationRejected(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
+    }
+
+    @Test
+    void getChatRoomsCombinesUnreadCountsAndDefaultsMissingRoomToZero() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom unreadRoom = chatRoom();
+        ChatRoom readRoom = ChatRoom.create("Java");
+        ReflectionTestUtils.setField(readRoom, "id", 11L);
+        ChatRoomMember unreadRoomMember =
+                ChatRoomMember.create(unreadRoom, member);
+        ChatRoomMember readRoomMember =
+                ChatRoomMember.createMember(readRoom, member);
+        ChatRoomUnreadCountProjection unreadCount =
+                mock(ChatRoomUnreadCountProjection.class);
+
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomMemberRepository.findAllActiveByMemberId(1L))
+                .thenReturn(List.of(unreadRoomMember, readRoomMember));
+        when(chatRoomMemberRepository.findUnreadCountsByMemberId(1L))
+                .thenReturn(List.of(unreadCount));
+        when(unreadCount.getRoomId()).thenReturn(10L);
+        when(unreadCount.getUnreadCount()).thenReturn(3L);
+
+        List<ChatRoomResponse> response = chatRoomService.getChatRooms(1L);
+
+        assertThat(response)
+                .extracting(ChatRoomResponse::roomId, ChatRoomResponse::unreadCount)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(10L, 3L),
+                        org.assertj.core.groups.Tuple.tuple(11L, 0L)
+                );
     }
 
     @Test
@@ -428,6 +463,141 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    void getMessagesMasksDeletedMessageContent() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ChatMessage deletedMessage = message(
+                chatRoom,
+                member,
+                101L,
+                "삭제 전 내용",
+                "2026-09-16T01:00:00Z"
+        );
+        ReflectionTestUtils.setField(deletedMessage, "deletedAt", Instant.now());
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findLatestMessages(
+                eq(10L),
+                eq(roomMember.getJoinedAt()),
+                any(Pageable.class)
+        )).thenReturn(List.of(deletedMessage));
+
+        ChatMessageResponse response = chatRoomService
+                .getMessages(10L, null, 1L, 30)
+                .content()
+                .get(0);
+
+        assertThat(response.deleted()).isTrue();
+        assertThat(response.content()).isNull();
+    }
+
+    @Test
+    void updateReadPositionAdvancesToRequestedMessage() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        ChatMessage currentMessage = message(
+                chatRoom,
+                member,
+                101L,
+                "현재 읽음 위치",
+                "2026-09-16T01:00:00Z"
+        );
+        ChatMessage requestedMessage = message(
+                chatRoom,
+                member,
+                102L,
+                "새 읽음 위치",
+                "2026-09-16T02:00:00Z"
+        );
+        ReflectionTestUtils.setField(roomMember, "lastReadMessage", currentMessage);
+
+        stubReadPositionAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndChatRoomId(102L, 10L))
+                .thenReturn(Optional.of(requestedMessage));
+
+        chatRoomService.updateReadPosition(10L, 1L, 102L);
+
+        assertThat(roomMember.getLastReadMessage()).isSameAs(requestedMessage);
+        verify(chatRoomMemberRepository)
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 1L);
+    }
+
+    @Test
+    void updateReadPositionDoesNotMoveBackward() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        ChatMessage requestedMessage = message(
+                chatRoom,
+                member,
+                101L,
+                "과거 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+        ChatMessage currentMessage = message(
+                chatRoom,
+                member,
+                102L,
+                "현재 읽음 위치",
+                "2026-09-16T02:00:00Z"
+        );
+        ReflectionTestUtils.setField(roomMember, "lastReadMessage", currentMessage);
+
+        stubReadPositionAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndChatRoomId(101L, 10L))
+                .thenReturn(Optional.of(requestedMessage));
+
+        chatRoomService.updateReadPosition(10L, 1L, 101L);
+
+        assertThat(roomMember.getLastReadMessage()).isSameAs(currentMessage);
+    }
+
+    @Test
+    void updateReadPositionRejectsMessageBeforeJoinedAt() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T02:00:00Z")
+        );
+        ChatMessage requestedMessage = message(
+                chatRoom,
+                member,
+                101L,
+                "참여 전 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubReadPositionAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndChatRoomId(101L, 10L))
+                .thenReturn(Optional.of(requestedMessage));
+
+        assertThatThrownBy(() ->
+                chatRoomService.updateReadPosition(10L, 1L, 101L)
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_MESSAGE_NOT_FOUND)
+        );
+
+        assertThat(roomMember.getLastReadMessage()).isNull();
+    }
+
+    @Test
     void getMessagesRejectsCursorFromAnotherRoom() {
         Member member = member(MemberStatus.ACTIVE, Instant.now());
         ChatRoom chatRoom = chatRoom();
@@ -542,6 +712,8 @@ class ChatRoomServiceTest {
 
         when(chatRoomRepository.findByIdForUpdate(10L))
                 .thenReturn(Optional.of(chatRoom));
+        when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(chatRoom));
         when(memberRepository.findById(1L))
                 .thenReturn(Optional.of(ownerMember));
         when(memberRepository.findById(2L))
@@ -643,6 +815,8 @@ class ChatRoomServiceTest {
         ReflectionTestUtils.setField(formerMember, "leftAt", Instant.now());
 
         when(chatRoomRepository.findByIdForUpdate(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(chatRoomRepository.findById(10L))
                 .thenReturn(Optional.of(chatRoom));
         when(memberRepository.findById(1L))
                 .thenReturn(Optional.of(ownerMember));
@@ -836,6 +1010,20 @@ class ChatRoomServiceTest {
         when(memberRepository.findById(1L))
                 .thenReturn(Optional.of(member));
         when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(roomMember));
+    }
+
+    private void stubReadPositionAccess(
+            Member member,
+            ChatRoom chatRoom,
+            ChatRoomMember roomMember
+    ) {
+        when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomMemberRepository
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 1L))
                 .thenReturn(Optional.of(roomMember));
     }
 

@@ -159,7 +159,8 @@ class ChatRoomControllerTest {
                         null,
                         ChatMessageType.SYSTEM,
                         "사용자님이 입장하였습니다.",
-                        createdAt
+                        createdAt,
+                        false
                 );
         when(chatRoomService.join(1L, 10L))
                 .thenReturn(new ChatRoomJoinResponse(chatRoom, chatMessage));
@@ -188,7 +189,8 @@ class ChatRoomControllerTest {
                 "사용자",
                 ChatMessageType.TEXT,
                 "안녕하세요",
-                createdAt
+                createdAt,
+                false
         );
         CursorPageResponse<ChatMessageResponse> response =
                 CursorPageResponse.of(List.of(message), 90L, true);
@@ -232,7 +234,8 @@ class ChatRoomControllerTest {
                 null,
                 ChatMessageType.SYSTEM,
                 "사용자님이 퇴장하였습니다.",
-                createdAt
+                createdAt,
+                false
         );
         when(chatRoomService.leave(10L, 1L)).thenReturn(leaveMessage);
 
@@ -290,7 +293,8 @@ class ChatRoomControllerTest {
                 null,
                 ChatMessageType.SYSTEM,
                 "새방장님이 방장으로 위임되셨습니다.",
-                createdAt
+                createdAt,
+                false
         );
         when(chatRoomService.transferOwnership(10L, 1L, 2L))
                 .thenReturn(ownerTransferMessage);
@@ -321,6 +325,30 @@ class ChatRoomControllerTest {
                 .transferOwnership(any(Long.class), any(Long.class), any(Long.class));
         verify(template, never())
                 .convertAndSend(any(String.class), any(Object.class));
+    }
+
+    @Test
+    void updateReadPositionReturnsSuccess() throws Exception {
+        mockMvc.perform(patch("/chat-rooms/10/read-position")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lastReadMessageId\":120}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomService).updateReadPosition(10L, 1L, 120L);
+    }
+
+    @Test
+    void updateReadPositionRejectsMissingMessageId() throws Exception {
+        mockMvc.perform(patch("/chat-rooms/10/read-position")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(chatRoomService, never())
+                .updateReadPosition(any(Long.class), any(Long.class), any(Long.class));
     }
 
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(
