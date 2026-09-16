@@ -13,10 +13,12 @@ public record ChatMessageResponse(
         String senderNickname,
         ChatMessageType type,
         String content,
-        Instant createdAt
+        Instant createdAt,
+        boolean deleted
 ) {
     public static ChatMessageResponse from(ChatMessage message) {
         Member sender = message.getSender();
+        boolean deleted = message.getDeletedAt() != null;
 
         return new ChatMessageResponse(
                 message.getId(),
@@ -24,8 +26,9 @@ public record ChatMessageResponse(
                 sender != null ? sender.getId() : null,
                 sender != null ? sender.getNickname() : null,
                 message.getType(),
-                message.getContent(),
-                message.getCreatedAt()
+                deleted ? null : message.getContent(),
+                message.getCreatedAt(),
+                deleted
         );
     }
 }
