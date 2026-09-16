@@ -2,6 +2,7 @@ package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.request.ChatRoomCreateRequest;
 import com.project.ChatProject.dto.request.ChatRoomOwnerTransferRequest;
+import com.project.ChatProject.dto.request.ChatRoomReadPositionRequest;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatRoomService;
@@ -159,6 +160,24 @@ public class ChatRoomController {
         template.convertAndSend(
                 "/sub/msg/" + roomId,
                 message
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
+    @PatchMapping("/{roomId}/read-position")
+    public ResponseEntity<ApiResponse<Void>> updateReadPosition(
+            @PathVariable Long roomId,
+            @RequestBody @Valid ChatRoomReadPositionRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        chatRoomService.updateReadPosition(
+                roomId,
+                memberId,
+                request.lastReadMessageId()
         );
 
         return ResponseEntity

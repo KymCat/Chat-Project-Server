@@ -93,6 +93,10 @@ public class ChatRoomMember {
         );
     }
 
+    public void updateLastReadMessage(ChatMessage requestedLastMessage) {
+        this.lastReadMessage = requestedLastMessage;
+    }
+
     public boolean isParticipating() {
         return leftAt == null;
     }
