@@ -61,6 +61,7 @@ public class ChatRoomService {
     @Transactional(readOnly = true)
     public List<ChatRoomResponse> getChatRooms(Long memberId) {
         Member member = findMember(memberId);
+        validateMember(member);
 
         List<ChatRoomMember> chatRoomMembers =
                 chatRoomMemberRepository
@@ -380,6 +381,7 @@ public class ChatRoomService {
                     "지원하지 않은 Lock type입니다. " + lockType
             );
         };
+        validateJoinableChatRoom(chatRoom);
 
         Member member = findMember(memberId);
         validateMember(member);
