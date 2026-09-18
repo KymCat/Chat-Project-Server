@@ -1,12 +1,13 @@
 package com.project.ChatProject.controller;
 
+import com.project.ChatProject.dto.ChatMessageEvent;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
-import com.project.ChatProject.dto.response.ChatRoomJoinResponse;
 import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.enums.ChatMessageType;
+import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.jwt.AccessTokenClaims;
@@ -147,10 +148,8 @@ class ChatRoomControllerTest {
     }
 
     @Test
-    void joinReturnsRoomAndBroadcastsPersistedSystemMessage() throws Exception {
+    void joinReturnsSuccessAndBroadcastsCreatedSystemMessage() throws Exception {
         Instant createdAt = Instant.parse("2026-09-12T06:00:00Z");
-        GroupChatRoomResponse chatRoom =
-                new GroupChatRoomResponse(10L, "Backend", createdAt);
         ChatMessageResponse chatMessage =
                 new ChatMessageResponse(
                         100L,
@@ -160,22 +159,22 @@ class ChatRoomControllerTest {
                         ChatMessageType.SYSTEM,
                         "사용자님이 입장하였습니다.",
                         createdAt,
+                        null,
                         false
                 );
+        ChatMessageEvent event = ChatMessageEvent.created(chatMessage);
         when(chatRoomService.join(1L, 10L))
-                .thenReturn(new ChatRoomJoinResponse(chatRoom, chatMessage));
+                .thenReturn(event);
 
         mockMvc.perform(post("/chat-rooms/10/members"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.roomId").value(10L))
-                .andExpect(jsonPath("$.data.name").value("Backend"))
-                .andExpect(jsonPath("$.data.lastMessageAt").exists());
+                .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(chatRoomService).join(1L, 10L);
         verify(template).convertAndSend(
                 "/sub/msg/10",
-                chatMessage
+                event
         );
     }
 
@@ -190,6 +189,7 @@ class ChatRoomControllerTest {
                 ChatMessageType.TEXT,
                 "안녕하세요",
                 createdAt,
+                null,
                 false
         );
         CursorPageResponse<ChatMessageResponse> response =
@@ -235,9 +235,11 @@ class ChatRoomControllerTest {
                 ChatMessageType.SYSTEM,
                 "사용자님이 퇴장하였습니다.",
                 createdAt,
+                null,
                 false
         );
-        when(chatRoomService.leave(10L, 1L)).thenReturn(leaveMessage);
+        ChatMessageEvent event = ChatMessageEvent.created(leaveMessage);
+        when(chatRoomService.leave(10L, 1L)).thenReturn(event);
 
         mockMvc.perform(delete("/chat-rooms/10/members"))
                 .andExpect(status().isOk())
@@ -247,7 +249,7 @@ class ChatRoomControllerTest {
         verify(chatRoomService).leave(10L, 1L);
         verify(template).convertAndSend(
                 "/sub/msg/10",
-                leaveMessage
+                event
         );
     }
 
@@ -294,10 +296,12 @@ class ChatRoomControllerTest {
                 ChatMessageType.SYSTEM,
                 "새방장님이 방장으로 위임되셨습니다.",
                 createdAt,
+                null,
                 false
         );
+        ChatMessageEvent event = ChatMessageEvent.created(ownerTransferMessage);
         when(chatRoomService.transferOwnership(10L, 1L, 2L))
-                .thenReturn(ownerTransferMessage);
+                .thenReturn(event);
 
         mockMvc.perform(patch("/chat-rooms/10/owner")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -309,7 +313,37 @@ class ChatRoomControllerTest {
         verify(chatRoomService).transferOwnership(10L, 1L, 2L);
         verify(template).convertAndSend(
                 "/sub/msg/10",
-                ownerTransferMessage
+                event
+        );
+    }
+
+    @Test
+    void deleteMessageReturnsSuccessAndBroadcastsDeletedEvent() throws Exception {
+        Instant createdAt = Instant.parse("2026-09-16T10:00:00Z");
+        ChatMessageResponse deletedMessage = new ChatMessageResponse(
+                130L,
+                10L,
+                1L,
+                "사용자",
+                ChatMessageType.TEXT,
+                null,
+                createdAt,
+                null,
+                true
+        );
+        ChatMessageEvent event = ChatMessageEvent.deleted(deletedMessage);
+        when(chatRoomService.deleteMessage(10L, 130L, 1L))
+                .thenReturn(event);
+
+        mockMvc.perform(delete("/chat-rooms/10/messages/130"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomService).deleteMessage(10L, 130L, 1L);
+        verify(template).convertAndSend(
+                "/sub/msg/10",
+                event
         );
     }
 

@@ -14,6 +14,7 @@ public record ChatMessageResponse(
         ChatMessageType type,
         String content,
         Instant createdAt,
+        Instant editedAt,
         boolean deleted
 ) {
     public static ChatMessageResponse from(ChatMessage message) {
@@ -28,6 +29,7 @@ public record ChatMessageResponse(
                 message.getType(),
                 deleted ? null : message.getContent(),
                 message.getCreatedAt(),
+                message.getEditedAt(),
                 deleted
         );
     }

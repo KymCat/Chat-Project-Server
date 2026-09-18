@@ -1,8 +1,10 @@
 package com.project.ChatProject.repository;
 
 import com.project.ChatProject.entity.ChatMessage;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -54,4 +56,18 @@ public interface ChatMessageRepository
             Long messageId,
             Long chatRoomId
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+            value = """
+                    SELECT cm
+                    FROM ChatMessage cm
+                    WHERE cm.id = :id
+                        AND cm.chatRoom.id = :roomId
+                    """
+    )
+    Optional<ChatMessage> findByIdAndRoomIdForUpdate(
+            @Param("id") Long id,
+            @Param("roomId") Long roomId
+            );
 }

@@ -1,5 +1,6 @@
 package com.project.ChatProject.controller;
 
+import com.project.ChatProject.dto.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatRoomCreateRequest;
 import com.project.ChatProject.dto.request.ChatRoomOwnerTransferRequest;
 import com.project.ChatProject.dto.request.ChatRoomReadPositionRequest;
@@ -69,23 +70,22 @@ public class ChatRoomController {
     }
 
     @PostMapping("/{roomId}/members")
-    public ResponseEntity<ApiResponse<GroupChatRoomResponse>> join(
+    public ResponseEntity<ApiResponse<Void>> join(
             @AuthenticationPrincipal AccessTokenClaims claims,
             @PathVariable Long roomId
     )
     {
         Long memberId = claims.memberId();
-        ChatRoomJoinResponse response =
+        ChatMessageEvent response =
                 chatRoomService.join(memberId, roomId);
 
         template.convertAndSend(
                 "/sub/msg/" + roomId,
-                response.chatMessage()
+                response
         );
 
         return ResponseEntity
-                .ok()
-                .body(ApiResponse.success(response.chatRoom()));
+                .ok(ApiResponse.success(null));
     }
 
     @GetMapping("/{roomId}/messages")
@@ -116,7 +116,7 @@ public class ChatRoomController {
     )
     {
         Long memberId = claims.memberId();
-        ChatMessageResponse leaveMessage
+        ChatMessageEvent leaveMessage
                 = chatRoomService.leave(roomId, memberId);
 
         template.convertAndSend(
@@ -150,7 +150,7 @@ public class ChatRoomController {
     )
     {
         Long memberId = claims.memberId();
-        ChatMessageResponse message
+        ChatMessageEvent message
                 = chatRoomService.transferOwnership(
                         roomId,
                         memberId,
@@ -178,6 +178,30 @@ public class ChatRoomController {
                 roomId,
                 memberId,
                 request.lastReadMessageId()
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
+    @DeleteMapping("/{roomId}/messages/{messageId}")
+    public ResponseEntity<ApiResponse<Void>> deleteMessage(
+            @PathVariable Long roomId,
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        ChatMessageEvent messageEvent =
+                chatRoomService.deleteMessage(
+                        roomId,
+                        messageId,
+                        memberId
+                );
+
+        template.convertAndSend(
+                "/sub/msg/" + roomId,
+                messageEvent
         );
 
         return ResponseEntity

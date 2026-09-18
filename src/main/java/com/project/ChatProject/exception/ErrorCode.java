@@ -77,6 +77,16 @@ public enum ErrorCode {
             "CHAT_MESSAGE_001",
             "존재하지 않은 채팅 메세지입니다."
     ),
+    CHAT_MESSAGE_DELETE_FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "CHAT_MESSAGE_002",
+            "자신이 작성한 메세지만 삭제 가능합니다."
+    ),
+    SYSTEM_MESSAGE_DELETE_NOT_ALLOWED(
+            HttpStatus.FORBIDDEN,
+            "CHAT_MESSAGE_003",
+            "시스템 메세지는 삭제 불가능합니다."
+    ),
 
     // Auth Exception
     INVALID_CREDENTIALS(

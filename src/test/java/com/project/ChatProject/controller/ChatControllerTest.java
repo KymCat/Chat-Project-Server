@@ -1,8 +1,10 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
+import com.project.ChatProject.dto.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.service.ChatMessageService;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +53,7 @@ class ChatControllerTest {
                 1L,
                 "홍길동"
         );
-        ChatMessageResponse expectedResponse =
+        ChatMessageResponse message =
                 new ChatMessageResponse(
                         100L,
                         10L,
@@ -60,19 +62,23 @@ class ChatControllerTest {
                         ChatMessageType.TEXT,
                         "안녕하세요",
                         createdAt,
+                        null,
                         false
                 );
+        ChatMessageEvent expectedEvent = ChatMessageEvent.created(message);
         when(chatMessageService.save(
                 1L,
                 request
-        )).thenReturn(expectedResponse);
+        )).thenReturn(expectedEvent);
 
-        ChatMessageResponse result = chatController.send(
+        ChatMessageEvent result = chatController.send(
                 request,
                 authentication
         );
 
-        assertThat(result).isEqualTo(expectedResponse);
+        assertThat(result).isEqualTo(expectedEvent);
+        assertThat(result.eventType()).isEqualTo(ChatMessageEventType.CREATED);
+        assertThat(result.message()).isEqualTo(message);
         verify(chatMessageService).save(
                 1L,
                 request

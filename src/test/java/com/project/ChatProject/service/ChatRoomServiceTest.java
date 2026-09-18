@@ -1,7 +1,7 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.ChatMessageEvent;
 import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
-import com.project.ChatProject.dto.response.ChatRoomJoinResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
@@ -13,6 +13,7 @@ import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.ChatMessageType;
+import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.entity.enums.MemberStatus;
@@ -274,7 +275,7 @@ class ChatRoomServiceTest {
                 .thenReturn(Optional.empty());
         stubSavedMessage(createdAt);
 
-        ChatRoomJoinResponse response = chatRoomService.join(1L, 10L);
+        ChatMessageEvent event = chatRoomService.join(1L, 10L);
 
         ArgumentCaptor<ChatRoomMember> memberCaptor =
                 ArgumentCaptor.forClass(ChatRoomMember.class);
@@ -297,14 +298,12 @@ class ChatRoomServiceTest {
         assertThat(savedMessage.getContent()).isEqualTo("사용자님이 입장하였습니다.");
         assertThat(chatRoom.getLastMessageAt()).isEqualTo(createdAt);
 
-        assertThat(response.chatRoom()).isEqualTo(
-                new GroupChatRoomResponse(10L, "Backend", createdAt)
-        );
-        assertThat(response.chatMessage().messageId()).isEqualTo(100L);
-        assertThat(response.chatMessage().senderId()).isNull();
-        assertThat(response.chatMessage().senderNickname()).isNull();
-        assertThat(response.chatMessage().type()).isEqualTo(ChatMessageType.SYSTEM);
-        assertThat(response.chatMessage().createdAt()).isEqualTo(createdAt);
+        assertThat(event.eventType()).isEqualTo(ChatMessageEventType.CREATED);
+        assertThat(event.message().messageId()).isEqualTo(100L);
+        assertThat(event.message().senderId()).isNull();
+        assertThat(event.message().senderNickname()).isNull();
+        assertThat(event.message().type()).isEqualTo(ChatMessageType.SYSTEM);
+        assertThat(event.message().createdAt()).isEqualTo(createdAt);
     }
 
     @Test
@@ -328,13 +327,14 @@ class ChatRoomServiceTest {
                 .thenReturn(Optional.of(formerMember));
         stubSavedMessage(createdAt);
 
-        ChatRoomJoinResponse response = chatRoomService.join(1L, 10L);
+        ChatMessageEvent event = chatRoomService.join(1L, 10L);
 
         assertThat(formerMember.isParticipating()).isTrue();
         assertThat(formerMember.getLastReadMessage()).isNull();
         verify(chatRoomMemberRepository, never()).save(any(ChatRoomMember.class));
         verify(chatMessageRepository).save(any(ChatMessage.class));
-        assertThat(response.chatMessage().type()).isEqualTo(ChatMessageType.SYSTEM);
+        assertThat(event.eventType()).isEqualTo(ChatMessageEventType.CREATED);
+        assertThat(event.message().type()).isEqualTo(ChatMessageType.SYSTEM);
     }
 
     @Test
@@ -633,7 +633,8 @@ class ChatRoomServiceTest {
         stubLockedMessageAccess(member, chatRoom, roomMember);
         stubSavedMessage(createdAt);
 
-        ChatMessageResponse response = chatRoomService.leave(10L, 1L);
+        ChatMessageEvent event = chatRoomService.leave(10L, 1L);
+        ChatMessageResponse response = event.message();
 
         assertThat(roomMember.isParticipating()).isFalse();
 
@@ -648,6 +649,7 @@ class ChatRoomServiceTest {
         assertThat(savedMessage.getContent()).isEqualTo("사용자님이 퇴장하였습니다.");
         assertThat(chatRoom.getLastMessageAt()).isEqualTo(createdAt);
 
+        assertThat(event.eventType()).isEqualTo(ChatMessageEventType.CREATED);
         assertThat(response.messageId()).isEqualTo(100L);
         assertThat(response.roomId()).isEqualTo(10L);
         assertThat(response.senderId()).isNull();
@@ -724,8 +726,9 @@ class ChatRoomServiceTest {
                 .thenReturn(Optional.of(newOwner));
         stubSavedMessage(createdAt);
 
-        ChatMessageResponse response =
+        ChatMessageEvent event =
                 chatRoomService.transferOwnership(10L, 1L, 2L);
+        ChatMessageResponse response = event.message();
 
         assertThat(owner.getRole()).isEqualTo(ChatRoomMemberRole.MEMBER);
         assertThat(newOwner.getRole()).isEqualTo(ChatRoomMemberRole.OWNER);
@@ -743,6 +746,7 @@ class ChatRoomServiceTest {
         assertThat(savedMessage.getContent())
                 .isEqualTo("새방장님이 방장으로 위임되셨습니다.");
 
+        assertThat(event.eventType()).isEqualTo(ChatMessageEventType.CREATED);
         assertThat(response.messageId()).isEqualTo(100L);
         assertThat(response.roomId()).isEqualTo(10L);
         assertThat(response.senderId()).isNull();
@@ -838,6 +842,168 @@ class ChatRoomServiceTest {
 
         assertThat(owner.getRole()).isEqualTo(ChatRoomMemberRole.OWNER);
         assertThat(formerMember.getRole()).isEqualTo(ChatRoomMemberRole.MEMBER);
+    }
+
+    @Test
+    void deleteMessageMarksOwnTextMessageDeletedAndReturnsDeletedEvent() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        ChatMessage message = message(
+                chatRoom,
+                member,
+                100L,
+                "삭제할 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        ChatMessageEvent event = chatRoomService.deleteMessage(10L, 100L, 1L);
+
+        assertThat(event.eventType()).isEqualTo(ChatMessageEventType.DELETED);
+        assertThat(event.message().messageId()).isEqualTo(100L);
+        assertThat(event.message().content()).isNull();
+        assertThat(event.message().deleted()).isTrue();
+        assertThat(message.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void deleteMessageIsIdempotentAndKeepsInitialDeletedAt() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        ChatMessage message = message(
+                chatRoom,
+                member,
+                100L,
+                "삭제할 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        ChatMessageEvent firstEvent =
+                chatRoomService.deleteMessage(10L, 100L, 1L);
+        Instant firstDeletedAt = message.getDeletedAt();
+        ChatMessageEvent secondEvent =
+                chatRoomService.deleteMessage(10L, 100L, 1L);
+
+        assertThat(firstEvent.eventType()).isEqualTo(ChatMessageEventType.DELETED);
+        assertThat(secondEvent.eventType()).isEqualTo(ChatMessageEventType.DELETED);
+        assertThat(message.getDeletedAt()).isEqualTo(firstDeletedAt);
+    }
+
+    @Test
+    void deleteMessageRejectsSystemMessage() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ChatMessage systemMessage = ChatMessage.createSystem(
+                chatRoom,
+                "사용자님이 입장하였습니다."
+        );
+        ReflectionTestUtils.setField(systemMessage, "id", 100L);
+        ReflectionTestUtils.setField(
+                systemMessage,
+                "createdAt",
+                Instant.now()
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(systemMessage));
+
+        assertThatThrownBy(() ->
+                chatRoomService.deleteMessage(10L, 100L, 1L)
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.SYSTEM_MESSAGE_DELETE_NOT_ALLOWED)
+        );
+
+        assertThat(systemMessage.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void deleteMessageRejectsMessageSentByAnotherMember() {
+        Member requester = member(MemberStatus.ACTIVE, Instant.now());
+        Member sender = member(2L, "다른사용자", MemberStatus.ACTIVE);
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, requester);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        ChatMessage message = message(
+                chatRoom,
+                sender,
+                100L,
+                "다른 사용자의 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(requester, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        assertThatThrownBy(() ->
+                chatRoomService.deleteMessage(10L, 100L, 1L)
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_MESSAGE_DELETE_FORBIDDEN)
+        );
+
+        assertThat(message.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void deleteMessageHidesMessageCreatedBeforeCurrentParticipation() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T02:00:00Z")
+        );
+        ChatMessage message = message(
+                chatRoom,
+                member,
+                100L,
+                "참여 이전 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        assertThatThrownBy(() ->
+                chatRoomService.deleteMessage(10L, 100L, 1L)
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_MESSAGE_NOT_FOUND)
+        );
+
+        assertThat(message.getDeletedAt()).isNull();
     }
 
     @Test

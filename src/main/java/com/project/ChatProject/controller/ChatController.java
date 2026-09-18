@@ -1,6 +1,7 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
+import com.project.ChatProject.dto.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.service.ChatMessageService;
@@ -23,7 +24,7 @@ public class ChatController {
     private final ChatMessageService chatMessageService;
 
     @MessageMapping("/msg")
-    public ChatMessageResponse send(
+    public ChatMessageEvent send(
             @Valid ChatMessageRequest request,
             Authentication authentication
     )
@@ -31,7 +32,7 @@ public class ChatController {
         WebSocketMemberPrincipal principal
                 = resolvePrincipal(authentication);
 
-        ChatMessageResponse response =
+        ChatMessageEvent event =
                 chatMessageService.save(
                         principal.memberId(),
                         request
@@ -39,10 +40,10 @@ public class ChatController {
 
         template.convertAndSend(
                 "/sub/msg/" + request.roomId(),
-                response
+                event
         );
 
-        return response;
+        return event;
     }
 
     private WebSocketMemberPrincipal resolvePrincipal(
