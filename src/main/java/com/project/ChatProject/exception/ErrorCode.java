@@ -82,10 +82,20 @@ public enum ErrorCode {
             "CHAT_MESSAGE_002",
             "자신이 작성한 메세지만 삭제 가능합니다."
     ),
-    SYSTEM_MESSAGE_DELETE_NOT_ALLOWED(
+    CHAT_MESSAGE_TYPE_DELETE_NOT_ALLOWED(
             HttpStatus.FORBIDDEN,
             "CHAT_MESSAGE_003",
             "시스템 메세지는 삭제 불가능합니다."
+    ),
+    CHAT_MESSAGE_EDIT_FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "CHAT_MESSAGE_004",
+            "자신이 작성한 메세지만 수정 가능합니다."
+    ),
+    CHAT_MESSAGE_TYPE_EDIT_NOT_ALLOWED(
+            HttpStatus.FORBIDDEN,
+            "CHAT_MESSAGE_005",
+            "해당 메세지는 수정 불가능합니다."
     ),
 
     // Auth Exception

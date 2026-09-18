@@ -348,6 +348,77 @@ class ChatRoomControllerTest {
     }
 
     @Test
+    void editMessageReturnsSuccessAndBroadcastsUpdatedEvent() throws Exception {
+        Instant createdAt = Instant.parse("2026-09-16T10:00:00Z");
+        Instant editedAt = Instant.parse("2026-09-16T10:05:00Z");
+        ChatMessageResponse editedMessage = new ChatMessageResponse(
+                130L,
+                10L,
+                1L,
+                "사용자",
+                ChatMessageType.TEXT,
+                "수정된 메시지",
+                createdAt,
+                editedAt,
+                false
+        );
+        ChatMessageEvent event = ChatMessageEvent.updated(editedMessage);
+        when(chatRoomService.editMessage(10L, 130L, 1L, "수정된 메시지"))
+                .thenReturn(event);
+
+        mockMvc.perform(patch("/chat-rooms/10/messages/130")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"수정된 메시지\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomService).editMessage(10L, 130L, 1L, "수정된 메시지");
+        verify(template).convertAndSend(
+                "/sub/msg/10",
+                event
+        );
+    }
+
+    @Test
+    void editMessageRejectsBlankContent() throws Exception {
+        mockMvc.perform(patch("/chat-rooms/10/messages/130")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(chatRoomService, never()).editMessage(
+                any(Long.class),
+                any(Long.class),
+                any(Long.class),
+                any(String.class)
+        );
+        verify(template, never())
+                .convertAndSend(any(String.class), any(Object.class));
+    }
+
+    @Test
+    void editMessageRejectsContentLongerThanOneThousandCharacters() throws Exception {
+        String content = "a".repeat(1001);
+
+        mockMvc.perform(patch("/chat-rooms/10/messages/130")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"" + content + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(chatRoomService, never()).editMessage(
+                any(Long.class),
+                any(Long.class),
+                any(Long.class),
+                any(String.class)
+        );
+        verify(template, never())
+                .convertAndSend(any(String.class), any(Object.class));
+    }
+
+    @Test
     void transferOwnershipRejectsMissingTargetMemberId() throws Exception {
         mockMvc.perform(patch("/chat-rooms/10/owner")
                         .contentType(MediaType.APPLICATION_JSON)

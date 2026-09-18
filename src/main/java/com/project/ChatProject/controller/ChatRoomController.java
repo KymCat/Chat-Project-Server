@@ -1,6 +1,7 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.ChatMessageEvent;
+import com.project.ChatProject.dto.request.ChatMessageEditRequest;
 import com.project.ChatProject.dto.request.ChatRoomCreateRequest;
 import com.project.ChatProject.dto.request.ChatRoomOwnerTransferRequest;
 import com.project.ChatProject.dto.request.ChatRoomReadPositionRequest;
@@ -197,6 +198,32 @@ public class ChatRoomController {
                         roomId,
                         messageId,
                         memberId
+                );
+
+        template.convertAndSend(
+                "/sub/msg/" + roomId,
+                messageEvent
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
+    @PatchMapping("/{roomId}/messages/{messageId}")
+    public ResponseEntity<ApiResponse<Void>> editMessage(
+            @PathVariable Long roomId,
+            @PathVariable Long messageId,
+            @RequestBody @Valid ChatMessageEditRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        ChatMessageEvent messageEvent =
+                chatRoomService.editMessage(
+                        roomId,
+                        messageId,
+                        memberId,
+                        request.content()
                 );
 
         template.convertAndSend(

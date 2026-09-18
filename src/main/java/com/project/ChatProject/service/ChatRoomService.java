@@ -332,10 +332,10 @@ public class ChatRoomService {
         ChatMessage message
                 = findChatMessageForUpdate(messageId, roomId);
 
-        // System Message 삭제 불가
-        if (message.getType().equals(ChatMessageType.SYSTEM)) {
+        // 일반 메세지가 아닌 경우, 삭제 불가
+        if (message.getType() != ChatMessageType.TEXT) {
             throw new CustomException(
-                    ErrorCode.SYSTEM_MESSAGE_DELETE_NOT_ALLOWED
+                    ErrorCode.CHAT_MESSAGE_TYPE_DELETE_NOT_ALLOWED
             );
         }
 
@@ -361,6 +361,58 @@ public class ChatRoomService {
                 ChatMessageResponse.from(message);
 
         return ChatMessageEvent.deleted(response);
+    }
+
+    @Transactional
+    public ChatMessageEvent editMessage(
+            Long roomId,
+            Long messageId,
+            Long memberId,
+            String content
+    )
+    {
+        ChatRoomParticipationContext context
+                = requireParticipation(roomId, memberId, NO_LOCK);
+
+        ChatMessage message
+                = findChatMessageForUpdate(messageId, roomId);
+
+        // 일반 메세지가 아닌 경우, 수정 불가
+        if (message.getType() != ChatMessageType.TEXT) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_TYPE_EDIT_NOT_ALLOWED
+            );
+        }
+
+        // 삭제된 메세지는 수정 불가
+        if (message.getDeletedAt() != null) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_NOT_FOUND
+            );
+        }
+
+        // 참가 이전 메세지 수정 불가
+        if (message.getCreatedAt()
+                .isBefore(context.chatRoomMember.getJoinedAt())) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_NOT_FOUND
+            );
+        }
+
+        // 다른 유저의 메세지 수정 불가
+        Long contextMemberId = context.member.getId();
+        Long messageSenderId = message.getSender().getId();
+        if (!contextMemberId.equals(messageSenderId)) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_EDIT_FORBIDDEN
+            );
+        }
+
+        message.editMessage(content);
+        ChatMessageResponse response =
+                ChatMessageResponse.from(message);
+
+        return ChatMessageEvent.updated(response);
     }
 
 

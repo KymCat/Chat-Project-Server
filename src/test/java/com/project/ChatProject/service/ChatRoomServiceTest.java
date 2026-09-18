@@ -933,7 +933,7 @@ class ChatRoomServiceTest {
         ).isInstanceOfSatisfying(
                 CustomException.class,
                 exception -> assertThat(exception.getErrorCode())
-                        .isEqualTo(ErrorCode.SYSTEM_MESSAGE_DELETE_NOT_ALLOWED)
+                        .isEqualTo(ErrorCode.CHAT_MESSAGE_TYPE_DELETE_NOT_ALLOWED)
         );
 
         assertThat(systemMessage.getDeletedAt()).isNull();
@@ -1004,6 +1004,168 @@ class ChatRoomServiceTest {
         );
 
         assertThat(message.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void editMessageUpdatesOwnTextMessageAndReturnsUpdatedEvent() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        ChatMessage message = message(
+                chatRoom,
+                member,
+                100L,
+                "수정 전 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        ChatMessageEvent event = chatRoomService.editMessage(
+                10L,
+                100L,
+                1L,
+                "  수정된 메시지  "
+        );
+
+        assertThat(message.getContent()).isEqualTo("수정된 메시지");
+        assertThat(message.getEditedAt()).isNotNull();
+        assertThat(event.eventType()).isEqualTo(ChatMessageEventType.UPDATED);
+        assertThat(event.message().messageId()).isEqualTo(100L);
+        assertThat(event.message().content()).isEqualTo("수정된 메시지");
+        assertThat(event.message().editedAt()).isEqualTo(message.getEditedAt());
+        assertThat(event.message().deleted()).isFalse();
+        verify(chatMessageRepository).findByIdAndRoomIdForUpdate(100L, 10L);
+    }
+
+    @Test
+    void editMessageRejectsSystemMessage() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ChatMessage systemMessage = ChatMessage.createSystem(
+                chatRoom,
+                "사용자님이 입장하였습니다."
+        );
+        ReflectionTestUtils.setField(systemMessage, "id", 100L);
+        ReflectionTestUtils.setField(systemMessage, "createdAt", Instant.now());
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(systemMessage));
+
+        assertThatThrownBy(() ->
+                chatRoomService.editMessage(10L, 100L, 1L, "수정 내용")
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_MESSAGE_TYPE_EDIT_NOT_ALLOWED)
+        );
+
+        assertThat(systemMessage.getEditedAt()).isNull();
+    }
+
+    @Test
+    void editMessageRejectsDeletedMessage() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ChatMessage message = message(
+                chatRoom,
+                member,
+                100L,
+                "삭제된 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+        message.deleteMessage();
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        assertThatThrownBy(() ->
+                chatRoomService.editMessage(10L, 100L, 1L, "수정 내용")
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_MESSAGE_NOT_FOUND)
+        );
+
+        assertThat(message.getEditedAt()).isNull();
+    }
+
+    @Test
+    void editMessageRejectsMessageSentByAnotherMember() {
+        Member requester = member(MemberStatus.ACTIVE, Instant.now());
+        Member sender = member(2L, "다른사용자", MemberStatus.ACTIVE);
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, requester);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        ChatMessage message = message(
+                chatRoom,
+                sender,
+                100L,
+                "다른 사용자의 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(requester, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        assertThatThrownBy(() ->
+                chatRoomService.editMessage(10L, 100L, 1L, "수정 내용")
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_MESSAGE_EDIT_FORBIDDEN)
+        );
+
+        assertThat(message.getEditedAt()).isNull();
+    }
+
+    @Test
+    void editMessageHidesMessageCreatedBeforeCurrentParticipation() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T02:00:00Z")
+        );
+        ChatMessage message = message(
+                chatRoom,
+                member,
+                100L,
+                "참여 이전 메시지",
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        assertThatThrownBy(() ->
+                chatRoomService.editMessage(10L, 100L, 1L, "수정 내용")
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_MESSAGE_NOT_FOUND)
+        );
+
+        assertThat(message.getEditedAt()).isNull();
     }
 
     @Test
