@@ -1,9 +1,8 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
-import com.project.ChatProject.dto.ChatMessageEvent;
+import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
-import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.service.ChatMessageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
-import com.project.ChatProject.dto.ChatMessageEvent;
+import com.project.ChatProject.dto.event.ChatMessageEvent;
+import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
@@ -16,6 +17,7 @@ import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.entity.enums.ChatRoomType;
+import com.project.ChatProject.entity.enums.ChatRoomEventType;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
@@ -1246,6 +1248,65 @@ class ChatRoomServiceTest {
 
         verify(chatRoomMemberRepository, never())
                 .findAllParticipatingByChatRoomId(any(Long.class));
+    }
+
+    @Test
+    void updateChatRoomNameUpdatesRoomAndCreatesSystemMessageEvents() {
+        Instant createdAt = Instant.parse("2026-09-21T10:00:00Z");
+        Member ownerMember = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember owner = ChatRoomMember.create(chatRoom, ownerMember);
+
+        stubLockedMessageAccess(ownerMember, chatRoom, owner);
+        stubSavedMessage(createdAt);
+
+        ChatRoomNameUpdateResult result = chatRoomService.updateChatRoomName(
+                10L,
+                1L,
+                "새 채팅방"
+        );
+
+        assertThat(chatRoom.getName()).isEqualTo("새 채팅방");
+        assertThat(chatRoom.getLastMessageAt()).isEqualTo(createdAt);
+        assertThat(result.chatRoomEvent().eventType())
+                .isEqualTo(ChatRoomEventType.UPDATED);
+        assertThat(result.chatRoomEvent().roomId()).isEqualTo(10L);
+        assertThat(result.chatRoomEvent().name()).isEqualTo("새 채팅방");
+        assertThat(result.chatMessageEvent().eventType())
+                .isEqualTo(ChatMessageEventType.CREATED);
+        assertThat(result.chatMessageEvent().message().content())
+                .isEqualTo("사용자님이 채팅방 이름을 '새 채팅방'(으)로 변경했습니다.");
+        assertThat(result.chatMessageEvent().message().createdAt())
+                .isEqualTo(createdAt);
+
+        ArgumentCaptor<ChatMessage> messageCaptor =
+                ArgumentCaptor.forClass(ChatMessage.class);
+        verify(chatMessageRepository).save(messageCaptor.capture());
+        ChatMessage savedMessage = messageCaptor.getValue();
+        assertThat(savedMessage.getChatRoom()).isSameAs(chatRoom);
+        assertThat(savedMessage.getSender()).isNull();
+        assertThat(savedMessage.getType()).isEqualTo(ChatMessageType.SYSTEM);
+        verify(chatRoomRepository).findByIdForUpdate(10L);
+    }
+
+    @Test
+    void updateChatRoomNameRejectsRequestFromMember() {
+        Member requester = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember participation =
+                ChatRoomMember.createMember(chatRoom, requester);
+        stubLockedMessageAccess(requester, chatRoom, participation);
+
+        assertThatThrownBy(() ->
+                chatRoomService.updateChatRoomName(10L, 1L, "새 채팅방")
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_ROOM_OWNER_REQUIRED)
+        );
+
+        assertThat(chatRoom.getName()).isEqualTo("Backend");
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
     }
 
     private void assertCreationRejected(ErrorCode expectedErrorCode) {

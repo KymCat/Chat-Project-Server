@@ -1,4 +1,4 @@
-package com.project.ChatProject.dto;
+package com.project.ChatProject.dto.event;
 
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.entity.enums.ChatMessageEventType;

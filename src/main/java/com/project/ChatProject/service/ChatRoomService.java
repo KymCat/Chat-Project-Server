@@ -1,8 +1,10 @@
 package com.project.ChatProject.service;
 
-import com.project.ChatProject.dto.ChatMessageEvent;
+import com.project.ChatProject.dto.event.ChatMessageEvent;
+import com.project.ChatProject.dto.event.ChatRoomEvent;
 import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
 import com.project.ChatProject.dto.response.*;
+import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
@@ -415,6 +417,43 @@ public class ChatRoomService {
         return ChatMessageEvent.updated(response);
     }
 
+    @Transactional
+    public ChatRoomNameUpdateResult updateChatRoomName(
+            Long roomId,
+            Long memberId,
+            String updateName
+    )
+    {
+        ChatRoomParticipationContext context
+                = requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+
+        ChatRoomMemberRole role = context.chatRoomMember.getRole();
+        if (!role.equals(ChatRoomMemberRole.OWNER)) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_OWNER_REQUIRED
+            );
+        }
+
+        context.chatRoom.updateName(updateName);
+
+        ChatMessage systemMessage = ChatMessage.createSystem(
+                context.chatRoom,
+                context.member().getNickname()
+                        + "님이 채팅방 이름을 '"
+                        + updateName
+                        + "'(으)로 변경했습니다."
+        );
+        chatMessageRepository.save(systemMessage);
+        context.chatRoom.updateLastMessageAt(systemMessage.getCreatedAt());
+
+        return new ChatRoomNameUpdateResult(
+                ChatRoomEvent.updated(roomId, updateName),
+                ChatMessageEvent.created(
+                        ChatMessageResponse.from(systemMessage)
+                )
+        );
+    }
+
 
     // == Private Method ==
 
@@ -455,7 +494,7 @@ public class ChatRoomService {
     }
 
     /**
-     * 채팅방
+     * 채팅방, 멤버, 채팅방 멤버 검증 메서드
      * @param roomId
      * @param memberId
      * @param lockType

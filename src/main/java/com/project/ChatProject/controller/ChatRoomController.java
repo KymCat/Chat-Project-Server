@@ -1,11 +1,10 @@
 package com.project.ChatProject.controller;
 
-import com.project.ChatProject.dto.ChatMessageEvent;
-import com.project.ChatProject.dto.request.ChatMessageEditRequest;
-import com.project.ChatProject.dto.request.ChatRoomCreateRequest;
-import com.project.ChatProject.dto.request.ChatRoomOwnerTransferRequest;
-import com.project.ChatProject.dto.request.ChatRoomReadPositionRequest;
+import com.project.ChatProject.dto.event.ChatMessageEvent;
+import com.project.ChatProject.dto.event.ChatRoomEvent;
+import com.project.ChatProject.dto.request.*;
 import com.project.ChatProject.dto.response.*;
+import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatRoomService;
 import jakarta.validation.Valid;
@@ -229,6 +228,35 @@ public class ChatRoomController {
         template.convertAndSend(
                 "/sub/msg/" + roomId,
                 messageEvent
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
+    @PatchMapping("/{roomId}")
+    public ResponseEntity<ApiResponse<Void>> updateChatRoomName(
+            @PathVariable Long roomId,
+            @RequestBody @Valid ChatRoomNameUpdateRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        ChatRoomNameUpdateResult result = chatRoomService
+                .updateChatRoomName(
+                        roomId,
+                        memberId,
+                        request.name()
+                );
+
+        template.convertAndSend(
+                "/sub/chat-rooms/" + roomId,
+                result.chatRoomEvent()
+        );
+
+        template.convertAndSend(
+                "/sub/msg/" + roomId,
+                result.chatMessageEvent()
         );
 
         return ResponseEntity

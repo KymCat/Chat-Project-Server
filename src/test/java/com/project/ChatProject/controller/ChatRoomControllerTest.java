@@ -1,15 +1,16 @@
 package com.project.ChatProject.controller;
 
-import com.project.ChatProject.dto.ChatMessageEvent;
+import com.project.ChatProject.dto.event.ChatMessageEvent;
+import com.project.ChatProject.dto.event.ChatRoomEvent;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.enums.ChatMessageType;
-import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
+import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.exception.GlobalExceptionHandler;
 import com.project.ChatProject.service.ChatRoomService;
@@ -454,6 +455,56 @@ class ChatRoomControllerTest {
 
         verify(chatRoomService, never())
                 .updateReadPosition(any(Long.class), any(Long.class), any(Long.class));
+    }
+
+    @Test
+    void updateChatRoomNameReturnsSuccessAndBroadcastsRoomAndMessageEvents()
+            throws Exception {
+        Instant createdAt = Instant.parse("2026-09-21T10:00:00Z");
+        ChatRoomEvent roomEvent = ChatRoomEvent.updated(10L, "새 채팅방");
+        ChatMessageEvent messageEvent = ChatMessageEvent.created(
+                new ChatMessageResponse(
+                        140L,
+                        10L,
+                        null,
+                        null,
+                        ChatMessageType.SYSTEM,
+                        "사용자님이 채팅방 이름을 '새 채팅방'(으)로 변경했습니다.",
+                        createdAt,
+                        null,
+                        false
+                )
+        );
+        when(chatRoomService.updateChatRoomName(10L, 1L, "새 채팅방"))
+                .thenReturn(new ChatRoomNameUpdateResult(roomEvent, messageEvent));
+
+        mockMvc.perform(patch("/chat-rooms/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"  새 채팅방  \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomService).updateChatRoomName(10L, 1L, "새 채팅방");
+        verify(template).convertAndSend("/sub/chat-rooms/10", roomEvent);
+        verify(template).convertAndSend("/sub/msg/10", messageEvent);
+    }
+
+    @Test
+    void updateChatRoomNameRejectsBlankName() throws Exception {
+        mockMvc.perform(patch("/chat-rooms/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(chatRoomService, never()).updateChatRoomName(
+                any(Long.class),
+                any(Long.class),
+                any(String.class)
+        );
+        verify(template, never())
+                .convertAndSend(any(String.class), any(Object.class));
     }
 
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(
