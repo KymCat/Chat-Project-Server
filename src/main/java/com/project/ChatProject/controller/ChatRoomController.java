@@ -262,4 +262,23 @@ public class ChatRoomController {
         return ResponseEntity
                 .ok(ApiResponse.success(null));
     }
+
+    @DeleteMapping("/{roomId}")
+    public ResponseEntity<ApiResponse<Void>> delete(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    )
+    {
+        Long memberId = claims.memberId();
+        ChatRoomEvent event
+                = chatRoomService.delete(roomId, memberId);
+
+        template.convertAndSend(
+                "/sub/chat-rooms/" + roomId,
+                event
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
 }

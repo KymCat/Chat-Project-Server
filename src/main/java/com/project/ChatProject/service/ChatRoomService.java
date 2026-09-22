@@ -454,6 +454,25 @@ public class ChatRoomService {
         );
     }
 
+    @Transactional
+    public ChatRoomEvent delete(Long roomId, Long memberId) {
+        ChatRoomParticipationContext context
+                = requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+
+        if (!context.chatRoomMember.getRole()
+                .equals(ChatRoomMemberRole.OWNER))
+        {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_OWNER_REQUIRED
+            );
+        }
+
+        String roomName = context.chatRoom().getName();
+        context.chatRoom.delete();
+
+        return ChatRoomEvent.deleted(roomId, roomName);
+    }
+
 
     // == Private Method ==
 

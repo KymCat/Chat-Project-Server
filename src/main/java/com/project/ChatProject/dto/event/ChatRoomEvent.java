@@ -14,4 +14,12 @@ public record ChatRoomEvent(
                 name
         );
     }
+
+    public static ChatRoomEvent deleted(Long roomId, String name) {
+        return new ChatRoomEvent(
+                ChatRoomEventType.DELETED,
+                roomId,
+                name
+        );
+    }
 }

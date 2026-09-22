@@ -507,6 +507,21 @@ class ChatRoomControllerTest {
                 .convertAndSend(any(String.class), any(Object.class));
     }
 
+    @Test
+    void deleteChatRoomReturnsSuccessAndBroadcastsDeletedEvent()
+            throws Exception {
+        ChatRoomEvent event = ChatRoomEvent.deleted(10L, "Backend");
+        when(chatRoomService.delete(10L, 1L)).thenReturn(event);
+
+        mockMvc.perform(delete("/chat-rooms/10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomService).delete(10L, 1L);
+        verify(template).convertAndSend("/sub/chat-rooms/10", event);
+    }
+
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(
             AccessTokenClaims claims
     ) {

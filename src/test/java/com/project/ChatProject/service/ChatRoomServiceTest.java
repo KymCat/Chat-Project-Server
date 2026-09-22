@@ -1309,6 +1309,40 @@ class ChatRoomServiceTest {
         verify(chatMessageRepository, never()).save(any(ChatMessage.class));
     }
 
+    @Test
+    void deleteChatRoomSoftDeletesRoomAndReturnsDeletedEvent() {
+        Member ownerMember = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember owner = ChatRoomMember.create(chatRoom, ownerMember);
+        stubLockedMessageAccess(ownerMember, chatRoom, owner);
+
+        var event = chatRoomService.delete(10L, 1L);
+
+        assertThat(chatRoom.getDeletedAt()).isNotNull();
+        assertThat(event.eventType()).isEqualTo(ChatRoomEventType.DELETED);
+        assertThat(event.roomId()).isEqualTo(10L);
+        assertThat(event.name()).isEqualTo("Backend");
+        verify(chatRoomRepository).findByIdForUpdate(10L);
+    }
+
+    @Test
+    void deleteChatRoomRejectsRequestFromMember() {
+        Member requester = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember participation =
+                ChatRoomMember.createMember(chatRoom, requester);
+        stubLockedMessageAccess(requester, chatRoom, participation);
+
+        assertThatThrownBy(() -> chatRoomService.delete(10L, 1L))
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_OWNER_REQUIRED)
+                );
+
+        assertThat(chatRoom.getDeletedAt()).isNull();
+    }
+
     private void assertCreationRejected(ErrorCode expectedErrorCode) {
         assertThatThrownBy(() -> chatRoomService.create(1L, "Backend"))
                 .isInstanceOfSatisfying(

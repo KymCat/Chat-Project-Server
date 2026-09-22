@@ -68,4 +68,9 @@ public class ChatRoom extends BaseTimeEntity {
     public void updateName(String name) {
         this.name = name;
     }
+
+    public void delete() {
+        if (deletedAt == null)
+            this.deletedAt = Instant.now();
+    }
 }
