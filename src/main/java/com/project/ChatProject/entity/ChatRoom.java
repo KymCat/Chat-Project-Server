@@ -64,4 +64,13 @@ public class ChatRoom extends BaseTimeEntity {
     public void updateLastMessageAt(Instant messageCreatedAt) {
         this.lastMessageAt = messageCreatedAt;
     }
+
+    public void updateName(String name) {
+        this.name = name;
+    }
+
+    public void delete() {
+        if (deletedAt == null)
+            this.deletedAt = Instant.now();
+    }
 }

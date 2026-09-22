@@ -12,9 +12,13 @@ public record ChatRoomResponse(
         ChatRoomType type,
         String name,
         ChatRoomMemberRole role,
-        Instant lastMessageAt
+        Instant lastMessageAt,
+        long unreadCount
 ) {
-    public static ChatRoomResponse of(ChatRoomMember chatRoomMember) {
+    public static ChatRoomResponse of(
+            ChatRoomMember chatRoomMember,
+            long unreadCount
+    ) {
         ChatRoom chatRoom = chatRoomMember.getChatRoom();
 
         return new ChatRoomResponse(
@@ -22,7 +26,8 @@ public record ChatRoomResponse(
                 chatRoom.getType(),
                 chatRoom.getName(),
                 chatRoomMember.getRole(),
-                chatRoom.getLastMessageAt()
+                chatRoom.getLastMessageAt(),
+                unreadCount
         );
 
     }

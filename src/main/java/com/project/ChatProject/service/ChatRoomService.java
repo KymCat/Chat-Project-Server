@@ -1,12 +1,15 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.event.ChatMessageEvent;
+import com.project.ChatProject.dto.event.ChatRoomEvent;
+import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
 import com.project.ChatProject.dto.response.*;
+import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
-import com.project.ChatProject.entity.enums.ChatRoomType;
-import com.project.ChatProject.entity.enums.MemberStatus;
+import com.project.ChatProject.entity.enums.*;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.ChatMessageRepository;
@@ -21,15 +24,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatRoomService {
+
+    private static final String NO_LOCK = "NO_LOCK";
+    private static final String CHAT_ROOM_LOCK = "CHAT_ROOM";
+    private static final String CHAT_ROOM_MEMBER_LOCK = "CHAT_ROOM_MEMBER";
 
     private final MemberRepository memberRepository;
     private final ChatRoomRepository chatRoomRepository;
@@ -57,13 +62,30 @@ public class ChatRoomService {
     @Transactional(readOnly = true)
     public List<ChatRoomResponse> getChatRooms(Long memberId) {
         Member member = findMember(memberId);
+        validateMember(member);
 
-        List<ChatRoomMember> lists = 
-                chatRoomMemberRepository.findAllActiveByMemberId(member.getId());
+        List<ChatRoomMember> chatRoomMembers =
+                chatRoomMemberRepository
+                        .findAllActiveByMemberId(member.getId());
 
-        return lists.stream()
-                        .map(ChatRoomResponse::of)
-                        .toList();
+        Map<Long, Long> unreadCountByRoomId =
+                chatRoomMemberRepository.findUnreadCountsByMemberId(memberId)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                ChatRoomUnreadCountProjection::getRoomId,
+                                ChatRoomUnreadCountProjection::getUnreadCount
+                        ));
+
+        return chatRoomMembers.stream()
+                .map(chatRoomMember -> {
+                    Long roomId = chatRoomMember.getChatRoom().getId();
+
+                    long unreadCount =
+                            unreadCountByRoomId.getOrDefault(roomId, 0L);
+
+                    return ChatRoomResponse.of(chatRoomMember, unreadCount);
+                })
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -83,7 +105,7 @@ public class ChatRoomService {
     }
 
     @Transactional
-    public ChatRoomJoinResponse join(Long memberId, Long roomId) {
+    public ChatMessageEvent join(Long memberId, Long roomId) {
         Member member = findMember(memberId);
         validateMember(member);
 
@@ -105,8 +127,7 @@ public class ChatRoomService {
             ChatRoomMember newMember
                     = ChatRoomMember.createMember(chatRoom, member);
             chatRoomMemberRepository.save(newMember);
-        }
-        else
+        } else
             rejoin(existingMember.get());
 
         ChatMessage enterMessage =
@@ -117,10 +138,8 @@ public class ChatRoomService {
         chatMessageRepository.save(enterMessage);
         chatRoom.updateLastMessageAt(enterMessage.getCreatedAt());
 
-        return new ChatRoomJoinResponse(
-                GroupChatRoomResponse.of(chatRoom),
-                ChatMessageResponse.from(enterMessage)
-        );
+        return ChatMessageEvent
+                .created(ChatMessageResponse.from(enterMessage));
     }
 
     @Transactional(readOnly = true)
@@ -131,26 +150,11 @@ public class ChatRoomService {
             int size
     )
     {
-        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
-                .orElseThrow(()->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_NOT_FOUND
-                        )
-                );
-        validateJoinableChatRoom(chatRoom);
+        ChatRoomParticipationContext context =
+                requireParticipation(roomId, memberId, NO_LOCK);
 
-        Member member = findMember(memberId);
-        validateMember(member);
-
-        ChatRoomMember chatRoomMember = chatRoomMemberRepository
-                .findByChatRoomIdAndMemberId(chatRoom.getId(), memberId)
-                .orElseThrow(()->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
-                        )
-                );
-        if (!chatRoomMember.isParticipating())
-            throw new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
+        ChatRoom chatRoom = context.chatRoom();
+        ChatRoomMember chatRoomMember = context.chatRoomMember();
 
         List<ChatMessage> messages = findMessages(
                 chatRoom.getId(),
@@ -182,7 +186,379 @@ public class ChatRoomService {
         );
     }
 
+    @Transactional
+    public ChatMessageEvent leave(Long roomId, Long memberId) {
+
+        ChatRoomParticipationContext context =
+                requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+
+        ChatRoom chatRoom = context.chatRoom();
+        Member member = context.member();
+        ChatRoomMember chatRoomMember = context.chatRoomMember();
+
+        // 채팅방 OWNER 나가기 방지
+        if (chatRoomMember.getRole() == ChatRoomMemberRole.OWNER) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_OWNER_TRANSFER_REQUIRED
+            );
+        }
+
+        chatRoomMember.leave();
+        ChatMessage leaveMessage =
+                ChatMessage.createSystem(
+                        chatRoom,
+                        member.getNickname() + "님이 퇴장하였습니다."
+                );
+        chatMessageRepository.save(leaveMessage);
+        chatRoom.updateLastMessageAt(leaveMessage.getCreatedAt());
+
+        return ChatMessageEvent
+                .created(ChatMessageResponse.from(leaveMessage));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChatRoomMemberResponse> getMembers(
+            Long roomId,
+            Long memberId
+    )
+    {
+        ChatRoomParticipationContext context =
+                requireParticipation(roomId, memberId, NO_LOCK);
+
+        List<ChatRoomMember> chatRoomMembers = chatRoomMemberRepository
+                .findAllParticipatingByChatRoomId(
+                        context.chatRoom.getId()
+                );
+
+        return chatRoomMembers.stream()
+                .map(ChatRoomMemberResponse::from)
+                .toList();
+    }
+
+    @Transactional
+    public ChatMessageEvent transferOwnership(
+            Long roomId,
+            Long memberId,
+            Long newOwnerMemberId)
+    {
+        if (memberId.equals(newOwnerMemberId))
+            throw new CustomException(
+                    ErrorCode.INVALID_OWNER_TRANSFER_TARGET
+            );
+
+        ChatRoomParticipationContext myContext
+                = requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+
+        if (myContext.chatRoomMember.getRole()
+                != ChatRoomMemberRole.OWNER) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_OWNER_REQUIRED
+            );
+        }
+
+        ChatRoomParticipationContext newOwnerContext
+                = requireParticipation(roomId, newOwnerMemberId, NO_LOCK);
+
+        // 방장 위임
+        myContext.chatRoomMember
+                .transferOwnershipTo(newOwnerContext.chatRoomMember);
+
+        // 시스템 메세지 작성
+        ChatMessage newOwnerMessage
+                = ChatMessage.createSystem(
+                        myContext.chatRoom,
+                        newOwnerContext.member.getNickname()
+                                + "님이 방장으로 위임되셨습니다."
+        );
+
+        chatMessageRepository.save(newOwnerMessage);
+        myContext.chatRoom
+                .updateLastMessageAt(newOwnerMessage.getCreatedAt());
+
+        return ChatMessageEvent
+                .created(ChatMessageResponse.from(newOwnerMessage));
+
+    }
+
+    @Transactional
+    public void updateReadPosition(
+            Long roomId,
+            Long memberId,
+            Long lastReadMessageId
+    )
+    {
+        ChatRoomParticipationContext context
+                = requireParticipation(roomId, memberId, CHAT_ROOM_MEMBER_LOCK);
+
+        ChatRoomMember chatRoomMember = context.chatRoomMember;
+
+        ChatMessage requestedLastMessage = chatMessageRepository
+                .findByIdAndChatRoomId(lastReadMessageId, roomId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_MESSAGE_NOT_FOUND
+                        )
+                );
+
+        // joinedAt 이후가 아니면 예외
+        if (requestedLastMessage.getCreatedAt()
+                .isBefore(chatRoomMember.getJoinedAt()))
+        {
+            throw new CustomException(ErrorCode.CHAT_MESSAGE_NOT_FOUND);
+        }
+
+        ChatMessage currentLastMessage = chatRoomMember.getLastReadMessage();
+
+        // 기존 읽음 위치와 같거나 이전 메세지라면 변경하지 않음
+        if (currentLastMessage != null
+                && !isAfter(
+                        requestedLastMessage,
+                        currentLastMessage
+                )
+        ) {
+            return;
+        }
+
+        chatRoomMember.updateLastReadMessage(requestedLastMessage);
+    }
+
+    @Transactional
+    public ChatMessageEvent deleteMessage(
+            Long roomId,
+            Long messageId,
+            Long memberId
+    ) {
+        ChatRoomParticipationContext context
+                = requireParticipation(roomId, memberId, NO_LOCK);
+
+        ChatMessage message
+                = findChatMessageForUpdate(messageId, roomId);
+
+        // 일반 메세지가 아닌 경우, 삭제 불가
+        if (message.getType() != ChatMessageType.TEXT) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_TYPE_DELETE_NOT_ALLOWED
+            );
+        }
+
+        // 참가 이전 메세지 삭제 불가
+        if (message.getCreatedAt()
+                .isBefore(context.chatRoomMember.getJoinedAt())) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_NOT_FOUND
+            );
+        }
+
+        // 다른 유저의 메세지 삭제 불가
+        Long contextMemberId = context.member.getId();
+        Long messageSenderId = message.getSender().getId();
+        if (!contextMemberId.equals(messageSenderId)) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_DELETE_FORBIDDEN
+            );
+        }
+
+        message.deleteMessage();
+        ChatMessageResponse response =
+                ChatMessageResponse.from(message);
+
+        return ChatMessageEvent.deleted(response);
+    }
+
+    @Transactional
+    public ChatMessageEvent editMessage(
+            Long roomId,
+            Long messageId,
+            Long memberId,
+            String content
+    )
+    {
+        ChatRoomParticipationContext context
+                = requireParticipation(roomId, memberId, NO_LOCK);
+
+        ChatMessage message
+                = findChatMessageForUpdate(messageId, roomId);
+
+        // 일반 메세지가 아닌 경우, 수정 불가
+        if (message.getType() != ChatMessageType.TEXT) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_TYPE_EDIT_NOT_ALLOWED
+            );
+        }
+
+        // 삭제된 메세지는 수정 불가
+        if (message.getDeletedAt() != null) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_NOT_FOUND
+            );
+        }
+
+        // 참가 이전 메세지 수정 불가
+        if (message.getCreatedAt()
+                .isBefore(context.chatRoomMember.getJoinedAt())) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_NOT_FOUND
+            );
+        }
+
+        // 다른 유저의 메세지 수정 불가
+        Long contextMemberId = context.member.getId();
+        Long messageSenderId = message.getSender().getId();
+        if (!contextMemberId.equals(messageSenderId)) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_EDIT_FORBIDDEN
+            );
+        }
+
+        message.editMessage(content);
+        ChatMessageResponse response =
+                ChatMessageResponse.from(message);
+
+        return ChatMessageEvent.updated(response);
+    }
+
+    @Transactional
+    public ChatRoomNameUpdateResult updateChatRoomName(
+            Long roomId,
+            Long memberId,
+            String updateName
+    )
+    {
+        ChatRoomParticipationContext context
+                = requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+
+        ChatRoomMemberRole role = context.chatRoomMember.getRole();
+        if (!role.equals(ChatRoomMemberRole.OWNER)) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_OWNER_REQUIRED
+            );
+        }
+
+        context.chatRoom.updateName(updateName);
+
+        ChatMessage systemMessage = ChatMessage.createSystem(
+                context.chatRoom,
+                context.member().getNickname()
+                        + "님이 채팅방 이름을 '"
+                        + updateName
+                        + "'(으)로 변경했습니다."
+        );
+        chatMessageRepository.save(systemMessage);
+        context.chatRoom.updateLastMessageAt(systemMessage.getCreatedAt());
+
+        return new ChatRoomNameUpdateResult(
+                ChatRoomEvent.updated(roomId, updateName),
+                ChatMessageEvent.created(
+                        ChatMessageResponse.from(systemMessage)
+                )
+        );
+    }
+
+    @Transactional
+    public ChatRoomEvent delete(Long roomId, Long memberId) {
+        ChatRoomParticipationContext context
+                = requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+
+        if (!context.chatRoomMember.getRole()
+                .equals(ChatRoomMemberRole.OWNER))
+        {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_OWNER_REQUIRED
+            );
+        }
+
+        String roomName = context.chatRoom().getName();
+        context.chatRoom.delete();
+
+        return ChatRoomEvent.deleted(roomId, roomName);
+    }
+
+
     // == Private Method ==
+
+    /**
+     * 읽음 요청된 메세지가 이전에 읽었던 메세지보다 나중에 작성된 메세지인지 검증
+     * @param request 읽음 요청된 메세지
+     * @param current 실제 내가 읽은 채팅방 마지막 메세지
+     * @return
+     */
+    private boolean isAfter(
+            ChatMessage request,
+            ChatMessage current
+    )
+    {
+        int createdAtComparison = request.getCreatedAt()
+                .compareTo(current.getCreatedAt());
+
+        /*
+            1 : request가 나중에 작성된 메세지
+            0 : 작성시간이 동일한 메세지
+           -1 : current보다 이전에 작성된 메세지
+         */
+        if (createdAtComparison != 0) {
+            return createdAtComparison > 0;
+        }
+
+        return request.getId() > current.getId();
+    }
+
+    /**
+     * 채팅방 서비스 로직에서 채팅방, 멤버, 채팅방 멤버 검증 반환 record
+     */
+    private record ChatRoomParticipationContext(
+            ChatRoom chatRoom,
+            Member member,
+            ChatRoomMember chatRoomMember
+    ) {
+    }
+
+    /**
+     * 채팅방, 멤버, 채팅방 멤버 검증 메서드
+     * @param roomId
+     * @param memberId
+     * @param lockType
+     * @return
+     */
+    private ChatRoomParticipationContext requireParticipation(
+            Long roomId,
+            Long memberId,
+            String lockType
+    )
+    {
+        ChatRoom chatRoom = switch (lockType) {
+            case CHAT_ROOM_LOCK -> findChatRoomLock(roomId);
+            case CHAT_ROOM_MEMBER_LOCK, NO_LOCK -> findChatRoom(roomId);
+            default -> throw new IllegalStateException(
+                    "지원하지 않은 Lock type입니다. " + lockType
+            );
+        };
+        validateJoinableChatRoom(chatRoom);
+
+        Member member = findMember(memberId);
+        validateMember(member);
+
+        ChatRoomMember chatRoomMember = switch (lockType) {
+            case CHAT_ROOM_MEMBER_LOCK ->
+                    findChatRoomMemberForUpdate(roomId, memberId);
+            case CHAT_ROOM_LOCK, NO_LOCK ->
+                    findChatRoomMember(roomId, memberId);
+            default -> throw new IllegalArgumentException(
+                    "지원하지 않는 Lock type입니다: " + lockType
+            );
+        };
+
+        if (!chatRoomMember.isParticipating()) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_ACCESS_DENIED
+            );
+        }
+
+        return new ChatRoomParticipationContext(
+                chatRoom,
+                member,
+                chatRoomMember
+        );
+    }
 
     /**
      * 채팅방에서 메세지 조회
@@ -263,7 +639,7 @@ public class ChatRoomService {
     }
 
     /**
-     * 유저 정보를 찾아서 반환
+     * 유저 엔티티 반환
      * @param memberId
      * @return 유저 정보(Entity)
      */
@@ -272,6 +648,89 @@ public class ChatRoomService {
                 .orElseThrow(() ->
                         new CustomException(
                                 ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+    }
+
+    /**
+     * 채팅방 엔티티 반환
+     * @param roomId
+     * @return
+     */
+    private ChatRoom findChatRoom(Long roomId) {
+        return chatRoomRepository.findById(roomId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_NOT_FOUND
+                        )
+                );
+    }
+
+    /**
+     * 채팅방 엔티티 반환 및 ChatRoom row Lock
+     * @param roomId
+     * @return
+     */
+    private ChatRoom findChatRoomLock(Long roomId) {
+        return chatRoomRepository.findByIdForUpdate(roomId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_NOT_FOUND
+                        )
+                );
+    }
+
+    /**
+     * 채팅방 멤버 엔티티 반환
+     * @param roomId
+     * @param memberId
+     * @return
+     */
+    private ChatRoomMember findChatRoomMember(
+            Long roomId,
+            Long memberId
+    ) {
+        return chatRoomMemberRepository
+                .findByChatRoomIdAndMemberId(roomId, memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_ACCESS_DENIED)
+                );
+    }
+
+    /**
+     * 채팅방 멤버 엔티티 반환 및 ChatRoomMember row Lock
+     * @param roomId
+     * @param memberId
+     * @return
+     */
+    private ChatRoomMember findChatRoomMemberForUpdate(
+            Long roomId,
+            Long memberId
+    ) {
+        return chatRoomMemberRepository
+                .findByChatRoomIdAndMemberIdForUpdate(roomId, memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_ACCESS_DENIED)
+                );
+    }
+
+    /**
+     * 채팅 메세지 엔티티 반환 및 ChatMessage row Lock
+     * @param messageId
+     * @param roomId
+     * @return
+     */
+    private ChatMessage findChatMessageForUpdate(
+            Long messageId,
+            Long roomId
+    ) {
+        return chatMessageRepository
+                .findByIdAndRoomIdForUpdate(messageId, roomId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_MESSAGE_NOT_FOUND
                         )
                 );
     }

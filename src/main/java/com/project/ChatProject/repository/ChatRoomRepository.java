@@ -2,15 +2,30 @@ package com.project.ChatProject.repository;
 
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.enums.ChatRoomType;
+import com.project.ChatProject.exception.CustomException;
+import com.project.ChatProject.exception.ErrorCode;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ChatRoomRepository
         extends JpaRepository<ChatRoom, Long>
 {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+            value = """
+                    SELECT cr
+                    FROM ChatRoom cr
+                    WHERE cr.id = :id
+                    """
+    )
+    Optional<ChatRoom> findByIdForUpdate(@Param("id") Long id);
+
     @Query(
             value = """
                     SELECT cr

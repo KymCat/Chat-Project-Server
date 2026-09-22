@@ -55,12 +55,47 @@ public enum ErrorCode {
             "CHAT_ROOM_005",
             "현재 참여중인 채팅방이 아닙니다."
     ),
+    CHAT_ROOM_OWNER_TRANSFER_REQUIRED(
+            HttpStatus.CONFLICT,
+            "CHAT_ROOM_006",
+            "방장은 소유권을 위임한 후 채팅방을 나갈 수 있습니다."
+    ),
+    CHAT_ROOM_OWNER_REQUIRED(
+            HttpStatus.FORBIDDEN,
+            "CHAT_ROOM_007",
+            "방장 권한이 필요합니다."
+    ),
+    INVALID_OWNER_TRANSFER_TARGET(
+            HttpStatus.BAD_REQUEST,
+            "CHAT_ROOM_008",
+            "방장 권한을 위임할 수 없는 회원입니다."
+    ),
 
     // Chat Message Exception
     CHAT_MESSAGE_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "CHAT_MESSAGE_001",
             "존재하지 않은 채팅 메세지입니다."
+    ),
+    CHAT_MESSAGE_DELETE_FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "CHAT_MESSAGE_002",
+            "자신이 작성한 메세지만 삭제 가능합니다."
+    ),
+    CHAT_MESSAGE_TYPE_DELETE_NOT_ALLOWED(
+            HttpStatus.FORBIDDEN,
+            "CHAT_MESSAGE_003",
+            "시스템 메세지는 삭제 불가능합니다."
+    ),
+    CHAT_MESSAGE_EDIT_FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "CHAT_MESSAGE_004",
+            "자신이 작성한 메세지만 수정 가능합니다."
+    ),
+    CHAT_MESSAGE_TYPE_EDIT_NOT_ALLOWED(
+            HttpStatus.FORBIDDEN,
+            "CHAT_MESSAGE_005",
+            "해당 메세지는 수정 불가능합니다."
     ),
 
     // Auth Exception

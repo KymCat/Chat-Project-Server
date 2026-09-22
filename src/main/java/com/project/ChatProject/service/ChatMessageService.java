@@ -1,5 +1,6 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.entity.ChatMessage;
@@ -28,7 +29,7 @@ public class ChatMessageService {
     private final ChatMessageRepository chatMessageRepository;
 
     @Transactional
-    public ChatMessageResponse save(
+    public ChatMessageEvent save(
             Long memberId,
             ChatMessageRequest request
     )
@@ -59,7 +60,8 @@ public class ChatMessageService {
         chatMessageRepository.save(message);
 
         chatRoom.updateLastMessageAt(message.getCreatedAt());
-        return ChatMessageResponse.from(message);
+        return  ChatMessageEvent
+                .created(ChatMessageResponse.from(message));
     }
 
     // == Private Method ==

@@ -85,6 +85,18 @@ public class ChatMessage extends BaseCreatedTimeEntity {
         this.attachment = attachment;
     }
 
+    public void deleteMessage() {
+        if (this.getDeletedAt() != null)
+            return;
+
+        this.deletedAt = Instant.now();
+    }
+
+    public void editMessage(String content) {
+        this.content = content.strip();
+        this.editedAt = Instant.now();
+    }
+
     public static ChatMessage createText(
             ChatRoom chatRoom,
             Member sender,

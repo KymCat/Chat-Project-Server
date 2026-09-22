@@ -1,5 +1,6 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.entity.ChatMessage;
@@ -7,6 +8,7 @@ import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.ChatMessageType;
+import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
@@ -81,7 +83,7 @@ class ChatMessageServiceTest {
                     return message;
                 });
 
-        ChatMessageResponse response = chatMessageService.save(
+        ChatMessageEvent event = chatMessageService.save(
                 MEMBER_ID,
                 new ChatMessageRequest(ROOM_ID, "  안녕하세요  ")
         );
@@ -99,7 +101,8 @@ class ChatMessageServiceTest {
         assertThat(savedMessage.getAttachment()).isNull();
         assertThat(chatRoom.getLastMessageAt()).isEqualTo(createdAt);
 
-        assertThat(response).isEqualTo(
+        assertThat(event.eventType()).isEqualTo(ChatMessageEventType.CREATED);
+        assertThat(event.message()).isEqualTo(
                 new ChatMessageResponse(
                         100L,
                         ROOM_ID,
@@ -107,7 +110,9 @@ class ChatMessageServiceTest {
                         "사용자",
                         ChatMessageType.TEXT,
                         "안녕하세요",
-                        createdAt
+                        createdAt,
+                        null,
+                        false
                 )
         );
     }

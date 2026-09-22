@@ -93,6 +93,10 @@ public class ChatRoomMember {
         );
     }
 
+    public void updateLastReadMessage(ChatMessage requestedLastMessage) {
+        this.lastReadMessage = requestedLastMessage;
+    }
+
     public boolean isParticipating() {
         return leftAt == null;
     }
@@ -101,5 +105,14 @@ public class ChatRoomMember {
         this.lastReadMessage = null;
         this.joinedAt = Instant.now();
         this.leftAt = null;
+    }
+
+    public void leave() {
+        this.leftAt = Instant.now();
+    }
+
+    public void transferOwnershipTo(ChatRoomMember newOwner) {
+        this.role = ChatRoomMemberRole.MEMBER;
+        newOwner.role = ChatRoomMemberRole.OWNER;
     }
 }
