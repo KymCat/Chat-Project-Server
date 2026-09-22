@@ -125,4 +125,27 @@ public class ChatMessage extends BaseCreatedTimeEntity {
                 null
         );
     }
+
+    public static ChatMessage createAttachment(
+            ChatRoom chatRoom,
+            Member sender,
+            ChatMessageType type,
+            Attachment attachment
+    ) {
+        if (type != ChatMessageType.IMAGE
+                && type != ChatMessageType.FILE) {
+            throw new IllegalArgumentException(
+                    "첨부파일 메시지는 IMAGE 또는 FILE 타입이어야 합니다."
+            );
+        }
+
+        return new ChatMessage(
+                chatRoom,
+                sender,
+                UUID.randomUUID(),
+                type,
+                null,
+                attachment
+        );
+    }
 }

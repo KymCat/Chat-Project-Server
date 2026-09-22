@@ -29,6 +29,10 @@ spring:
                     auth: ${MAIL_SMTP_AUTH:false}
                     starttls:
                         enable: ${MAIL_SMTP_STARTTLS_ENABLE:false}
+    servlet:
+        multipart:
+            max-file-size: 50MB
+            max-request-size: 52MB
 jwt:
     access-token-expiration: ${ACCESS_TOKEN_EXPIRATION}
     secret: ${JWT_SECRET}
@@ -42,3 +46,8 @@ email-verification:
     resend-cooldown: ${RESEND_COOLDOWN}
     max-attempts: ${MAX_ATTEMPTS}
     sender: ${MAIL_FROM}
+chat:
+    storage:
+        local-root: ${CHAT_LOCAL_STORAGE_ROOT}
+        max-image-size: 10MB
+        max-file-size: 50MB

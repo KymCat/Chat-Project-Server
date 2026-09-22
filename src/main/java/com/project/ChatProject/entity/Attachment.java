@@ -59,4 +59,59 @@ public class Attachment extends BaseCreatedTimeEntity {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    private Attachment(
+            Member uploader,
+            String originalName,
+            String contentType,
+            long sizeBytes,
+            String storageKey
+    ) {
+        this.uploader = uploader;
+        this.originalName = originalName;
+        this.contentType = contentType;
+        this.sizeBytes = sizeBytes;
+        this.storageKey = storageKey;
+        this.status = AttachmentStatus.PENDING;
+    }
+
+    public void activate() {
+        if (status == AttachmentStatus.ACTIVE) {
+            return;
+        }
+
+        if (status == AttachmentStatus.DELETED) {
+            throw new IllegalStateException(
+                    "삭제된 첨부파일은 활성화할 수 없습니다."
+            );
+        }
+
+        this.status = AttachmentStatus.ACTIVE;
+        this.activatedAt = Instant.now();
+    }
+
+    public void delete() {
+        if (status == AttachmentStatus.DELETED) {
+            return;
+        }
+
+        this.status = AttachmentStatus.DELETED;
+        this.deletedAt = Instant.now();
+    }
+
+    public static Attachment createPending(
+            Member uploader,
+            String originalName,
+            String contentType,
+            long sizeBytes,
+            String storageKey
+    ) {
+        return new Attachment(
+                uploader,
+                originalName,
+                contentType,
+                sizeBytes,
+                storageKey
+        );
+    }
 }
