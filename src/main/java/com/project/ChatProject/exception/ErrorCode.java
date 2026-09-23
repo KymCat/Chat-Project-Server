@@ -153,6 +153,31 @@ public enum ErrorCode {
             "ATTACHMENT-003",
             "잘못된 첨부파일 저장 경로입니다."
     ),
+    ATTACHMENT_EMPTY(
+            HttpStatus.BAD_REQUEST,
+            "ATTACHMENT-004",
+            "빈 파일은 첨부할 수 없습니다."
+    ),
+    ATTACHMENT_TOO_LARGE(
+            HttpStatus.PAYLOAD_TOO_LARGE,
+            "ATTACHMENT-005",
+            "첨부파일 허용 크기를 초과했습니다."
+    ),
+    ATTACHMENT_TYPE_NOT_ALLOWED(
+            HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+            "ATTACHMENT-006",
+            "허용되지 않는 첨부파일 형식입니다."
+    ),
+    ATTACHMENT_INVALID_IMAGE(
+            HttpStatus.BAD_REQUEST,
+            "ATTACHMENT-007",
+            "유효한 이미지 파일이 아닙니다."
+    ),
+    ATTACHMENT_INVALID_FILENAME(
+            HttpStatus.BAD_REQUEST,
+            "ATTACHMENT-008",
+            "유효하지 않은 첨부파일 이름입니다."
+    ),
 
     // Common Exception
     INTERNAL_SERVER_ERROR(
