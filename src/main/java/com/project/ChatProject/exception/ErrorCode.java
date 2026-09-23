@@ -137,6 +137,23 @@ public enum ErrorCode {
             "이메일 인증이 필요합니다."
     ),
 
+    // Attachment Exception
+    ATTACHMENT_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "ATTACHMENT-001",
+            "존재하지 않는 첨부파일입니다."
+    ),
+    ATTACHMENT_STORAGE_FAILED(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "ATTACHMENT-002",
+            "첨부파일 저장 처리에 실패했습니다."
+    ),
+    INVALID_ATTACHMENT_STORAGE_KEY(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "ATTACHMENT-003",
+            "잘못된 첨부파일 저장 경로입니다."
+    ),
+
     // Common Exception
     INTERNAL_SERVER_ERROR(
             HttpStatus.INTERNAL_SERVER_ERROR,
