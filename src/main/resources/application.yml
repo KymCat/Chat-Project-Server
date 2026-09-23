@@ -33,19 +33,35 @@ spring:
         multipart:
             max-file-size: 50MB
             max-request-size: 52MB
+    security:
+        oauth2:
+            client:
+                registration:
+                    google:
+                        client-id: ${GOOGLE_CLIENT_ID}
+                        client-secret: ${GOOGLE_CLIENT_SECRET}
+                        scope:
+                            - openid
+                            - profile
+                            - email
+                            -
 jwt:
     access-token-expiration: ${ACCESS_TOKEN_EXPIRATION}
     secret: ${JWT_SECRET}
+
 refresh-token:
     expiration: ${REFRESH_TOKEN_EXPIRATION}
+
 cookie:
     secure: ${COOKIE_SECURE}
+
 email-verification:
     hash-secret: ${EMAIL_VERIFICATION_HASH_SECRET}
     code-expiration: ${CODE_EXPIRATION}
     resend-cooldown: ${RESEND_COOLDOWN}
     max-attempts: ${MAX_ATTEMPTS}
     sender: ${MAIL_FROM}
+
 chat:
     storage:
         local-root: ${CHAT_LOCAL_STORAGE_ROOT}
