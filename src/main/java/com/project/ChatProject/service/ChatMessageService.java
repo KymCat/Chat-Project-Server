@@ -5,15 +5,10 @@ import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
-import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
-import com.project.ChatProject.entity.enums.MemberStatus;
-import com.project.ChatProject.exception.CustomException;
-import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.ChatMessageRepository;
-import com.project.ChatProject.repository.ChatRoomMemberRepository;
-import com.project.ChatProject.repository.ChatRoomRepository;
-import com.project.ChatProject.repository.MemberRepository;
+import com.project.ChatProject.service.support.ChatRoomParticipationContext;
+import com.project.ChatProject.service.support.ParticipationLockMode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,9 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ChatMessageService {
 
-    private final MemberRepository memberRepository;
-    private final ChatRoomRepository chatRoomRepository;
-    private final ChatRoomMemberRepository chatRoomMemberRepository;
+    private final ChatRoomParticipationService participation;
     private final ChatMessageRepository chatMessageRepository;
 
     @Transactional
@@ -34,22 +27,15 @@ public class ChatMessageService {
             ChatMessageRequest request
     )
     {
-        Long roomId = request.roomId();
-        Member sender = findMember(memberId);
-        validateMember(sender);
-
-        ChatRoom chatRoom = chatRoomRepository
-                .findById(roomId)
-                .orElseThrow(()->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_NOT_FOUND
-                        )
+        ChatRoomParticipationContext context =
+                participation.requireParticipation(
+                        request.roomId(),
+                        memberId,
+                        ParticipationLockMode.NONE
                 );
 
-        if (chatRoom.getDeletedAt() != null) {
-            throw new CustomException(ErrorCode.CHAT_ROOM_DELETED);
-        }
-        validateParticipation(roomId, memberId);
+        Member sender = context.member();
+        ChatRoom chatRoom = context.chatRoom();
 
         String content = request.content().strip();
         ChatMessage message = ChatMessage.createText(
@@ -60,47 +46,8 @@ public class ChatMessageService {
         chatMessageRepository.save(message);
 
         chatRoom.updateLastMessageAt(message.getCreatedAt());
+
         return  ChatMessageEvent
                 .created(ChatMessageResponse.from(message));
-    }
-
-    // == Private Method ==
-
-    private Member findMember(Long memberId) {
-        return memberRepository.findById(memberId)
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.MEMBER_NOT_FOUND
-                        )
-                );
-    }
-
-    private void validateMember(Member member) {
-        if (member.getStatus() == MemberStatus.SUSPENDED) {
-            throw new CustomException(ErrorCode.MEMBER_BLOCKED);
-        }
-
-        if (member.getStatus() == MemberStatus.WITHDRAWN) {
-            throw new CustomException(ErrorCode.MEMBER_WITHDRAWN);
-        }
-
-        if (member.getEmailVerifiedAt() == null) {
-            throw new CustomException(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
-        }
-    }
-
-    private void validateParticipation(
-            Long roomId,
-            Long memberId
-    )
-    {
-        ChatRoomMember chatRoomMember =
-                chatRoomMemberRepository
-                        .findByChatRoomIdAndMemberId(roomId, memberId)
-                        .orElseThrow(()->
-                                new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED)
-                        );
-        if (!chatRoomMember.isParticipating())
-            throw new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
     }
 }

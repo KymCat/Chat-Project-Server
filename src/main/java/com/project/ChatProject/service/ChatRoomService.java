@@ -15,7 +15,8 @@ import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
-import com.project.ChatProject.repository.MemberRepository;
+import com.project.ChatProject.service.support.ChatRoomParticipationContext;
+import com.project.ChatProject.service.support.ParticipationLockMode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -32,19 +33,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ChatRoomService {
 
-    private static final String NO_LOCK = "NO_LOCK";
-    private static final String CHAT_ROOM_LOCK = "CHAT_ROOM";
-    private static final String CHAT_ROOM_MEMBER_LOCK = "CHAT_ROOM_MEMBER";
-
-    private final MemberRepository memberRepository;
+    private final ChatRoomParticipationService participation;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final ChatMessageRepository chatMessageRepository;
 
     @Transactional
     public ChatRoomCreateResponse create(Long memberId, String name) {
-        Member member = findMember(memberId);
-        validateMember(member);
+        Member member = participation.requireActiveMember(memberId);
 
         ChatRoom chatRoom = ChatRoom.create(name);
         ChatRoomMember chatRoomMember = ChatRoomMember.create(chatRoom, member);
@@ -61,8 +57,7 @@ public class ChatRoomService {
 
     @Transactional(readOnly = true)
     public List<ChatRoomResponse> getChatRooms(Long memberId) {
-        Member member = findMember(memberId);
-        validateMember(member);
+        Member member = participation.requireActiveMember(memberId);
 
         List<ChatRoomMember> chatRoomMembers =
                 chatRoomMemberRepository
@@ -90,8 +85,7 @@ public class ChatRoomService {
 
     @Transactional(readOnly = true)
     public List<GroupChatRoomResponse> getGroupChatRooms(Long memberId) {
-        Member member = findMember(memberId);
-        validateMember(member);
+        Member member = participation.requireActiveMember(memberId);
 
         List<ChatRoom> lists =
                 chatRoomRepository.findAllGroupChatRoom(
@@ -106,16 +100,9 @@ public class ChatRoomService {
 
     @Transactional
     public ChatMessageEvent join(Long memberId, Long roomId) {
-        Member member = findMember(memberId);
-        validateMember(member);
+        Member member = participation.requireActiveMember(memberId);
 
-        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_NOT_FOUND
-                        )
-                );
-        validateJoinableChatRoom(chatRoom);
+        ChatRoom chatRoom = participation.requireJoinableChatRoom(roomId);
 
         Optional<ChatRoomMember> existingMember =
                 chatRoomMemberRepository.findByChatRoomIdAndMemberId(
@@ -150,8 +137,12 @@ public class ChatRoomService {
             int size
     )
     {
-        ChatRoomParticipationContext context =
-                requireParticipation(roomId, memberId, NO_LOCK);
+        ChatRoomParticipationContext context = participation
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.NONE
+                );
 
         ChatRoom chatRoom = context.chatRoom();
         ChatRoomMember chatRoomMember = context.chatRoomMember();
@@ -189,8 +180,12 @@ public class ChatRoomService {
     @Transactional
     public ChatMessageEvent leave(Long roomId, Long memberId) {
 
-        ChatRoomParticipationContext context =
-                requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+        ChatRoomParticipationContext context = participation
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.CHAT_ROOM
+                );
 
         ChatRoom chatRoom = context.chatRoom();
         Member member = context.member();
@@ -222,12 +217,16 @@ public class ChatRoomService {
             Long memberId
     )
     {
-        ChatRoomParticipationContext context =
-                requireParticipation(roomId, memberId, NO_LOCK);
+        ChatRoomParticipationContext context = participation
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.NONE
+                );
 
         List<ChatRoomMember> chatRoomMembers = chatRoomMemberRepository
                 .findAllParticipatingByChatRoomId(
-                        context.chatRoom.getId()
+                        context.chatRoom().getId()
                 );
 
         return chatRoomMembers.stream()
@@ -246,33 +245,41 @@ public class ChatRoomService {
                     ErrorCode.INVALID_OWNER_TRANSFER_TARGET
             );
 
-        ChatRoomParticipationContext myContext
-                = requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+        ChatRoomParticipationContext myContext = participation
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.CHAT_ROOM
+                );
 
-        if (myContext.chatRoomMember.getRole()
+        if (myContext.chatRoomMember().getRole()
                 != ChatRoomMemberRole.OWNER) {
             throw new CustomException(
                     ErrorCode.CHAT_ROOM_OWNER_REQUIRED
             );
         }
 
-        ChatRoomParticipationContext newOwnerContext
-                = requireParticipation(roomId, newOwnerMemberId, NO_LOCK);
+        ChatRoomParticipationContext newOwnerContext = participation
+                .requireParticipation(
+                        roomId,
+                        newOwnerMemberId,
+                        ParticipationLockMode.NONE
+                );
 
         // 방장 위임
-        myContext.chatRoomMember
-                .transferOwnershipTo(newOwnerContext.chatRoomMember);
+        myContext.chatRoomMember()
+                .transferOwnershipTo(newOwnerContext.chatRoomMember());
 
         // 시스템 메세지 작성
         ChatMessage newOwnerMessage
                 = ChatMessage.createSystem(
-                        myContext.chatRoom,
-                        newOwnerContext.member.getNickname()
+                        myContext.chatRoom(),
+                        newOwnerContext.member().getNickname()
                                 + "님이 방장으로 위임되셨습니다."
         );
 
         chatMessageRepository.save(newOwnerMessage);
-        myContext.chatRoom
+        myContext.chatRoom()
                 .updateLastMessageAt(newOwnerMessage.getCreatedAt());
 
         return ChatMessageEvent
@@ -287,10 +294,14 @@ public class ChatRoomService {
             Long lastReadMessageId
     )
     {
-        ChatRoomParticipationContext context
-                = requireParticipation(roomId, memberId, CHAT_ROOM_MEMBER_LOCK);
+        ChatRoomParticipationContext context = participation
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.CHAT_ROOM_MEMBER
+                );
 
-        ChatRoomMember chatRoomMember = context.chatRoomMember;
+        ChatRoomMember chatRoomMember = context.chatRoomMember();
 
         ChatMessage requestedLastMessage = chatMessageRepository
                 .findByIdAndChatRoomId(lastReadMessageId, roomId)
@@ -328,8 +339,12 @@ public class ChatRoomService {
             Long messageId,
             Long memberId
     ) {
-        ChatRoomParticipationContext context
-                = requireParticipation(roomId, memberId, NO_LOCK);
+        ChatRoomParticipationContext context = participation
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.NONE
+                );
 
         ChatMessage message
                 = findChatMessageForUpdate(messageId, roomId);
@@ -343,14 +358,14 @@ public class ChatRoomService {
 
         // 참가 이전 메세지 삭제 불가
         if (message.getCreatedAt()
-                .isBefore(context.chatRoomMember.getJoinedAt())) {
+                .isBefore(context.chatRoomMember().getJoinedAt())) {
             throw new CustomException(
                     ErrorCode.CHAT_MESSAGE_NOT_FOUND
             );
         }
 
         // 다른 유저의 메세지 삭제 불가
-        Long contextMemberId = context.member.getId();
+        Long contextMemberId = context.member().getId();
         Long messageSenderId = message.getSender().getId();
         if (!contextMemberId.equals(messageSenderId)) {
             throw new CustomException(
@@ -373,8 +388,12 @@ public class ChatRoomService {
             String content
     )
     {
-        ChatRoomParticipationContext context
-                = requireParticipation(roomId, memberId, NO_LOCK);
+        ChatRoomParticipationContext context = participation
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.NONE
+                );
 
         ChatMessage message
                 = findChatMessageForUpdate(messageId, roomId);
@@ -395,14 +414,14 @@ public class ChatRoomService {
 
         // 참가 이전 메세지 수정 불가
         if (message.getCreatedAt()
-                .isBefore(context.chatRoomMember.getJoinedAt())) {
+                .isBefore(context.chatRoomMember().getJoinedAt())) {
             throw new CustomException(
                     ErrorCode.CHAT_MESSAGE_NOT_FOUND
             );
         }
 
         // 다른 유저의 메세지 수정 불가
-        Long contextMemberId = context.member.getId();
+        Long contextMemberId = context.member().getId();
         Long messageSenderId = message.getSender().getId();
         if (!contextMemberId.equals(messageSenderId)) {
             throw new CustomException(
@@ -424,27 +443,31 @@ public class ChatRoomService {
             String updateName
     )
     {
-        ChatRoomParticipationContext context
-                = requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+        ChatRoomParticipationContext context = participation
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.CHAT_ROOM
+                );
 
-        ChatRoomMemberRole role = context.chatRoomMember.getRole();
+        ChatRoomMemberRole role = context.chatRoomMember().getRole();
         if (!role.equals(ChatRoomMemberRole.OWNER)) {
             throw new CustomException(
                     ErrorCode.CHAT_ROOM_OWNER_REQUIRED
             );
         }
 
-        context.chatRoom.updateName(updateName);
+        context.chatRoom().updateName(updateName);
 
         ChatMessage systemMessage = ChatMessage.createSystem(
-                context.chatRoom,
+                context.chatRoom(),
                 context.member().getNickname()
                         + "님이 채팅방 이름을 '"
                         + updateName
                         + "'(으)로 변경했습니다."
         );
         chatMessageRepository.save(systemMessage);
-        context.chatRoom.updateLastMessageAt(systemMessage.getCreatedAt());
+        context.chatRoom().updateLastMessageAt(systemMessage.getCreatedAt());
 
         return new ChatRoomNameUpdateResult(
                 ChatRoomEvent.updated(roomId, updateName),
@@ -456,10 +479,14 @@ public class ChatRoomService {
 
     @Transactional
     public ChatRoomEvent delete(Long roomId, Long memberId) {
-        ChatRoomParticipationContext context
-                = requireParticipation(roomId, memberId, CHAT_ROOM_LOCK);
+        ChatRoomParticipationContext context = participation
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.CHAT_ROOM
+                );
 
-        if (!context.chatRoomMember.getRole()
+        if (!context.chatRoomMember().getRole()
                 .equals(ChatRoomMemberRole.OWNER))
         {
             throw new CustomException(
@@ -468,7 +495,7 @@ public class ChatRoomService {
         }
 
         String roomName = context.chatRoom().getName();
-        context.chatRoom.delete();
+        context.chatRoom().delete();
 
         return ChatRoomEvent.deleted(roomId, roomName);
     }
@@ -500,64 +527,6 @@ public class ChatRoomService {
         }
 
         return request.getId() > current.getId();
-    }
-
-    /**
-     * 채팅방 서비스 로직에서 채팅방, 멤버, 채팅방 멤버 검증 반환 record
-     */
-    private record ChatRoomParticipationContext(
-            ChatRoom chatRoom,
-            Member member,
-            ChatRoomMember chatRoomMember
-    ) {
-    }
-
-    /**
-     * 채팅방, 멤버, 채팅방 멤버 검증 메서드
-     * @param roomId
-     * @param memberId
-     * @param lockType
-     * @return
-     */
-    private ChatRoomParticipationContext requireParticipation(
-            Long roomId,
-            Long memberId,
-            String lockType
-    )
-    {
-        ChatRoom chatRoom = switch (lockType) {
-            case CHAT_ROOM_LOCK -> findChatRoomLock(roomId);
-            case CHAT_ROOM_MEMBER_LOCK, NO_LOCK -> findChatRoom(roomId);
-            default -> throw new IllegalStateException(
-                    "지원하지 않은 Lock type입니다. " + lockType
-            );
-        };
-        validateJoinableChatRoom(chatRoom);
-
-        Member member = findMember(memberId);
-        validateMember(member);
-
-        ChatRoomMember chatRoomMember = switch (lockType) {
-            case CHAT_ROOM_MEMBER_LOCK ->
-                    findChatRoomMemberForUpdate(roomId, memberId);
-            case CHAT_ROOM_LOCK, NO_LOCK ->
-                    findChatRoomMember(roomId, memberId);
-            default -> throw new IllegalArgumentException(
-                    "지원하지 않는 Lock type입니다: " + lockType
-            );
-        };
-
-        if (!chatRoomMember.isParticipating()) {
-            throw new CustomException(
-                    ErrorCode.CHAT_ROOM_ACCESS_DENIED
-            );
-        }
-
-        return new ChatRoomParticipationContext(
-                chatRoom,
-                member,
-                chatRoomMember
-        );
     }
 
     /**
@@ -608,24 +577,6 @@ public class ChatRoomService {
     }
 
     /**
-     * 해당 채팅방이 참여가능한 채팅방인지 검증
-     * @param chatRoom
-     */
-    private void validateJoinableChatRoom(ChatRoom chatRoom) {
-        if (chatRoom.getDeletedAt() != null) {
-            throw new CustomException(
-                    ErrorCode.CHAT_ROOM_DELETED
-            );
-        }
-
-        if (chatRoom.getType() != ChatRoomType.GROUP) {
-            throw new CustomException(
-                    ErrorCode.INVALID_CHAT_ROOM_TYPE
-            );
-        }
-    }
-
-    /**
      * 한번 퇴장했던 채팅방으로 재참여
      * @param chatRoomMember
      */
@@ -636,84 +587,6 @@ public class ChatRoomService {
             );
 
         chatRoomMember.rejoin();
-    }
-
-    /**
-     * 유저 엔티티 반환
-     * @param memberId
-     * @return 유저 정보(Entity)
-     */
-    private Member findMember(Long memberId) {
-        return memberRepository.findById(memberId)
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.MEMBER_NOT_FOUND
-                        )
-                );
-    }
-
-    /**
-     * 채팅방 엔티티 반환
-     * @param roomId
-     * @return
-     */
-    private ChatRoom findChatRoom(Long roomId) {
-        return chatRoomRepository.findById(roomId)
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_NOT_FOUND
-                        )
-                );
-    }
-
-    /**
-     * 채팅방 엔티티 반환 및 ChatRoom row Lock
-     * @param roomId
-     * @return
-     */
-    private ChatRoom findChatRoomLock(Long roomId) {
-        return chatRoomRepository.findByIdForUpdate(roomId)
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_NOT_FOUND
-                        )
-                );
-    }
-
-    /**
-     * 채팅방 멤버 엔티티 반환
-     * @param roomId
-     * @param memberId
-     * @return
-     */
-    private ChatRoomMember findChatRoomMember(
-            Long roomId,
-            Long memberId
-    ) {
-        return chatRoomMemberRepository
-                .findByChatRoomIdAndMemberId(roomId, memberId)
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_ACCESS_DENIED)
-                );
-    }
-
-    /**
-     * 채팅방 멤버 엔티티 반환 및 ChatRoomMember row Lock
-     * @param roomId
-     * @param memberId
-     * @return
-     */
-    private ChatRoomMember findChatRoomMemberForUpdate(
-            Long roomId,
-            Long memberId
-    ) {
-        return chatRoomMemberRepository
-                .findByChatRoomIdAndMemberIdForUpdate(roomId, memberId)
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_ACCESS_DENIED)
-                );
     }
 
     /**
@@ -733,23 +606,5 @@ public class ChatRoomService {
                                 ErrorCode.CHAT_MESSAGE_NOT_FOUND
                         )
                 );
-    }
-
-    /**
-     * 해당 유저의 정지, 탈퇴, 이메일 인증에 대한 검증
-     * @param member
-     */
-    private void validateMember(Member member) {
-        if (member.getStatus() == MemberStatus.SUSPENDED) {
-            throw new CustomException(ErrorCode.MEMBER_BLOCKED);
-        }
-
-        if (member.getStatus() == MemberStatus.WITHDRAWN) {
-            throw new CustomException(ErrorCode.MEMBER_WITHDRAWN);
-        }
-
-        if (member.getEmailVerifiedAt() == null) {
-            throw new CustomException(ErrorCode.EMAIL_VERIFICATION_REQUIRED);
-        }
     }
 }
