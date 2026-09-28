@@ -13,6 +13,7 @@ public record ChatMessageResponse(
         String senderNickname,
         ChatMessageType type,
         String content,
+        AttachmentResponse attachment,
         Instant createdAt,
         Instant editedAt,
         boolean deleted
@@ -21,6 +22,12 @@ public record ChatMessageResponse(
         Member sender = message.getSender();
         boolean deleted = message.getDeletedAt() != null;
 
+        AttachmentResponse attachment =
+                !deleted &&
+                message.getAttachment() != null
+                        ? AttachmentResponse.from(message.getAttachment())
+                        : null;
+
         return new ChatMessageResponse(
                 message.getId(),
                 message.getChatRoom().getId(),
@@ -28,6 +35,7 @@ public record ChatMessageResponse(
                 sender != null ? sender.getNickname() : null,
                 message.getType(),
                 deleted ? null : message.getContent(),
+                attachment,
                 message.getCreatedAt(),
                 message.getEditedAt(),
                 deleted

@@ -1,17 +1,22 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.event.ChatMessageEvent;
+import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
+import com.project.ChatProject.dto.response.AttachmentResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.entity.Attachment;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.repository.AttachmentRepository;
 import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
@@ -52,6 +57,9 @@ class ChatMessageServiceTest {
     @Mock
     private ChatMessageRepository chatMessageRepository;
 
+    @Mock
+    private AttachmentRepository attachmentRepository;
+
     private ChatMessageService chatMessageService;
 
     @BeforeEach
@@ -65,7 +73,8 @@ class ChatMessageServiceTest {
 
         chatMessageService = new ChatMessageService(
                 participation,
-                chatMessageRepository
+                chatMessageRepository,
+                attachmentRepository
         );
     }
 
@@ -124,11 +133,143 @@ class ChatMessageServiceTest {
                         "사용자",
                         ChatMessageType.TEXT,
                         "안녕하세요",
+                        null,
                         createdAt,
                         null,
                         false
                 )
         );
+    }
+
+    @Test
+    void saveAttachmentStoresImageMessageAndActivatesAttachment() {
+        Instant createdAt = Instant.parse("2026-09-28T06:00:00Z");
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(chatRoom, sender);
+        Attachment attachment = attachment(
+                sender,
+                "image.png",
+                "image/png"
+        );
+
+        stubParticipation(sender, chatRoom, chatRoomMember);
+        when(attachmentRepository.findByForUpdate(200L))
+                .thenReturn(Optional.of(attachment));
+        stubSavedMessage(createdAt, 101L);
+
+        ChatMessageEvent event = chatMessageService.saveAttachment(
+                MEMBER_ID,
+                new ChatAttachmentMessageRequest(ROOM_ID, 200L)
+        );
+
+        ArgumentCaptor<ChatMessage> messageCaptor =
+                ArgumentCaptor.forClass(ChatMessage.class);
+        verify(chatMessageRepository).save(messageCaptor.capture());
+
+        ChatMessage savedMessage = messageCaptor.getValue();
+        assertThat(savedMessage.getChatRoom()).isSameAs(chatRoom);
+        assertThat(savedMessage.getSender()).isSameAs(sender);
+        assertThat(savedMessage.getType()).isEqualTo(ChatMessageType.IMAGE);
+        assertThat(savedMessage.getContent()).isNull();
+        assertThat(savedMessage.getAttachment()).isSameAs(attachment);
+        assertThat(attachment.getStatus()).isEqualTo(AttachmentStatus.ACTIVE);
+        assertThat(attachment.getActivatedAt()).isNotNull();
+        assertThat(chatRoom.getLastMessageAt()).isEqualTo(createdAt);
+        assertThat(event.eventType()).isEqualTo(ChatMessageEventType.CREATED);
+        assertThat(event.message().attachment()).isEqualTo(
+                new AttachmentResponse(
+                        200L,
+                        "image.png",
+                        "image/png",
+                        1_024L
+                )
+        );
+    }
+
+    @Test
+    void saveAttachmentStoresNonImageAsFileMessage() {
+        Instant createdAt = Instant.parse("2026-09-28T06:00:00Z");
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(chatRoom, sender);
+        Attachment attachment = attachment(
+                sender,
+                "document.pdf",
+                "application/pdf"
+        );
+
+        stubParticipation(sender, chatRoom, chatRoomMember);
+        when(attachmentRepository.findByForUpdate(200L))
+                .thenReturn(Optional.of(attachment));
+        stubSavedMessage(createdAt, 102L);
+
+        ChatMessageEvent event = chatMessageService.saveAttachment(
+                MEMBER_ID,
+                new ChatAttachmentMessageRequest(ROOM_ID, 200L)
+        );
+
+        assertThat(event.message().type()).isEqualTo(ChatMessageType.FILE);
+        assertThat(event.message().attachment().originalName())
+                .isEqualTo("document.pdf");
+    }
+
+    @Test
+    void saveAttachmentRejectsUnknownAttachment() {
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(chatRoom, sender);
+
+        stubParticipation(sender, chatRoom, chatRoomMember);
+        when(attachmentRepository.findByForUpdate(200L))
+                .thenReturn(Optional.empty());
+
+        assertAttachmentSaveRejected(ErrorCode.ATTACHMENT_NOT_FOUND);
+    }
+
+    @Test
+    void saveAttachmentRejectsAttachmentOwnedByAnotherMember() {
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        Member otherMember = member(MemberStatus.ACTIVE, Instant.now());
+        ReflectionTestUtils.setField(otherMember, "id", 2L);
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(chatRoom, sender);
+        Attachment attachment = attachment(
+                otherMember,
+                "image.png",
+                "image/png"
+        );
+
+        stubParticipation(sender, chatRoom, chatRoomMember);
+        when(attachmentRepository.findByForUpdate(200L))
+                .thenReturn(Optional.of(attachment));
+
+        assertAttachmentSaveRejected(ErrorCode.ATTACHMENT_NOT_FOUND);
+        assertThat(attachment.getStatus()).isEqualTo(AttachmentStatus.PENDING);
+    }
+
+    @Test
+    void saveAttachmentRejectsAlreadyUsedAttachment() {
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(chatRoom, sender);
+        Attachment attachment = attachment(
+                sender,
+                "image.png",
+                "image/png"
+        );
+        attachment.activate();
+
+        stubParticipation(sender, chatRoom, chatRoomMember);
+        when(attachmentRepository.findByForUpdate(200L))
+                .thenReturn(Optional.of(attachment));
+
+        assertAttachmentSaveRejected(ErrorCode.ATTACHMENT_ALREADY_USED);
     }
 
     @Test
@@ -254,6 +395,70 @@ class ChatMessageServiceTest {
 
         verify(chatMessageRepository, never())
                 .save(any(ChatMessage.class));
+    }
+
+    private void assertAttachmentSaveRejected(
+            ErrorCode expectedErrorCode
+    ) {
+        assertThatThrownBy(() -> chatMessageService.saveAttachment(
+                MEMBER_ID,
+                new ChatAttachmentMessageRequest(ROOM_ID, 200L)
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(expectedErrorCode)
+        );
+
+        verify(chatMessageRepository, never())
+                .save(any(ChatMessage.class));
+    }
+
+    private void stubParticipation(
+            Member member,
+            ChatRoom chatRoom,
+            ChatRoomMember chatRoomMember
+    ) {
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(chatRoomRepository.findById(ROOM_ID))
+                .thenReturn(Optional.of(chatRoom));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(
+                ROOM_ID,
+                MEMBER_ID
+        )).thenReturn(Optional.of(chatRoomMember));
+    }
+
+    private void stubSavedMessage(
+            Instant createdAt,
+            Long messageId
+    ) {
+        when(chatMessageRepository.save(any(ChatMessage.class)))
+                .thenAnswer(invocation -> {
+                    ChatMessage message = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(message, "id", messageId);
+                    ReflectionTestUtils.setField(
+                            message,
+                            "createdAt",
+                            createdAt
+                    );
+                    return message;
+                });
+    }
+
+    private Attachment attachment(
+            Member uploader,
+            String originalName,
+            String contentType
+    ) {
+        Attachment attachment = Attachment.createPending(
+                uploader,
+                originalName,
+                contentType,
+                1_024L,
+                "2026/09/28/test-file"
+        );
+        ReflectionTestUtils.setField(attachment, "id", 200L);
+        return attachment;
     }
 
     private Member member(

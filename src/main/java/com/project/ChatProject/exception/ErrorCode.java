@@ -178,6 +178,11 @@ public enum ErrorCode {
             "ATTACHMENT-008",
             "유효하지 않은 첨부파일 이름입니다."
     ),
+    ATTACHMENT_ALREADY_USED(
+            HttpStatus.CONFLICT,
+            "ATTACHMENT-009",
+            "이미 메시지에 사용된 첨부파일입니다."
+    ),
 
     // Common Exception
     INTERNAL_SERVER_ERROR(

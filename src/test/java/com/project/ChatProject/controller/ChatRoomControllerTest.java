@@ -159,6 +159,7 @@ class ChatRoomControllerTest {
                         null,
                         ChatMessageType.SYSTEM,
                         "사용자님이 입장하였습니다.",
+                        null,
                         createdAt,
                         null,
                         false
@@ -189,6 +190,7 @@ class ChatRoomControllerTest {
                 "사용자",
                 ChatMessageType.TEXT,
                 "안녕하세요",
+                null,
                 createdAt,
                 null,
                 false
@@ -235,6 +237,7 @@ class ChatRoomControllerTest {
                 null,
                 ChatMessageType.SYSTEM,
                 "사용자님이 퇴장하였습니다.",
+                null,
                 createdAt,
                 null,
                 false
@@ -296,6 +299,7 @@ class ChatRoomControllerTest {
                 null,
                 ChatMessageType.SYSTEM,
                 "새방장님이 방장으로 위임되셨습니다.",
+                null,
                 createdAt,
                 null,
                 false
@@ -328,6 +332,7 @@ class ChatRoomControllerTest {
                 "사용자",
                 ChatMessageType.TEXT,
                 null,
+                null,
                 createdAt,
                 null,
                 true
@@ -359,6 +364,7 @@ class ChatRoomControllerTest {
                 "사용자",
                 ChatMessageType.TEXT,
                 "수정된 메시지",
+                null,
                 createdAt,
                 editedAt,
                 false
@@ -470,6 +476,7 @@ class ChatRoomControllerTest {
                         null,
                         ChatMessageType.SYSTEM,
                         "사용자님이 채팅방 이름을 '새 채팅방'(으)로 변경했습니다.",
+                        null,
                         createdAt,
                         null,
                         false

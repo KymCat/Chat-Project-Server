@@ -2,7 +2,9 @@ package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
 import com.project.ChatProject.dto.event.ChatMessageEvent;
+import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
+import com.project.ChatProject.dto.response.AttachmentResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatMessageType;
@@ -61,6 +63,7 @@ class ChatControllerTest {
                         "홍길동",
                         ChatMessageType.TEXT,
                         "안녕하세요",
+                        null,
                         createdAt,
                         null,
                         false
@@ -86,6 +89,47 @@ class ChatControllerTest {
         verify(template).convertAndSend(
                 "/sub/msg/10",
                 result
+        );
+    }
+
+    @Test
+    void sendAttachmentBroadcastsAttachmentMessage() {
+        Instant createdAt = Instant.parse("2026-09-28T06:00:00Z");
+        ChatAttachmentMessageRequest request =
+                new ChatAttachmentMessageRequest(10L, 200L);
+        Authentication authentication = authentication(1L, "홍길동");
+        AttachmentResponse attachment = new AttachmentResponse(
+                200L,
+                "image.png",
+                "image/png",
+                1_024L
+        );
+        ChatMessageResponse message = new ChatMessageResponse(
+                101L,
+                10L,
+                1L,
+                "홍길동",
+                ChatMessageType.IMAGE,
+                null,
+                attachment,
+                createdAt,
+                null,
+                false
+        );
+        ChatMessageEvent expectedEvent = ChatMessageEvent.created(message);
+        when(chatMessageService.saveAttachment(1L, request))
+                .thenReturn(expectedEvent);
+
+        ChatMessageEvent result = chatController.sendAttachment(
+                request,
+                authentication
+        );
+
+        assertThat(result).isEqualTo(expectedEvent);
+        verify(chatMessageService).saveAttachment(1L, request);
+        verify(template).convertAndSend(
+                "/sub/msg/10",
+                expectedEvent
         );
     }
 
