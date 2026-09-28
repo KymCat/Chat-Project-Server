@@ -7,6 +7,7 @@ import com.project.ChatProject.storage.FileStorage;
 import com.project.ChatProject.storage.StoredFile;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
@@ -26,6 +27,7 @@ import java.util.UUID;
 
 @Slf4j
 @Component
+@Profile("local")
 public class LocalFileStorage implements FileStorage {
 
     private final Path root;
