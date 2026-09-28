@@ -16,10 +16,10 @@ import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
 import com.project.ChatProject.repository.MemberRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -52,8 +52,22 @@ class ChatMessageServiceTest {
     @Mock
     private ChatMessageRepository chatMessageRepository;
 
-    @InjectMocks
     private ChatMessageService chatMessageService;
+
+    @BeforeEach
+    void setUp() {
+        ChatRoomParticipationService participation =
+                new ChatRoomParticipationService(
+                        memberRepository,
+                        chatRoomMemberRepository,
+                        chatRoomRepository
+                );
+
+        chatMessageService = new ChatMessageService(
+                participation,
+                chatMessageRepository
+        );
+    }
 
     @Test
     void saveStoresTextMessageAndUpdatesRoomLastMessageAt() {
@@ -119,6 +133,8 @@ class ChatMessageServiceTest {
 
     @Test
     void saveRejectsUnknownMember() {
+        when(chatRoomRepository.findById(ROOM_ID))
+                .thenReturn(Optional.of(chatRoom()));
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.empty());
 
@@ -127,6 +143,8 @@ class ChatMessageServiceTest {
 
     @Test
     void saveRejectsSuspendedMember() {
+        when(chatRoomRepository.findById(ROOM_ID))
+                .thenReturn(Optional.of(chatRoom()));
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(
                         member(MemberStatus.SUSPENDED, Instant.now())
@@ -137,6 +155,8 @@ class ChatMessageServiceTest {
 
     @Test
     void saveRejectsWithdrawnMember() {
+        when(chatRoomRepository.findById(ROOM_ID))
+                .thenReturn(Optional.of(chatRoom()));
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(
                         member(MemberStatus.WITHDRAWN, Instant.now())
@@ -147,6 +167,8 @@ class ChatMessageServiceTest {
 
     @Test
     void saveRejectsMemberWhoseEmailIsNotVerified() {
+        when(chatRoomRepository.findById(ROOM_ID))
+                .thenReturn(Optional.of(chatRoom()));
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(
                         member(MemberStatus.ACTIVE, null)
@@ -157,9 +179,6 @@ class ChatMessageServiceTest {
 
     @Test
     void saveRejectsUnknownChatRoom() {
-        Member sender = member(MemberStatus.ACTIVE, Instant.now());
-        when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(sender));
         when(chatRoomRepository.findById(ROOM_ID))
                 .thenReturn(Optional.empty());
 
@@ -176,8 +195,6 @@ class ChatMessageServiceTest {
                 Instant.now()
         );
 
-        when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(sender));
         when(chatRoomRepository.findById(ROOM_ID))
                 .thenReturn(Optional.of(chatRoom));
 

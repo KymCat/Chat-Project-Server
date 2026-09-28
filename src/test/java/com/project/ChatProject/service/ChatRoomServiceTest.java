@@ -25,10 +25,10 @@ import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
 import com.project.ChatProject.repository.MemberRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -62,8 +62,24 @@ class ChatRoomServiceTest {
     @Mock
     private ChatMessageRepository chatMessageRepository;
 
-    @InjectMocks
     private ChatRoomService chatRoomService;
+
+    @BeforeEach
+    void setUp() {
+        ChatRoomParticipationService participation =
+                new ChatRoomParticipationService(
+                        memberRepository,
+                        chatRoomMemberRepository,
+                        chatRoomRepository
+                );
+
+        chatRoomService = new ChatRoomService(
+                participation,
+                chatRoomRepository,
+                chatRoomMemberRepository,
+                chatMessageRepository
+        );
+    }
 
     @Test
     void createStoresGroupRoomAndCreatorAsOwner() {
