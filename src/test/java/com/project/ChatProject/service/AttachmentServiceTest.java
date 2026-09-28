@@ -2,8 +2,10 @@ package com.project.ChatProject.service;
 
 import com.project.ChatProject.attachment.AttachmentValidator;
 import com.project.ChatProject.attachment.ValidatedAttachment;
+import com.project.ChatProject.dto.result.AttachmentDownloadResult;
 import com.project.ChatProject.dto.response.AttachmentUploadResponse;
 import com.project.ChatProject.entity.Attachment;
+import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
@@ -12,6 +14,7 @@ import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.AttachmentRepository;
+import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
 import com.project.ChatProject.service.support.ParticipationLockMode;
 import com.project.ChatProject.storage.FileStorage;
@@ -23,6 +26,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -50,6 +55,9 @@ class AttachmentServiceTest {
     private AttachmentRepository attachmentRepository;
 
     @Mock
+    private ChatMessageRepository chatMessageRepository;
+
+    @Mock
     private FileStorage fileStorage;
 
     private AttachmentService attachmentService;
@@ -62,6 +70,7 @@ class AttachmentServiceTest {
                 participation,
                 attachmentValidator,
                 attachmentRepository,
+                chatMessageRepository,
                 fileStorage
         );
 
@@ -274,6 +283,114 @@ class AttachmentServiceTest {
                 );
     }
 
+    @Test
+    void downloadReturnsActiveAttachmentResource() {
+        Attachment attachment = activeAttachment();
+        ChatMessage message = ChatMessage.createAttachment(
+                context.chatRoom(),
+                context.member(),
+                ChatMessageType.IMAGE,
+                attachment
+        );
+        Resource resource = new ByteArrayResource("image-content".getBytes());
+
+        when(chatMessageRepository
+                .findActiveMessageByRoomIdAndAttachmentId(ROOM_ID, 100L))
+                .thenReturn(java.util.Optional.of(message));
+        when(fileStorage.load(attachment.getStorageKey()))
+                .thenReturn(resource);
+
+        AttachmentDownloadResult result = attachmentService.download(
+                ROOM_ID,
+                100L,
+                MEMBER_ID
+        );
+
+        assertThat(result.resource()).isSameAs(resource);
+        assertThat(result.originalName()).isEqualTo("photo.png");
+        assertThat(result.contentType()).isEqualTo("image/png");
+        assertThat(result.sizeBytes()).isEqualTo(13L);
+        assertThat(result.contentDisposition()).startsWith("inline;");
+        verify(participation).requireParticipation(
+                ROOM_ID,
+                MEMBER_ID,
+                ParticipationLockMode.NONE
+        );
+        verify(fileStorage).load("2026/09/28/storage-key");
+    }
+
+    @Test
+    void downloadStopsWhenParticipationValidationFails() {
+        CustomException failure =
+                new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
+        when(participation.requireParticipation(
+                ROOM_ID,
+                MEMBER_ID,
+                ParticipationLockMode.NONE
+        )).thenThrow(failure);
+
+        assertThatThrownBy(() -> attachmentService.download(
+                ROOM_ID,
+                100L,
+                MEMBER_ID
+        )).isSameAs(failure);
+
+        verifyNoInteractions(chatMessageRepository, fileStorage);
+    }
+
+    @Test
+    void downloadRejectsAttachmentNotConnectedToRoomMessage() {
+        when(chatMessageRepository
+                .findActiveMessageByRoomIdAndAttachmentId(ROOM_ID, 100L))
+                .thenReturn(java.util.Optional.empty());
+
+        assertDownloadRejected(ErrorCode.ATTACHMENT_NOT_FOUND);
+
+        verifyNoInteractions(fileStorage);
+    }
+
+    @Test
+    void downloadRejectsPendingAttachment() {
+        Attachment attachment = pendingAttachment();
+        ChatMessage message = ChatMessage.createAttachment(
+                context.chatRoom(),
+                context.member(),
+                ChatMessageType.IMAGE,
+                attachment
+        );
+        when(chatMessageRepository
+                .findActiveMessageByRoomIdAndAttachmentId(ROOM_ID, 100L))
+                .thenReturn(java.util.Optional.of(message));
+
+        assertDownloadRejected(ErrorCode.ATTACHMENT_NOT_FOUND);
+
+        verifyNoInteractions(fileStorage);
+    }
+
+    @Test
+    void downloadPropagatesMissingStoredFileFailure() {
+        Attachment attachment = activeAttachment();
+        ChatMessage message = ChatMessage.createAttachment(
+                context.chatRoom(),
+                context.member(),
+                ChatMessageType.IMAGE,
+                attachment
+        );
+        CustomException failure =
+                new CustomException(ErrorCode.ATTACHMENT_NOT_FOUND);
+        when(chatMessageRepository
+                .findActiveMessageByRoomIdAndAttachmentId(ROOM_ID, 100L))
+                .thenReturn(java.util.Optional.of(message));
+        when(fileStorage.load(attachment.getStorageKey()))
+                .thenThrow(failure);
+
+        assertThatThrownBy(() -> attachmentService.download(
+                ROOM_ID,
+                100L,
+                MEMBER_ID
+        )).isSameAs(failure);
+    }
+
     private void stubBeforeDatabaseSave(
             ValidatedAttachment validated,
             StoredFile storedFile
@@ -285,5 +402,35 @@ class AttachmentServiceTest {
         )).thenReturn(context);
         when(attachmentValidator.validate(file)).thenReturn(validated);
         when(fileStorage.store(file)).thenReturn(storedFile);
+    }
+
+    private void assertDownloadRejected(ErrorCode expectedErrorCode) {
+        assertThatThrownBy(() -> attachmentService.download(
+                ROOM_ID,
+                100L,
+                MEMBER_ID
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(expectedErrorCode)
+        );
+    }
+
+    private Attachment activeAttachment() {
+        Attachment attachment = pendingAttachment();
+        attachment.activate();
+        return attachment;
+    }
+
+    private Attachment pendingAttachment() {
+        Attachment attachment = Attachment.createPending(
+                context.member(),
+                "photo.png",
+                "image/png",
+                13L,
+                "2026/09/28/storage-key"
+        );
+        ReflectionTestUtils.setField(attachment, "id", 100L);
+        return attachment;
     }
 }

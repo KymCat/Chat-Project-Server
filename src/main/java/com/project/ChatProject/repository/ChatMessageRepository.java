@@ -70,4 +70,20 @@ public interface ChatMessageRepository
             @Param("id") Long id,
             @Param("roomId") Long roomId
             );
+
+
+    @Query(
+            value = """
+                    SELECT cm
+                    FROM ChatMessage cm
+                    JOIN FETCH cm.attachment a
+                    WHERE cm.chatRoom.id = :roomId
+                        AND a.id = :attachmentId
+                        AND cm.deletedAt IS NULL
+                    """
+    )
+    Optional<ChatMessage> findActiveMessageByRoomIdAndAttachmentId(
+            @Param("roomId") Long roomId,
+            @Param("attachmentId") Long attachmentId
+    );
 }
