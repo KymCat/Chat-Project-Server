@@ -30,6 +30,10 @@ public class Attachment extends BaseCreatedTimeEntity {
     @JoinColumn(name = "uploader_id", nullable = false)
     private Member uploader;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "room_id", nullable = false)
+    private ChatRoom chatRoom;
+
     @Column(name = "original_name",
             nullable = false,
             length = 255)
@@ -62,12 +66,14 @@ public class Attachment extends BaseCreatedTimeEntity {
 
     private Attachment(
             Member uploader,
+            ChatRoom chatRoom,
             String originalName,
             String contentType,
             long sizeBytes,
             String storageKey
     ) {
         this.uploader = uploader;
+        this.chatRoom = chatRoom;
         this.originalName = originalName;
         this.contentType = contentType;
         this.sizeBytes = sizeBytes;
@@ -101,6 +107,7 @@ public class Attachment extends BaseCreatedTimeEntity {
 
     public static Attachment createPending(
             Member uploader,
+            ChatRoom chatRoom,
             String originalName,
             String contentType,
             long sizeBytes,
@@ -108,6 +115,7 @@ public class Attachment extends BaseCreatedTimeEntity {
     ) {
         return new Attachment(
                 uploader,
+                chatRoom,
                 originalName,
                 contentType,
                 sizeBytes,

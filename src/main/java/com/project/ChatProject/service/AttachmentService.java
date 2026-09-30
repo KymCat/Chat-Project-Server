@@ -52,6 +52,7 @@ public class AttachmentService {
         try {
             Attachment attachment = Attachment.createPending(
                     context.member(),
+                    context.chatRoom(),
                     storedFile.originalName(),
                     validated.contentType(),
                     storedFile.sizeBytes(),

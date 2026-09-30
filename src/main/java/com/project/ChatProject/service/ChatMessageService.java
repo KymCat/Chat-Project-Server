@@ -79,6 +79,7 @@ public class ChatMessageService {
                 );
 
         validateAttachmentOwner(attachment, memberId);
+        validateAttachmentRoom(attachment, context.chatRoom().getId());
         validatePendingAttachment(attachment);
 
         ChatMessageType messageType =
@@ -113,6 +114,22 @@ public class ChatMessageService {
             Long memberId
     ) {
         if (!attachment.getUploader().getId().equals(memberId)) {
+            throw new CustomException(
+                    ErrorCode.ATTACHMENT_NOT_FOUND
+            );
+        }
+    }
+
+    /**
+     * 첨부파일이 올라온 채팅방 ID가 같은지 검증
+     * @param attachment
+     * @param roomId
+     */
+    private void validateAttachmentRoom(
+            Attachment attachment,
+            Long roomId
+    ) {
+        if (!attachment.getChatRoom().getId().equals(roomId)) {
             throw new CustomException(
                     ErrorCode.ATTACHMENT_NOT_FOUND
             );
