@@ -26,6 +26,9 @@ class AttachmentValidatorTest {
 
     private static final DataSize MAX_IMAGE_SIZE = DataSize.ofMegabytes(10);
     private static final DataSize MAX_FILE_SIZE = DataSize.ofMegabytes(50);
+    private static final int MAX_IMAGE_WIDTH = 10;
+    private static final int MAX_IMAGE_HEIGHT = 10;
+    private static final long MAX_IMAGE_PIXELS = 50L;
 
     private AttachmentValidator validator;
 
@@ -34,7 +37,10 @@ class AttachmentValidatorTest {
         StorageProperties properties = new StorageProperties(
                 Path.of("uploads"),
                 MAX_IMAGE_SIZE,
-                MAX_FILE_SIZE
+                MAX_FILE_SIZE,
+                MAX_IMAGE_WIDTH,
+                MAX_IMAGE_HEIGHT,
+                MAX_IMAGE_PIXELS
         );
         validator = new AttachmentValidator(properties);
     }
@@ -329,10 +335,62 @@ class AttachmentValidatorTest {
         );
     }
 
+    @Test
+    void validateAcceptsImageAtDimensionAndPixelLimits() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "image.png",
+                "image/png",
+                createImageBytes(
+                        MAX_IMAGE_WIDTH,
+                        Math.toIntExact(
+                                MAX_IMAGE_PIXELS / MAX_IMAGE_WIDTH
+                        ),
+                        "PNG"
+                )
+        );
+
+        ValidatedAttachment result = validator.validate(file);
+
+        assertThat(result.messageType()).isEqualTo(ChatMessageType.IMAGE);
+        assertThat(result.contentType()).isEqualTo("image/png");
+    }
+
+    @ParameterizedTest(name = "[{index}] width={0}, height={1}")
+    @CsvSource({
+            "11, 1",
+            "1, 11",
+            "8, 7"
+    })
+    void validateRejectsImageExceedingDimensionOrPixelLimits(
+            int width,
+            int height
+    ) throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "image.png",
+                "image/png",
+                createImageBytes(width, height, "PNG")
+        );
+
+        assertErrorCode(
+                () -> validator.validate(file),
+                ErrorCode.ATTACHMENT_TOO_LARGE
+        );
+    }
+
     private byte[] createImageBytes(String format) throws IOException {
+        return createImageBytes(2, 2, format);
+    }
+
+    private byte[] createImageBytes(
+            int width,
+            int height,
+            String format
+    ) throws IOException {
         BufferedImage image = new BufferedImage(
-                2,
-                2,
+                width,
+                height,
                 BufferedImage.TYPE_INT_RGB
         );
 

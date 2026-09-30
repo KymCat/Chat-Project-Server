@@ -278,6 +278,21 @@ public class AttachmentValidator {
                             ErrorCode.ATTACHMENT_INVALID_IMAGE
                     );
                 }
+
+                // pixel validate
+                int maxWidth = properties.maxImageWidth();
+                int maxHeight = properties.maxImageHeight();
+                long maxTotalPixel = properties.maxImagePixels();
+                long totalPixel = (long) width * height;
+
+                if (width > maxWidth || height > maxHeight
+                        || totalPixel > maxTotalPixel)
+                {
+                    throw new CustomException(
+                            ErrorCode.ATTACHMENT_TOO_LARGE
+                    );
+                }
+
             } finally {
                 reader.dispose();
             }

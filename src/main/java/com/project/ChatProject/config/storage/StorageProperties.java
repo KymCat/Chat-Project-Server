@@ -12,6 +12,9 @@ import java.nio.file.Path;
 public record StorageProperties(
         @NotNull Path localRoot,
         @NotNull DataSize maxImageSize,
-        @NotNull DataSize maxFileSize
+        @NotNull DataSize maxFileSize,
+        @NotNull int maxImageWidth,
+        @NotNull int maxImageHeight,
+        @NotNull long maxImagePixels
 ) {
 }

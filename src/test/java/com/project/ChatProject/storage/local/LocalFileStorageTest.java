@@ -37,7 +37,10 @@ class LocalFileStorageTest {
         StorageProperties properties = new StorageProperties(
                 root,
                 DataSize.ofMegabytes(10),
-                DataSize.ofMegabytes(50)
+                DataSize.ofMegabytes(50),
+                8_192,
+                8_192,
+                25_000_000L
         );
 
         fileStorage = new LocalFileStorage(properties);
