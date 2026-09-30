@@ -1,5 +1,6 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.attachment.AttachmentUploadRateLimiter;
 import com.project.ChatProject.attachment.AttachmentValidator;
 import com.project.ChatProject.attachment.ValidatedAttachment;
 import com.project.ChatProject.dto.response.AttachmentUploadResponse;
@@ -29,6 +30,7 @@ public class AttachmentService {
     private final AttachmentValidator attachmentValidator;
     private final AttachmentRepository attachmentRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final AttachmentUploadRateLimiter uploadRateLimiter;
     private final FileStorage fileStorage;
 
     @Transactional
@@ -43,6 +45,9 @@ public class AttachmentService {
                         memberId,
                         ParticipationLockMode.NONE
         );
+
+        // 업로드 Rate Limit
+        uploadRateLimiter.checkAllowed(memberId);
 
         ValidatedAttachment validated =
                 attachmentValidator.validate(file);

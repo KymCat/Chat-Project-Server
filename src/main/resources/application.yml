@@ -65,6 +65,9 @@ email-verification:
     sender: ${MAIL_FROM}
 
 chat:
+    attachment-upload-rate-limit:
+        max-requests: 10
+        window: 60s
     storage:
         local-root: ${CHAT_LOCAL_STORAGE_ROOT}
         max-image-size: 10MB

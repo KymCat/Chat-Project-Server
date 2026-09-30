@@ -183,6 +183,11 @@ public enum ErrorCode {
             "ATTACHMENT-009",
             "이미 메시지에 사용된 첨부파일입니다."
     ),
+    ATTACHMENT_UPLOAD_TOO_MANY_REQUESTS(
+            HttpStatus.TOO_MANY_REQUESTS,
+            "ATTACHMENT-010",
+            "첨부파일 업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+    ),
 
     // Common Exception
     INTERNAL_SERVER_ERROR(
