@@ -149,6 +149,7 @@ class ChatMessageServiceTest {
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(chatRoom, sender);
         Attachment attachment = attachment(
+                chatRoom,
                 sender,
                 "image.png",
                 "image/png"
@@ -196,6 +197,7 @@ class ChatMessageServiceTest {
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(chatRoom, sender);
         Attachment attachment = attachment(
+                chatRoom,
                 sender,
                 "document.pdf",
                 "application/pdf"
@@ -239,6 +241,7 @@ class ChatMessageServiceTest {
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(chatRoom, sender);
         Attachment attachment = attachment(
+                chatRoom,
                 otherMember,
                 "image.png",
                 "image/png"
@@ -253,12 +256,39 @@ class ChatMessageServiceTest {
     }
 
     @Test
+    void saveAttachmentRejectsAttachmentUploadedToAnotherRoom() {
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom requestedRoom = chatRoom();
+        ChatRoom anotherRoom = ChatRoom.create("다른 채팅방");
+        ReflectionTestUtils.setField(anotherRoom, "id", 20L);
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(requestedRoom, sender);
+        Attachment attachment = attachment(
+                anotherRoom,
+                sender,
+                "image.png",
+                "image/png"
+        );
+
+        stubParticipation(sender, requestedRoom, chatRoomMember);
+        when(attachmentRepository.findByForUpdate(200L))
+                .thenReturn(Optional.of(attachment));
+
+        assertAttachmentSaveRejected(ErrorCode.ATTACHMENT_NOT_FOUND);
+
+        assertThat(attachment.getStatus())
+                .isEqualTo(AttachmentStatus.PENDING);
+        assertThat(attachment.getActivatedAt()).isNull();
+    }
+
+    @Test
     void saveAttachmentRejectsAlreadyUsedAttachment() {
         Member sender = member(MemberStatus.ACTIVE, Instant.now());
         ChatRoom chatRoom = chatRoom();
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(chatRoom, sender);
         Attachment attachment = attachment(
+                chatRoom,
                 sender,
                 "image.png",
                 "image/png"
@@ -446,12 +476,14 @@ class ChatMessageServiceTest {
     }
 
     private Attachment attachment(
+            ChatRoom chatRoom,
             Member uploader,
             String originalName,
             String contentType
     ) {
         Attachment attachment = Attachment.createPending(
                 uploader,
+                chatRoom,
                 originalName,
                 contentType,
                 1_024L,

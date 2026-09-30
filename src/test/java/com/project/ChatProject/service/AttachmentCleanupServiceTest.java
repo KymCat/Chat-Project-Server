@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.entity.Attachment;
+import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.exception.CustomException;
@@ -151,8 +152,11 @@ class AttachmentCleanupServiceTest {
                 "user@example.com",
                 "사용자"
         );
+        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ReflectionTestUtils.setField(chatRoom, "id", 10L);
         Attachment attachment = Attachment.createPending(
                 uploader,
+                chatRoom,
                 "photo.png",
                 "image/png",
                 13L,

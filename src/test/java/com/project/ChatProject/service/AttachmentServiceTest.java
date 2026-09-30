@@ -132,6 +132,8 @@ class AttachmentServiceTest {
 
         assertThat(savedAttachment.getId()).isEqualTo(100L);
         assertThat(savedAttachment.getUploader()).isSameAs(context.member());
+        assertThat(savedAttachment.getChatRoom())
+                .isSameAs(context.chatRoom());
         assertThat(savedAttachment.getOriginalName()).isEqualTo("photo.png");
         assertThat(savedAttachment.getContentType()).isEqualTo("image/png");
         assertThat(savedAttachment.getSizeBytes()).isEqualTo(file.getSize());
@@ -425,6 +427,7 @@ class AttachmentServiceTest {
     private Attachment pendingAttachment() {
         Attachment attachment = Attachment.createPending(
                 context.member(),
+                context.chatRoom(),
                 "photo.png",
                 "image/png",
                 13L,
