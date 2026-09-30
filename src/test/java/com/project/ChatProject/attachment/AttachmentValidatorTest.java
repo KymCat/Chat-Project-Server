@@ -7,6 +7,7 @@ import com.project.ChatProject.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.mock.web.MockMultipartFile;
@@ -16,6 +17,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
@@ -42,7 +44,10 @@ class AttachmentValidatorTest {
                 MAX_IMAGE_HEIGHT,
                 MAX_IMAGE_PIXELS
         );
-        validator = new AttachmentValidator(properties);
+        validator = new AttachmentValidator(
+                properties,
+                new AttachmentContentTypeDetector()
+        );
     }
 
     @ParameterizedTest
@@ -71,25 +76,91 @@ class AttachmentValidatorTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-            "document.pdf, application/pdf",
-            "note.txt, text/plain",
-            "document.docx, application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "sheet.xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "slides.pptx, application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    })
-    void validateClassifiesSupportedFile(String fileName, String contentType) {
+    @MethodSource("supportedFiles")
+    void validateClassifiesSupportedFile(
+            String fileName,
+            String contentType,
+            byte[] content
+    ) {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 fileName,
                 contentType,
-                "content".getBytes()
+                content
         );
 
         ValidatedAttachment result = validator.validate(file);
 
         assertThat(result.messageType()).isEqualTo(ChatMessageType.FILE);
         assertThat(result.contentType()).isEqualTo(contentType);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "document.docx, application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "sheet.xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "slides.pptx, application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    })
+    void validateRejectsUnsupportedOfficeFile(
+            String fileName,
+            String contentType
+    ) {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                fileName,
+                contentType,
+                "content".getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertErrorCode(
+                () -> validator.validate(file),
+                ErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED
+        );
+    }
+
+    @Test
+    void validateRejectsTextContentDisguisedAsPdf() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "document.pdf",
+                "application/pdf",
+                "This is not a PDF".getBytes(StandardCharsets.UTF_8)
+        );
+
+        assertErrorCode(
+                () -> validator.validate(file),
+                ErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED
+        );
+    }
+
+    @Test
+    void validateRejectsPdfContentDisguisedAsText() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "document.txt",
+                "text/plain",
+                createPdfBytes()
+        );
+
+        assertErrorCode(
+                () -> validator.validate(file),
+                ErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED
+        );
+    }
+
+    @Test
+    void validateRejectsBinaryContentDisguisedAsText() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "document.txt",
+                "text/plain",
+                new byte[]{0x00, 0x01, 0x02, 0x03, 0x04}
+        );
+
+        assertErrorCode(
+                () -> validator.validate(file),
+                ErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED
+        );
     }
 
     @ParameterizedTest
@@ -411,6 +482,34 @@ class AttachmentValidatorTest {
                 "report" + (char) 127 + ".txt",
                 "report" + (char) 133 + ".txt"
         );
+    }
+
+    private static Stream<Arguments> supportedFiles() {
+        return Stream.of(
+                Arguments.of(
+                        "document.pdf",
+                        "application/pdf",
+                        createPdfBytes()
+                ),
+                Arguments.of(
+                        "note.txt",
+                        "text/plain",
+                        "일반 텍스트 파일입니다."
+                                .getBytes(StandardCharsets.UTF_8)
+                )
+        );
+    }
+
+    private static byte[] createPdfBytes() {
+        return """
+                %PDF-1.4
+                1 0 obj
+                <<>>
+                endobj
+                trailer
+                <<>>
+                %%EOF
+                """.getBytes(StandardCharsets.US_ASCII);
     }
 
     private void assertErrorCode(

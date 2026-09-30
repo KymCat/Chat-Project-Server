@@ -4,6 +4,7 @@ import com.project.ChatProject.config.storage.StorageProperties;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,7 @@ import java.io.InputStream;
 import java.util.*;
 
 @Component
+@RequiredArgsConstructor
 public class AttachmentValidator {
 
     private static final int MAX_ORIGINAL_NAME_LENGTH = 255;
@@ -30,23 +32,11 @@ public class AttachmentValidator {
 
     private static final Map<String, Set<String>> FILE_CONTENT_TYPES = Map.of(
             "pdf", Set.of(MediaType.APPLICATION_PDF_VALUE),
-            "txt", Set.of(MediaType.TEXT_PLAIN_VALUE),
-            "docx", Set.of(
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            ),
-            "xlsx", Set.of(
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
-            "pptx", Set.of(
-                    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            )
+            "txt", Set.of(MediaType.TEXT_PLAIN_VALUE)
     );
 
     private final StorageProperties properties;
-
-    public AttachmentValidator(StorageProperties properties) {
-        this.properties = properties;
-    }
+    private final AttachmentContentTypeDetector contentTypeDetector;
 
     public ValidatedAttachment validate(MultipartFile file) {
         validateNotEmpty(file);
@@ -324,6 +314,16 @@ public class AttachmentValidator {
                 > properties.maxFileSize().toBytes()) {
             throw new CustomException(
                     ErrorCode.ATTACHMENT_TOO_LARGE
+            );
+        }
+
+        // Tika Detect
+        String detectedContentType =
+                contentTypeDetector.detect(file);
+
+        if (!allowedContentTypes.contains(detectedContentType)) {
+            throw new CustomException(
+                    ErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED
             );
         }
     }
