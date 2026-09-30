@@ -14,10 +14,7 @@ import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Iterator;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @Component
 public class AttachmentValidator {
@@ -117,6 +114,13 @@ public class AttachmentValidator {
         String originalName = file.getOriginalFilename();
 
         if (originalName == null || originalName.isBlank()) {
+            throw new CustomException(
+                    ErrorCode.ATTACHMENT_INVALID_FILENAME
+            );
+        }
+
+        // \r, \n, \0 및 ISO control character 포함 시 거부
+        if (originalName.chars().anyMatch(Character::isISOControl)) {
             throw new CustomException(
                     ErrorCode.ATTACHMENT_INVALID_FILENAME
             );

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.util.unit.DataSize;
 
@@ -16,6 +17,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -66,8 +68,6 @@ class AttachmentValidatorTest {
     @CsvSource({
             "document.pdf, application/pdf",
             "note.txt, text/plain",
-            "archive.zip, application/zip",
-            "archive.zip, application/x-zip-compressed",
             "document.docx, application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "sheet.xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "slides.pptx, application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -84,6 +84,25 @@ class AttachmentValidatorTest {
 
         assertThat(result.messageType()).isEqualTo(ChatMessageType.FILE);
         assertThat(result.contentType()).isEqualTo(contentType);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "application/zip",
+            "application/x-zip-compressed"
+    })
+    void validateRejectsZipFile(String contentType) {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "archive.zip",
+                contentType,
+                "content".getBytes()
+        );
+
+        assertErrorCode(
+                () -> validator.validate(file),
+                ErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED
+        );
     }
 
     @Test
@@ -145,6 +164,24 @@ class AttachmentValidatorTest {
             "C:\\fakepath\\"
     }, nullValues = "NULL")
     void validateRejectsInvalidFilename(String originalFilename) {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                originalFilename,
+                "text/plain",
+                "content".getBytes()
+        );
+
+        assertErrorCode(
+                () -> validator.validate(file),
+                ErrorCode.ATTACHMENT_INVALID_FILENAME
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("controlCharacterFilenames")
+    void validateRejectsFilenameContainingControlCharacter(
+            String originalFilename
+    ) {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 originalFilename,
@@ -304,6 +341,18 @@ class AttachmentValidatorTest {
             assertThat(written).isTrue();
             return outputStream.toByteArray();
         }
+    }
+
+    private static Stream<String> controlCharacterFilenames() {
+        return Stream.of(
+                "report\r.txt",
+                "report\n.txt",
+                "report\t.txt",
+                "report" + (char) 0 + ".txt",
+                "report" + (char) 31 + ".txt",
+                "report" + (char) 127 + ".txt",
+                "report" + (char) 133 + ".txt"
+        );
     }
 
     private void assertErrorCode(
