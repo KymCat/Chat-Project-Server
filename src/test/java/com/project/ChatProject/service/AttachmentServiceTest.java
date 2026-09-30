@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.attachment.AttachmentValidator;
+import com.project.ChatProject.attachment.AttachmentUploadRateLimiter;
 import com.project.ChatProject.attachment.ValidatedAttachment;
 import com.project.ChatProject.dto.result.AttachmentDownloadResult;
 import com.project.ChatProject.dto.response.AttachmentUploadResponse;
@@ -58,6 +59,9 @@ class AttachmentServiceTest {
     private ChatMessageRepository chatMessageRepository;
 
     @Mock
+    private AttachmentUploadRateLimiter uploadRateLimiter;
+
+    @Mock
     private FileStorage fileStorage;
 
     private AttachmentService attachmentService;
@@ -71,6 +75,7 @@ class AttachmentServiceTest {
                 attachmentValidator,
                 attachmentRepository,
                 chatMessageRepository,
+                uploadRateLimiter,
                 fileStorage
         );
 
@@ -151,6 +156,7 @@ class AttachmentServiceTest {
                 "image/png",
                 file.getSize()
         ));
+        verify(uploadRateLimiter).checkAllowed(MEMBER_ID);
         verify(fileStorage, never()).delete(storedFile.storageKey());
     }
 
@@ -163,6 +169,34 @@ class AttachmentServiceTest {
                 MEMBER_ID,
                 ParticipationLockMode.NONE
         )).thenThrow(failure);
+
+        assertThatThrownBy(() -> attachmentService.upload(
+                ROOM_ID,
+                file,
+                MEMBER_ID
+        )).isSameAs(failure);
+
+        verifyNoInteractions(
+                uploadRateLimiter,
+                attachmentValidator,
+                fileStorage,
+                attachmentRepository
+        );
+    }
+
+    @Test
+    void uploadStopsBeforeValidationWhenRateLimitIsExceeded() {
+        CustomException failure = new CustomException(
+                ErrorCode.ATTACHMENT_UPLOAD_TOO_MANY_REQUESTS
+        );
+        when(participation.requireParticipation(
+                ROOM_ID,
+                MEMBER_ID,
+                ParticipationLockMode.NONE
+        )).thenReturn(context);
+        doThrow(failure)
+                .when(uploadRateLimiter)
+                .checkAllowed(MEMBER_ID);
 
         assertThatThrownBy(() -> attachmentService.upload(
                 ROOM_ID,
