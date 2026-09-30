@@ -34,10 +34,6 @@ public class AttachmentValidator {
     private static final Map<String, Set<String>> FILE_CONTENT_TYPES = Map.of(
             "pdf", Set.of(MediaType.APPLICATION_PDF_VALUE),
             "txt", Set.of(MediaType.TEXT_PLAIN_VALUE),
-            "zip", Set.of(
-                    "application/zip",
-                    "application/x-zip-compressed"
-            ),
             "docx", Set.of(
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             ),
