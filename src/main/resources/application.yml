@@ -46,7 +46,6 @@ spring:
                             - openid
                             - profile
                             - email
-                            -
 jwt:
     access-token-expiration: ${ACCESS_TOKEN_EXPIRATION}
     secret: ${JWT_SECRET}

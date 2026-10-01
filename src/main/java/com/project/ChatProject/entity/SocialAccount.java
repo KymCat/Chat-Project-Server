@@ -55,4 +55,51 @@ public class SocialAccount extends BaseTimeEntity {
 
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;
+
+    private SocialAccount(
+            Member member,
+            SocialProvider provider,
+            String providerUserId,
+            String providerEmail,
+            String providerDisplayName,
+            String providerProfileImageUrl
+    ) {
+        this.member = member;
+        this.provider = provider;
+        this.providerUserId = providerUserId;
+        this.providerEmail = providerEmail;
+        this.providerDisplayName = providerDisplayName;
+        this.providerProfileImageUrl = providerProfileImageUrl;
+        this.lastSyncedAt = Instant.now();
+    }
+
+    public static SocialAccount create(
+            Member member,
+            SocialProvider provider,
+            String providerUserId,
+            String providerEmail,
+            String providerDisplayName,
+            String providerProfileImageUrl
+    ) {
+        return new SocialAccount(
+                member,
+                provider,
+                providerUserId,
+                providerEmail,
+                providerDisplayName,
+                providerProfileImageUrl
+        );
+    }
+
+    // 프로필 동기화
+    public void synchronizeProfile(
+            String providerEmail,
+            String providerDisplayName,
+            String providerProfileImageUrl
+    ) {
+        this.providerEmail = providerEmail;
+        this.providerDisplayName = providerDisplayName;
+        this.providerProfileImageUrl = providerProfileImageUrl;
+        this.lastSyncedAt = Instant.now();
+    }
 }
