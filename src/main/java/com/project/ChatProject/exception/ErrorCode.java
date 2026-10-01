@@ -104,6 +104,16 @@ public enum ErrorCode {
             "AUTH-001",
             "이메일 또는 비밀번호가 올바르지 않습니다."
     ),
+    INVALID_SOCIAL_PROFILE(
+            HttpStatus.UNAUTHORIZED,
+            "AUTH-002",
+            "소셜 계정 정보를 확인할 수 없습니다."
+    ),
+    SOCIAL_ACCOUNT_CONFLICT(
+            HttpStatus.CONFLICT,
+            "AUTH-003",
+            "이미 다른 소셜 계정이 연결되어 있습니다."
+    ),
 
     // Email Verification Exception
     EMAIL_ALREADY_VERIFIED(
