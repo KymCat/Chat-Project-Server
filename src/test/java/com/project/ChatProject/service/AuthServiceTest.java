@@ -8,9 +8,6 @@ import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.jwt.AccessTokenBlacklistStore;
 import com.project.ChatProject.jwt.AccessTokenClaims;
-import com.project.ChatProject.jwt.JwtProvider;
-import com.project.ChatProject.jwt.refresh.RefreshTokenGenerator;
-import com.project.ChatProject.jwt.refresh.RefreshTokenHasher;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.repository.MemberCredentialRepository;
@@ -18,6 +15,7 @@ import com.project.ChatProject.repository.MemberRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,9 +25,11 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,19 +47,13 @@ class AuthServiceTest {
     private MemberCredentialRepository memberCredentialRepository;
 
     @Mock
-    private JwtProvider jwtProvider;
-
-    @Mock
-    private RefreshTokenGenerator refreshTokenGenerator;
-
-    @Mock
-    private RefreshTokenHasher refreshTokenHasher;
-
-    @Mock
     private RefreshTokenStore refreshTokenStore;
 
     @Mock
     private AccessTokenBlacklistStore accessTokenBlacklistStore;
+
+    @Mock
+    private AuthTokenService authTokenService;
 
     @InjectMocks
     private AuthService authService;
@@ -75,32 +69,22 @@ class AuthServiceTest {
         when(memberRepository.findByEmail("user@example.com"))
                 .thenReturn(member);
         when(memberCredentialRepository.getPasswordHashById(1L))
-                .thenReturn("password-hash");
+                .thenReturn(Optional.of("password-hash"));
         when(passwordEncoder.matches("password123!", "password-hash"))
                 .thenReturn(true);
-        when(jwtProvider.generateAccessToken(eq(1L), anyString(), eq(false)))
-                .thenReturn("access-token");
-        when(refreshTokenGenerator.generate())
-                .thenReturn("refresh-token");
-        when(refreshTokenHasher.hash("refresh-token"))
-                .thenReturn("refresh-token-hash");
+        when(authTokenService.create(member))
+                .thenReturn(new TokenResponse(
+                        "access-token",
+                        "refresh-token",
+                        "session-id"
+                ));
 
         TokenResponse response = authService.login(request);
 
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.refreshToken()).isEqualTo("refresh-token");
-        assertThat(response.sessionId()).isNotBlank();
-
-        verify(refreshTokenStore).save(
-                response.sessionId(),
-                1L,
-                "refresh-token-hash"
-        );
-        verify(jwtProvider).generateAccessToken(
-                1L,
-                response.sessionId(),
-                false
-        );
+        assertThat(response.sessionId()).isEqualTo("session-id");
+        verify(authTokenService).create(member);
         verify(member).updateLastLoginAt();
     }
 
@@ -121,11 +105,7 @@ class AuthServiceTest {
                 );
 
         verify(passwordEncoder, never()).matches(anyString(), anyString());
-        verify(refreshTokenStore, never()).save(
-                anyString(),
-                eq(1L),
-                anyString()
-        );
+        verify(authTokenService, never()).create(any(Member.class));
     }
 
     @Test
@@ -140,7 +120,7 @@ class AuthServiceTest {
         when(memberRepository.findByEmail("user@example.com"))
                 .thenReturn(member);
         when(memberCredentialRepository.getPasswordHashById(1L))
-                .thenReturn("password-hash");
+                .thenReturn(Optional.of("password-hash"));
         when(passwordEncoder.matches("wrong-password", "password-hash"))
                 .thenReturn(false);
 
@@ -151,7 +131,32 @@ class AuthServiceTest {
                                 .isEqualTo(ErrorCode.INVALID_CREDENTIALS)
                 );
 
-        verify(refreshTokenGenerator, never()).generate();
+        verify(authTokenService, never()).create(any(Member.class));
+    }
+
+    @Test
+    void loginRejectsMemberWithoutCredential() {
+        LoginRequest request = new LoginRequest(
+                "social@example.com",
+                "password123!"
+        );
+        Member member = org.mockito.Mockito.mock(Member.class);
+        when(member.getId()).thenReturn(1L);
+
+        when(memberRepository.findByEmail("social@example.com"))
+                .thenReturn(member);
+        when(memberCredentialRepository.getPasswordHashById(1L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOfSatisfying(
+                        CustomException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_CREDENTIALS)
+                );
+
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(authTokenService, never()).create(any(Member.class));
     }
 
     @Test
@@ -190,7 +195,8 @@ class AuthServiceTest {
 
     @Test
     void reissueRotatesAccessTokenAndRefreshToken() {
-        Member member = member(MemberStatus.ACTIVE);
+        Member member = org.mockito.Mockito.mock(Member.class);
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
         RefreshTokenSession session = new RefreshTokenSession(
                 1L,
                 "current-refresh-token-hash"
@@ -198,16 +204,14 @@ class AuthServiceTest {
 
         when(refreshTokenStore.findBySessionId("session-id"))
                 .thenReturn(Optional.of(session));
-        when(refreshTokenHasher.hash("current-refresh-token"))
-                .thenReturn("current-refresh-token-hash");
         when(memberRepository.findById(1L))
                 .thenReturn(Optional.of(member));
-        when(jwtProvider.generateAccessToken(1L, "session-id", false))
-                .thenReturn("new-access-token");
-        when(refreshTokenGenerator.generate())
-                .thenReturn("new-refresh-token");
-        when(refreshTokenHasher.hash("new-refresh-token"))
-                .thenReturn("new-refresh-token-hash");
+        when(authTokenService.create(member, "session-id"))
+                .thenReturn(new TokenResponse(
+                        "new-access-token",
+                        "new-refresh-token",
+                        "session-id"
+                ));
 
         TokenResponse response = authService.reissue(
                 "session-id",
@@ -217,11 +221,19 @@ class AuthServiceTest {
         assertThat(response.accessToken()).isEqualTo("new-access-token");
         assertThat(response.refreshToken()).isEqualTo("new-refresh-token");
         assertThat(response.sessionId()).isEqualTo("session-id");
-        verify(refreshTokenStore).save(
-                "session-id",
-                1L,
-                "new-refresh-token-hash"
+
+        InOrder inOrder = inOrder(
+                refreshTokenStore,
+                authTokenService,
+                memberRepository
         );
+        inOrder.verify(refreshTokenStore).findBySessionId("session-id");
+        inOrder.verify(authTokenService).validateRefreshToken(
+                "current-refresh-token",
+                "current-refresh-token-hash"
+        );
+        inOrder.verify(memberRepository).findById(1L);
+        inOrder.verify(authTokenService).create(member, "session-id");
         verify(member, never()).updateLastLoginAt();
     }
 
@@ -239,7 +251,10 @@ class AuthServiceTest {
                         .isEqualTo(ErrorCode.INVALID_REFRESH_TOKEN)
         );
 
-        verify(refreshTokenHasher, never()).hash(anyString());
+        verify(authTokenService, never()).validateRefreshToken(
+                anyString(),
+                anyString()
+        );
         verify(memberRepository, never()).findById(anyLong());
     }
 
@@ -251,8 +266,12 @@ class AuthServiceTest {
         );
         when(refreshTokenStore.findBySessionId("session-id"))
                 .thenReturn(Optional.of(session));
-        when(refreshTokenHasher.hash("invalid-refresh-token"))
-                .thenReturn("invalid-refresh-token-hash");
+        doThrow(new CustomException(ErrorCode.INVALID_REFRESH_TOKEN))
+                .when(authTokenService)
+                .validateRefreshToken(
+                        "invalid-refresh-token",
+                        "saved-refresh-token-hash"
+                );
 
         assertThatThrownBy(() -> authService.reissue(
                 "session-id",
@@ -264,7 +283,10 @@ class AuthServiceTest {
         );
 
         verify(memberRepository, never()).findById(anyLong());
-        verify(refreshTokenGenerator, never()).generate();
+        verify(authTokenService, never()).create(
+                any(Member.class),
+                anyString()
+        );
     }
 
     @Test
@@ -296,7 +318,7 @@ class AuthServiceTest {
         when(memberRepository.findByEmail("user@example.com"))
                 .thenReturn(member);
         when(memberCredentialRepository.getPasswordHashById(1L))
-                .thenReturn("password-hash");
+                .thenReturn(Optional.of("password-hash"));
         when(passwordEncoder.matches("password123!", "password-hash"))
                 .thenReturn(true);
 
@@ -307,7 +329,7 @@ class AuthServiceTest {
                                 .isEqualTo(expectedErrorCode)
                 );
 
-        verify(refreshTokenGenerator, never()).generate();
+        verify(authTokenService, never()).create(any(Member.class));
     }
 
     private void assertReissueRejectedByMemberStatus(
@@ -323,8 +345,6 @@ class AuthServiceTest {
 
         when(refreshTokenStore.findBySessionId("session-id"))
                 .thenReturn(Optional.of(session));
-        when(refreshTokenHasher.hash("refresh-token"))
-                .thenReturn("refresh-token-hash");
         when(memberRepository.findById(1L))
                 .thenReturn(Optional.of(member));
 
@@ -337,10 +357,12 @@ class AuthServiceTest {
                         .isEqualTo(expectedErrorCode)
         );
 
-        verify(refreshTokenGenerator, never()).generate();
-        verify(refreshTokenStore, never()).save(
-                anyString(),
-                anyLong(),
+        verify(authTokenService).validateRefreshToken(
+                "refresh-token",
+                "refresh-token-hash"
+        );
+        verify(authTokenService, never()).create(
+                any(Member.class),
                 anyString()
         );
     }
