@@ -10,6 +10,7 @@ import com.project.ChatProject.jwt.AccessTokenBlacklistStore;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
+import com.project.ChatProject.oauth.OAuthLoginCodeStore;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,12 +24,14 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
     private final PasswordEncoder passwordEncoder;
     private final MemberRepository memberRepository;
     private final MemberCredentialRepository memberCredentialRepository;
     private final RefreshTokenStore refreshTokenStore;
     private final AccessTokenBlacklistStore accessTokenBlacklistStore;
     private final AuthTokenService authTokenService;
+    private final OAuthLoginCodeStore oauthLoginCodeStore;
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
@@ -72,7 +75,10 @@ public class AuthService {
         refreshTokenStore.deleteBySessionId(sessionId);
     }
 
-    public TokenResponse reissue(String sessionId, String refreshToken) {
+    public TokenResponse reissue(
+            String sessionId,
+            String refreshToken
+    ) {
         RefreshTokenSession session = refreshTokenStore
                 .findBySessionId(sessionId)
                 .orElseThrow(() ->
@@ -93,6 +99,18 @@ public class AuthService {
                 member,
                 sessionId
         );
+    }
+
+    public String exchangeOAuthLoginCode(
+            String code,
+            String sessionId
+    ) {
+        return oauthLoginCodeStore.consume(code, sessionId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.INVALID_OAUTH_LOGIN_CODE
+                        )
+                );
     }
 
     private void isMemberSuspendOrWithdrawn(Member member) {

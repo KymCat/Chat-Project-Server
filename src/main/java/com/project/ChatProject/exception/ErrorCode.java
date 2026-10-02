@@ -114,6 +114,11 @@ public enum ErrorCode {
             "AUTH-003",
             "이미 다른 소셜 계정이 연결되어 있습니다."
     ),
+    INVALID_OAUTH_LOGIN_CODE(
+            HttpStatus.UNAUTHORIZED,
+            "AUTH-004",
+            "유효하지 않거나 만료된 소셜 로그인 코드입니다."
+    ),
 
     // Email Verification Exception
     EMAIL_ALREADY_VERIFIED(

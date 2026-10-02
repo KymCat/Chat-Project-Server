@@ -3,6 +3,7 @@ package com.project.ChatProject.controller;
 import com.project.ChatProject.config.security.AuthCookieFactory;
 import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
 import com.project.ChatProject.dto.request.LoginRequest;
+import com.project.ChatProject.dto.request.OAuthLoginCodeExchangeRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.jwt.AccessTokenClaims;
@@ -108,6 +109,18 @@ public class AuthController {
         return ResponseEntity
                 .ok()
                 .body(ApiResponse.success(null));
+    }
+
+    @PostMapping("/oauth/exchange")
+    public ResponseEntity<ApiResponse<String>> exchangeOAuthLoginCode(
+            @CookieValue(name = SESSION_ID_COOKIE_NAME) String sessionId,
+            @RequestBody @Valid OAuthLoginCodeExchangeRequest request
+    ) {
+        String code = request.code();
+        String accessToken = authService.exchangeOAuthLoginCode(code, sessionId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(accessToken));
     }
 
 }

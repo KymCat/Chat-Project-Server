@@ -10,6 +10,7 @@ import com.project.ChatProject.jwt.AccessTokenBlacklistStore;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
+import com.project.ChatProject.oauth.OAuthLoginCodeStore;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,9 @@ class AuthServiceTest {
 
     @Mock
     private AuthTokenService authTokenService;
+
+    @Mock
+    private OAuthLoginCodeStore oauthLoginCodeStore;
 
     @InjectMocks
     private AuthService authService;
@@ -302,6 +306,48 @@ class AuthServiceTest {
         assertReissueRejectedByMemberStatus(
                 MemberStatus.WITHDRAWN,
                 ErrorCode.MEMBER_WITHDRAWN
+        );
+    }
+
+    @Test
+    void exchangeOAuthLoginCodeReturnsStoredAccessToken() {
+        when(oauthLoginCodeStore.consume(
+                "login-code",
+                "session-id"
+        )).thenReturn(Optional.of("access-token"));
+
+        String accessToken = authService.exchangeOAuthLoginCode(
+                "login-code",
+                "session-id"
+        );
+
+        assertThat(accessToken).isEqualTo("access-token");
+        verify(oauthLoginCodeStore).consume(
+                "login-code",
+                "session-id"
+        );
+        verify(authTokenService, never()).create(any(Member.class));
+    }
+
+    @Test
+    void exchangeOAuthLoginCodeRejectsInvalidOrExpiredCode() {
+        when(oauthLoginCodeStore.consume(
+                "invalid-code",
+                "session-id"
+        )).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.exchangeOAuthLoginCode(
+                "invalid-code",
+                "session-id"
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.INVALID_OAUTH_LOGIN_CODE)
+        );
+
+        verify(oauthLoginCodeStore).consume(
+                "invalid-code",
+                "session-id"
         );
     }
 

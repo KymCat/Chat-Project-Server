@@ -3,6 +3,7 @@ package com.project.ChatProject.controller;
 import com.project.ChatProject.config.security.AuthCookieFactory;
 import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
 import com.project.ChatProject.dto.request.LoginRequest;
+import com.project.ChatProject.dto.request.OAuthLoginCodeExchangeRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.jwt.AccessTokenClaims;
@@ -186,6 +187,32 @@ class AuthControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().success()).isTrue();
         assertThat(response.getBody().data()).isNull();
+    }
+
+    @Test
+    void exchangeOAuthLoginCodeReturnsAccessTokenWithoutNewCookies() {
+        OAuthLoginCodeExchangeRequest request =
+                new OAuthLoginCodeExchangeRequest("login-code");
+        when(authService.exchangeOAuthLoginCode(
+                "login-code",
+                "session-id"
+        )).thenReturn("access-token");
+
+        ResponseEntity<ApiResponse<String>> response =
+                authController.exchangeOAuthLoginCode(
+                        "session-id",
+                        request
+                );
+
+        verify(authService).exchangeOAuthLoginCode(
+                "login-code",
+                "session-id"
+        );
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).isEqualTo("access-token");
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).isNull();
     }
 
     private AccessTokenClaims claims() {
