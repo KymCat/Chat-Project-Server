@@ -1,11 +1,11 @@
 package com.project.ChatProject.controller;
 
+import com.project.ChatProject.config.security.AuthCookieFactory;
 import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
 import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.jwt.AccessTokenClaims;
-import com.project.ChatProject.jwt.refresh.RefreshTokenProperties;
 import com.project.ChatProject.service.AuthService;
 import com.project.ChatProject.service.EmailVerificationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +16,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -33,6 +32,9 @@ class AuthControllerTest {
     @Mock
     private EmailVerificationService emailVerificationService;
 
+    @Mock
+    private AuthCookieFactory authCookieFactory;
+
     private AuthController authController;
 
     @BeforeEach
@@ -40,7 +42,7 @@ class AuthControllerTest {
         authController = new AuthController(
                 authService,
                 emailVerificationService,
-                new RefreshTokenProperties(Duration.ofDays(14))
+                authCookieFactory
         );
     }
 
@@ -57,6 +59,10 @@ class AuthControllerTest {
                         "session-id"
                 )
         );
+        when(authCookieFactory.createSessionIdCookie("session-id"))
+                .thenReturn("session-id-cookie");
+        when(authCookieFactory.createRefreshTokenCookie("refresh-token"))
+                .thenReturn("refresh-token-cookie");
 
         ResponseEntity<ApiResponse<String>> response =
                 authController.login(request);
@@ -67,19 +73,12 @@ class AuthControllerTest {
         assertThat(response.getBody().data()).isEqualTo("access-token");
 
         List<String> cookies = response.getHeaders().get(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).hasSize(2);
-        assertThat(cookies.get(0))
-                .contains("sessionId=session-id")
-                .contains("Path=/")
-                .contains("Max-Age=1209600")
-                .contains("HttpOnly")
-                .contains("SameSite=Lax");
-        assertThat(cookies.get(1))
-                .contains("refreshToken=refresh-token")
-                .contains("Path=/")
-                .contains("Max-Age=1209600")
-                .contains("HttpOnly")
-                .contains("SameSite=Lax");
+        assertThat(cookies).containsExactly(
+                "session-id-cookie",
+                "refresh-token-cookie"
+        );
+        verify(authCookieFactory).createSessionIdCookie("session-id");
+        verify(authCookieFactory).createRefreshTokenCookie("refresh-token");
     }
 
     @Test
@@ -92,6 +91,10 @@ class AuthControllerTest {
                 Instant.now(),
                 Instant.now().plusSeconds(600)
         );
+        when(authCookieFactory.deleteSessionIdCookie())
+                .thenReturn("deleted-session-id-cookie");
+        when(authCookieFactory.deleteRefreshTokenCookie())
+                .thenReturn("deleted-refresh-token-cookie");
 
         ResponseEntity<ApiResponse<Void>> response =
                 authController.logout(claims);
@@ -102,19 +105,12 @@ class AuthControllerTest {
         assertThat(response.getBody().success()).isTrue();
 
         List<String> cookies = response.getHeaders().get(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).hasSize(2);
-        assertThat(cookies.get(0))
-                .contains("sessionId=")
-                .contains("Path=/")
-                .contains("Max-Age=0")
-                .contains("HttpOnly")
-                .contains("SameSite=Lax");
-        assertThat(cookies.get(1))
-                .contains("refreshToken=")
-                .contains("Path=/")
-                .contains("Max-Age=0")
-                .contains("HttpOnly")
-                .contains("SameSite=Lax");
+        assertThat(cookies).containsExactly(
+                "deleted-session-id-cookie",
+                "deleted-refresh-token-cookie"
+        );
+        verify(authCookieFactory).deleteSessionIdCookie();
+        verify(authCookieFactory).deleteRefreshTokenCookie();
     }
 
     @Test
@@ -129,6 +125,10 @@ class AuthControllerTest {
                         "session-id"
                 )
         );
+        when(authCookieFactory.createSessionIdCookie("session-id"))
+                .thenReturn("session-id-cookie");
+        when(authCookieFactory.createRefreshTokenCookie("new-refresh-token"))
+                .thenReturn("new-refresh-token-cookie");
 
         ResponseEntity<ApiResponse<String>> response =
                 authController.reissue(
@@ -146,16 +146,13 @@ class AuthControllerTest {
         assertThat(response.getBody().data()).isEqualTo("new-access-token");
 
         List<String> cookies = response.getHeaders().get(HttpHeaders.SET_COOKIE);
-        assertThat(cookies).hasSize(2);
-        assertThat(cookies.get(0))
-                .contains("sessionId=session-id")
-                .contains("Max-Age=1209600")
-                .contains("HttpOnly");
-        assertThat(cookies.get(1))
-                .contains("refreshToken=new-refresh-token")
-                .doesNotContain("current-refresh-token")
-                .contains("Max-Age=1209600")
-                .contains("HttpOnly");
+        assertThat(cookies).containsExactly(
+                "session-id-cookie",
+                "new-refresh-token-cookie"
+        );
+        verify(authCookieFactory).createSessionIdCookie("session-id");
+        verify(authCookieFactory)
+                .createRefreshTokenCookie("new-refresh-token");
     }
 
     @Test
