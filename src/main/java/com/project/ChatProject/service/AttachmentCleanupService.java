@@ -2,8 +2,6 @@ package com.project.ChatProject.service;
 
 import com.project.ChatProject.entity.Attachment;
 import com.project.ChatProject.entity.enums.AttachmentStatus;
-import com.project.ChatProject.exception.CustomException;
-import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.AttachmentRepository;
 import com.project.ChatProject.storage.FileStorage;
 import lombok.RequiredArgsConstructor;
