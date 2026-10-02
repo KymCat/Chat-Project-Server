@@ -8,9 +8,6 @@ import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.jwt.AccessTokenBlacklistStore;
 import com.project.ChatProject.jwt.AccessTokenClaims;
-import com.project.ChatProject.jwt.JwtProvider;
-import com.project.ChatProject.jwt.refresh.RefreshTokenGenerator;
-import com.project.ChatProject.jwt.refresh.RefreshTokenHasher;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.repository.MemberCredentialRepository;
@@ -22,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Locale;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -30,11 +26,9 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final MemberRepository memberRepository;
     private final MemberCredentialRepository memberCredentialRepository;
-    private final JwtProvider jwtProvider;
-    private final RefreshTokenGenerator refreshTokenGenerator;
-    private final RefreshTokenHasher refreshTokenHasher;
     private final RefreshTokenStore refreshTokenStore;
     private final AccessTokenBlacklistStore accessTokenBlacklistStore;
+    private final AuthTokenService authTokenService;
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
@@ -50,7 +44,12 @@ public class AuthService {
         }
 
         String passwordHash = memberCredentialRepository
-                .getPasswordHashById(member.getId());
+                .getPasswordHashById(member.getId())
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.INVALID_CREDENTIALS
+                        )
+                );
 
         if (!passwordEncoder.matches(password, passwordHash)) {
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
@@ -58,15 +57,7 @@ public class AuthService {
 
         isMemberSuspendOrWithdrawn(member);
 
-        Long memberId = member.getId();
-        boolean emailVerified = member.getEmailVerifiedAt() != null;
-        String sessionId = UUID.randomUUID().toString();
-
-        TokenResponse response = tokenIssue(
-                memberId,
-                emailVerified,
-                sessionId
-        );
+        TokenResponse response = authTokenService.create(member);
 
         member.updateLastLoginAt();
         return response;
@@ -87,10 +78,10 @@ public class AuthService {
                 .orElseThrow(() ->
                         new CustomException(ErrorCode.INVALID_REFRESH_TOKEN));
 
-        String refreshTokenHash = refreshTokenHasher.hash(refreshToken);
-        if (!refreshTokenHash.equals(session.refreshTokenHash())) {
-            throw new CustomException(ErrorCode.INVALID_REFRESH_TOKEN);
-        }
+        authTokenService.validateRefreshToken(
+                refreshToken,
+                session.refreshTokenHash()
+        );
 
         Member member = memberRepository
                 .findById(session.memberId())
@@ -98,40 +89,11 @@ public class AuthService {
                         new CustomException(ErrorCode.MEMBER_NOT_FOUND));
         isMemberSuspendOrWithdrawn(member);
 
-        return tokenIssue(
-                member.getId(),
-                member.getEmailVerifiedAt() != null,
+        return authTokenService.create(
+                member,
                 sessionId
         );
     }
-
-    private TokenResponse tokenIssue(
-            Long memberId,
-            boolean emailVerified,
-            String sessionId
-    )
-    {
-        String accessToken = jwtProvider.generateAccessToken(
-                memberId,
-                sessionId,
-                emailVerified
-        );
-
-        String refreshToken = refreshTokenGenerator.generate();
-        String refreshTokenHash = refreshTokenHasher.hash(refreshToken);
-        refreshTokenStore.save(
-                sessionId,
-                memberId,
-                refreshTokenHash
-        );
-
-        return new TokenResponse(
-                accessToken,
-                refreshToken,
-                sessionId
-        );
-    }
-
 
     private void isMemberSuspendOrWithdrawn(Member member) {
         if (member.getStatus() != MemberStatus.ACTIVE) {
