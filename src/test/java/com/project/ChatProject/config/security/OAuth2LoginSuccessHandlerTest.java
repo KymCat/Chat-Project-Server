@@ -66,7 +66,7 @@ class OAuth2LoginSuccessHandlerTest {
         ReflectionTestUtils.setField(
                 successHandler,
                 "frontendCallbackUri",
-                "http://localhost:5173/oauth/callback"
+                "http://localhost:3000/oauth/callback"
         );
     }
 
@@ -130,7 +130,7 @@ class OAuth2LoginSuccessHandlerTest {
                 "refresh-token-cookie"
         );
         verify(response).sendRedirect(
-                "http://localhost:5173/oauth/callback?code=login-code"
+                "http://localhost:3000/oauth/callback?code=login-code"
         );
     }
 
