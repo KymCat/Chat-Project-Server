@@ -21,6 +21,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final OAuth2LoginSuccessHandler oauth2LoginSuccessHandler;
+    private final OAuth2LoginFailureHandler oauth2LoginFailureHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -60,7 +61,9 @@ public class SecurityConfig {
                 )
 
                 .oauth2Login(oauth2 ->
-                        oauth2.successHandler(oauth2LoginSuccessHandler)
+                        oauth2
+                                .successHandler(oauth2LoginSuccessHandler)
+                                .failureHandler(oauth2LoginFailureHandler)
                 )
 
                 .addFilterBefore(
