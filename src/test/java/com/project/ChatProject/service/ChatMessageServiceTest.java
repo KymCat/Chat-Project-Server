@@ -5,6 +5,7 @@ import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.AttachmentResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.entity.Attachment;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
@@ -27,9 +28,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -413,6 +416,178 @@ class ChatMessageServiceTest {
         assertSaveRejected(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
     }
 
+    @Test
+    void searchMessagesReturnsLatestPageAndNormalizesKeyword() {
+        Instant joinedAt = Instant.parse("2026-10-12T05:00:00Z");
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(chatRoom, sender);
+        ReflectionTestUtils.setField(chatRoomMember, "joinedAt", joinedAt);
+        List<ChatMessage> foundMessages = List.of(
+                textMessage(chatRoom, sender, 104L, "Spring 4", "2026-10-12T09:04:00Z"),
+                textMessage(chatRoom, sender, 103L, "Spring 3", "2026-10-12T09:03:00Z"),
+                textMessage(chatRoom, sender, 102L, "Spring 2", "2026-10-12T09:02:00Z"),
+                textMessage(chatRoom, sender, 101L, "Spring 1", "2026-10-12T09:01:00Z")
+        );
+
+        stubParticipation(sender, chatRoom, chatRoomMember);
+        when(chatMessageRepository.searchMessage(
+                ROOM_ID,
+                "Spring",
+                joinedAt,
+                PageRequest.of(0, 4)
+        )).thenReturn(foundMessages);
+
+        CursorPageResponse<ChatMessageResponse> response =
+                chatMessageService.searchMessages(
+                        MEMBER_ID,
+                        ROOM_ID,
+                        "  Spring  ",
+                        3,
+                        null
+                );
+
+        assertThat(response.content())
+                .extracting(ChatMessageResponse::messageId)
+                .containsExactly(104L, 103L, 102L);
+        assertThat(response.nextCursor()).isEqualTo(102L);
+        assertThat(response.hasNext()).isTrue();
+        verify(chatMessageRepository).searchMessage(
+                ROOM_ID,
+                "Spring",
+                joinedAt,
+                PageRequest.of(0, 4)
+        );
+        verify(chatMessageRepository, never()).searchMessageBefore(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    void searchMessagesUsesCursorFromRequestedRoom() {
+        Instant joinedAt = Instant.parse("2026-10-12T05:00:00Z");
+        Instant cursorCreatedAt = Instant.parse("2026-10-12T09:00:00Z");
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(chatRoom, sender);
+        ReflectionTestUtils.setField(chatRoomMember, "joinedAt", joinedAt);
+        ChatMessage cursorMessage = textMessage(
+                chatRoom,
+                sender,
+                100L,
+                "Spring cursor",
+                cursorCreatedAt.toString()
+        );
+        List<ChatMessage> foundMessages = List.of(
+                textMessage(chatRoom, sender, 99L, "Spring 2", "2026-10-12T08:59:00Z"),
+                textMessage(chatRoom, sender, 98L, "Spring 1", "2026-10-12T08:58:00Z")
+        );
+
+        stubParticipation(sender, chatRoom, chatRoomMember);
+        when(chatMessageRepository.findByIdAndChatRoomId(100L, ROOM_ID))
+                .thenReturn(Optional.of(cursorMessage));
+        when(chatMessageRepository.searchMessageBefore(
+                ROOM_ID,
+                "Spring",
+                joinedAt,
+                cursorCreatedAt,
+                100L,
+                PageRequest.of(0, 4)
+        )).thenReturn(foundMessages);
+
+        CursorPageResponse<ChatMessageResponse> response =
+                chatMessageService.searchMessages(
+                        MEMBER_ID,
+                        ROOM_ID,
+                        "Spring",
+                        3,
+                        100L
+                );
+
+        assertThat(response.content())
+                .extracting(ChatMessageResponse::messageId)
+                .containsExactly(99L, 98L);
+        assertThat(response.nextCursor()).isNull();
+        assertThat(response.hasNext()).isFalse();
+        verify(chatMessageRepository).findByIdAndChatRoomId(100L, ROOM_ID);
+        verify(chatMessageRepository, never()).searchMessage(
+                any(),
+                any(),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    void searchMessagesRejectsCursorOutsideRequestedRoom() {
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(chatRoom, sender);
+
+        stubParticipation(sender, chatRoom, chatRoomMember);
+        when(chatMessageRepository.findByIdAndChatRoomId(999L, ROOM_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> chatMessageService.searchMessages(
+                MEMBER_ID,
+                ROOM_ID,
+                "Spring",
+                30,
+                999L
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_MESSAGE_NOT_FOUND)
+        );
+
+        verify(chatMessageRepository, never()).searchMessageBefore(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    void searchMessagesRejectsFormerRoomMember() {
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember chatRoomMember =
+                ChatRoomMember.createMember(chatRoom, sender);
+        ReflectionTestUtils.setField(chatRoomMember, "leftAt", Instant.now());
+
+        stubParticipation(sender, chatRoom, chatRoomMember);
+
+        assertThatThrownBy(() -> chatMessageService.searchMessages(
+                MEMBER_ID,
+                ROOM_ID,
+                "Spring",
+                30,
+                null
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED)
+        );
+
+        verify(chatMessageRepository, never()).searchMessage(
+                any(),
+                any(),
+                any(),
+                any()
+        );
+    }
+
     private void assertSaveRejected(ErrorCode expectedErrorCode) {
         assertThatThrownBy(() -> chatMessageService.save(
                 MEMBER_ID,
@@ -491,6 +666,27 @@ class ChatMessageServiceTest {
         );
         ReflectionTestUtils.setField(attachment, "id", 200L);
         return attachment;
+    }
+
+    private ChatMessage textMessage(
+            ChatRoom chatRoom,
+            Member sender,
+            Long messageId,
+            String content,
+            String createdAt
+    ) {
+        ChatMessage message = ChatMessage.createText(
+                chatRoom,
+                sender,
+                content
+        );
+        ReflectionTestUtils.setField(message, "id", messageId);
+        ReflectionTestUtils.setField(
+                message,
+                "createdAt",
+                Instant.parse(createdAt)
+        );
+        return message;
     }
 
     private Member member(

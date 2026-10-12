@@ -13,6 +13,7 @@ import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.exception.GlobalExceptionHandler;
+import com.project.ChatProject.service.ChatMessageService;
 import com.project.ChatProject.service.ChatRoomService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,9 @@ class ChatRoomControllerTest {
     private ChatRoomService chatRoomService;
 
     @Mock
+    private ChatMessageService chatMessageService;
+
+    @Mock
     private SimpMessagingTemplate template;
 
     private MockMvc mockMvc;
@@ -58,7 +62,11 @@ class ChatRoomControllerTest {
     @BeforeEach
     void setUp() {
         ChatRoomController controller =
-                new ChatRoomController(template, chatRoomService);
+                new ChatRoomController(
+                        template,
+                        chatRoomService,
+                        chatMessageService
+                );
 
         mockMvc = MockMvcBuilders
                 .standaloneSetup(controller)
@@ -225,6 +233,85 @@ class ChatRoomControllerTest {
 
         verify(chatRoomService, never())
                 .getMessages(any(Long.class), any(), any(Long.class), any(Integer.class));
+    }
+
+    @Test
+    void searchMessagesReturnsCursorPage() throws Exception {
+        Instant createdAt = Instant.parse("2026-10-12T06:00:00Z");
+        ChatMessageResponse message = new ChatMessageResponse(
+                90L,
+                10L,
+                1L,
+                "사용자",
+                ChatMessageType.TEXT,
+                "Spring Security",
+                null,
+                createdAt,
+                null,
+                false
+        );
+        CursorPageResponse<ChatMessageResponse> response =
+                CursorPageResponse.of(List.of(message), 90L, true);
+        when(chatMessageService.searchMessages(
+                1L,
+                10L,
+                "Spring",
+                20,
+                100L
+        )).thenReturn(response);
+
+        mockMvc.perform(get("/chat-rooms/10/messages/search")
+                        .param("keyword", "Spring")
+                        .param("size", "20")
+                        .param("beforeMessageId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.content[0].messageId").value(90L))
+                .andExpect(jsonPath("$.data.content[0].content")
+                        .value("Spring Security"))
+                .andExpect(jsonPath("$.data.nextCursor").value(90L))
+                .andExpect(jsonPath("$.data.hasNext").value(true));
+
+        verify(chatMessageService).searchMessages(
+                1L,
+                10L,
+                "Spring",
+                20,
+                100L
+        );
+    }
+
+    @Test
+    void searchMessagesRejectsInvalidParameters() throws Exception {
+        mockMvc.perform(get("/chat-rooms/10/messages/search")
+                        .param("keyword", "   "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/chat-rooms/10/messages/search")
+                        .param("keyword", "a".repeat(101)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/chat-rooms/10/messages/search")
+                        .param("keyword", "Spring")
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/chat-rooms/10/messages/search")
+                        .param("keyword", "Spring")
+                        .param("size", "61"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(chatMessageService, never()).searchMessages(
+                any(Long.class),
+                any(Long.class),
+                any(String.class),
+                any(Integer.class),
+                any()
+        );
     }
 
     @Test
