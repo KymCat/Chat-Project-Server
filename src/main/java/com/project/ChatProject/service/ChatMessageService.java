@@ -4,6 +4,7 @@ import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.entity.Attachment;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
@@ -17,8 +18,12 @@ import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
 import com.project.ChatProject.service.support.ParticipationLockMode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
 @Service
@@ -100,6 +105,71 @@ public class ChatMessageService {
 
         return ChatMessageEvent
                 .created(ChatMessageResponse.from(message));
+    }
+
+    @Transactional(readOnly = true)
+    public CursorPageResponse<ChatMessageResponse> searchMessages(
+            Long memberId,
+            Long roomId,
+            String keyword,
+            int size,
+            Long beforeMessageId
+    ) {
+        ChatRoomParticipationContext context =
+                participation.requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.NONE
+                );
+
+        String normalizedKeyword = keyword.strip();
+
+        List<ChatMessage> result;
+        if (beforeMessageId == null) {
+            result = chatMessageRepository
+                    .searchMessage(
+                            roomId,
+                            normalizedKeyword,
+                            context.chatRoomMember().getJoinedAt(),
+                            PageRequest.of(0, size+1)
+                    );
+        }
+        else {
+            ChatMessage beforeMessage = chatMessageRepository
+                    .findByIdAndChatRoomId(beforeMessageId, roomId)
+                    .orElseThrow(() ->
+                            new CustomException(
+                                    ErrorCode.CHAT_MESSAGE_NOT_FOUND
+                            )
+                    );
+
+            result = chatMessageRepository
+                    .searchMessageBefore(
+                            roomId,
+                            normalizedKeyword,
+                            context.chatRoomMember().getJoinedAt(),
+                            beforeMessage.getCreatedAt(),
+                            beforeMessageId,
+                            PageRequest.of(0, size+1)
+                    );
+        }
+        boolean hasNext = result.size() > size;
+        if (hasNext)
+            result = new ArrayList<>(result.subList(0, size));
+
+        Long nextCursor = hasNext && !result.isEmpty()
+                ? result.get(result.size() - 1).getId()
+                : null;
+
+        List<ChatMessageResponse> responses = result.stream()
+                .map(ChatMessageResponse::from)
+                .toList();
+
+        return CursorPageResponse.of(
+                responses,
+                nextCursor,
+                hasNext
+        );
     }
 
     // === private method ==

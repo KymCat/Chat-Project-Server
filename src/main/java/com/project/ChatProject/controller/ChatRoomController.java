@@ -6,10 +6,13 @@ import com.project.ChatProject.dto.request.*;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
+import com.project.ChatProject.service.ChatMessageService;
 import com.project.ChatProject.service.ChatRoomService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,13 +29,13 @@ public class ChatRoomController {
 
     private final SimpMessagingTemplate template;
     private final ChatRoomService chatRoomService;
+    private final ChatMessageService chatMessageService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ChatRoomCreateResponse>> create(
             @RequestBody @Valid ChatRoomCreateRequest request,
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         ChatRoomCreateResponse response
                 = chatRoomService.create(memberId, request.name());
@@ -58,8 +61,7 @@ public class ChatRoomController {
     @GetMapping("/available")
     public ResponseEntity<ApiResponse<List<GroupChatRoomResponse>>> getGroupChatRooms(
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         List<GroupChatRoomResponse> response
                 = chatRoomService.getGroupChatRooms(memberId);
@@ -73,8 +75,7 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<Void>> join(
             @AuthenticationPrincipal AccessTokenClaims claims,
             @PathVariable Long roomId
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         ChatMessageEvent response =
                 chatRoomService.join(memberId, roomId);
@@ -113,8 +114,7 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<Void>> leave(
             @PathVariable Long roomId,
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         ChatMessageEvent leaveMessage
                 = chatRoomService.leave(roomId, memberId);
@@ -132,8 +132,7 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<List<ChatRoomMemberResponse>>> getMembers(
             @PathVariable Long roomId,
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         List<ChatRoomMemberResponse> response
                 = chatRoomService.getMembers(roomId, memberId);
@@ -147,8 +146,7 @@ public class ChatRoomController {
             @PathVariable Long roomId,
             @RequestBody @Valid ChatRoomOwnerTransferRequest request,
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         ChatMessageEvent message
                 = chatRoomService.transferOwnership(
@@ -171,8 +169,7 @@ public class ChatRoomController {
             @PathVariable Long roomId,
             @RequestBody @Valid ChatRoomReadPositionRequest request,
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         chatRoomService.updateReadPosition(
                 roomId,
@@ -189,8 +186,7 @@ public class ChatRoomController {
             @PathVariable Long roomId,
             @PathVariable Long messageId,
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         ChatMessageEvent messageEvent =
                 chatRoomService.deleteMessage(
@@ -214,8 +210,7 @@ public class ChatRoomController {
             @PathVariable Long messageId,
             @RequestBody @Valid ChatMessageEditRequest request,
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         ChatMessageEvent messageEvent =
                 chatRoomService.editMessage(
@@ -239,8 +234,7 @@ public class ChatRoomController {
             @PathVariable Long roomId,
             @RequestBody @Valid ChatRoomNameUpdateRequest request,
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         ChatRoomNameUpdateResult result = chatRoomService
                 .updateChatRoomName(
@@ -267,8 +261,7 @@ public class ChatRoomController {
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long roomId,
             @AuthenticationPrincipal AccessTokenClaims claims
-    )
-    {
+    ) {
         Long memberId = claims.memberId();
         ChatRoomEvent event
                 = chatRoomService.delete(roomId, memberId);
@@ -280,5 +273,27 @@ public class ChatRoomController {
 
         return ResponseEntity
                 .ok(ApiResponse.success(null));
+    }
+
+    @GetMapping("/{roomId}/messages/search")
+    public ResponseEntity<ApiResponse<CursorPageResponse<ChatMessageResponse>>> searchMessages(
+            @PathVariable Long roomId,
+            @RequestParam @NotBlank @Size(max = 100) String keyword,
+            @RequestParam(defaultValue = "30") @Min(1) @Max(60) int size,
+            @RequestParam(required = false) Long beforeMessageId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        CursorPageResponse<ChatMessageResponse> response =
+                chatMessageService.searchMessages(
+                        memberId,
+                        roomId,
+                        keyword,
+                        size,
+                        beforeMessageId
+                );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
     }
 }

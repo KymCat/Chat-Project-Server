@@ -86,4 +86,58 @@ public interface ChatMessageRepository
             @Param("roomId") Long roomId,
             @Param("attachmentId") Long attachmentId
     );
+
+    // 채팅메세지 최초 검색
+    @Query(
+            value = """
+                    SELECT cm
+                    FROM ChatMessage cm
+                    JOIN FETCH cm.sender
+                    WHERE cm.chatRoom.id = :roomId
+                        AND cm.createdAt >= :joinedAt
+                        AND cm.type =
+                            com.project.ChatProject.entity.enums.ChatMessageType.TEXT
+                        AND cm.deletedAt IS NULL
+                        AND LOCATE(LOWER(:keyword), LOWER(cm.content)) > 0
+                    ORDER BY cm.createdAt DESC, cm.id DESC
+                    """
+    )
+    List<ChatMessage> searchMessage(
+            @Param("roomId") Long roomId,
+            @Param("keyword") String keyword,
+            @Param("joinedAt") Instant joinedAt,
+            Pageable pageable
+    );
+
+    // 채팅 메세지 커서 검색
+    @Query(
+            value = """
+                    SELECT cm
+                    FROM ChatMessage cm
+                    JOIN FETCH cm.sender
+                    WHERE cm.chatRoom.id = :roomId
+                        AND cm.createdAt >= :joinedAt
+                        AND cm.type =
+                            com.project.ChatProject.entity.enums.ChatMessageType.TEXT
+                        AND cm.deletedAt IS NULL
+                        AND (
+                            cm.createdAt < :beforeCreatedAt
+                            OR (
+                                cm.createdAt = :beforeCreatedAt
+                                AND cm.id < :beforeMessageId
+                            )
+                        )
+                        AND LOCATE(LOWER(:keyword), LOWER(cm.content)) > 0
+                    ORDER BY cm.createdAt DESC, cm.id DESC
+                    """
+    )
+    List<ChatMessage> searchMessageBefore(
+            @Param("roomId") Long roomId,
+            @Param("keyword") String keyword,
+            @Param("joinedAt") Instant joinedAt,
+            @Param("beforeCreatedAt") Instant beforeCreatedAt,
+            @Param("beforeMessageId") Long beforeMessageId,
+            Pageable pageable
+    );
+
 }
