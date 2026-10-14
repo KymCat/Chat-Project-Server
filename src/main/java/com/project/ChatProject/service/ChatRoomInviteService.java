@@ -30,28 +30,50 @@ public class ChatRoomInviteService {
             Long memberId,
             InviteLinkExpiration expiration
     ) {
-
-        ChatRoomParticipationContext context = participationService
-                .requireParticipation(
-                        roomId,
-                        memberId,
-                        ParticipationLockMode.CHAT_ROOM
-                );
-
-        if (!context.chatRoomMember()
-                .getRole()
-                .equals(ChatRoomMemberRole.OWNER)
-        ) {
-            throw new CustomException(
-                    ErrorCode.CHAT_ROOM_OWNER_REQUIRED
-            );
-        }
+        inviteLinkValidation(roomId, memberId);
 
         if(inviteLinkRepository.findByRoomId(roomId).isPresent()) {
             throw new CustomException(
                     ErrorCode.CHAT_ROOM_LINK_ALREADY_EXISTS
             );
         }
+
+        return createTokenAndSave(
+                roomId,
+                expiration
+        );
+    }
+
+    @Transactional
+    public ChatRoomInviteLink reissueInviteLink(
+            Long roomId,
+            Long memberId,
+            InviteLinkExpiration expiration
+    ) {
+        inviteLinkValidation(roomId, memberId);
+
+        inviteLinkRepository.findByRoomId(roomId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_INVITE_LINK_NOT_FOUND
+                        )
+                );
+
+        return createTokenAndSave(roomId, expiration);
+    }
+
+    // ==== private Method ====
+
+    /**
+     * 초대링크 토큰 생성과 Redis 저장
+     * @param roomId
+     * @param expiration
+     * @return
+     */
+    private ChatRoomInviteLink createTokenAndSave(
+            Long roomId,
+            InviteLinkExpiration expiration
+    ) {
 
         String token = inviteLinkGenerator.generate();
         Duration ttl = expiration.getDuration();
@@ -69,12 +91,30 @@ public class ChatRoomInviteService {
         return link;
     }
 
-//    @Transactional
-//    public ChatRoomInviteLink reissueInviteLink(
-//            Long roomId,
-//            Long memberId,
-//            InviteLinkExpiration expiration
-//    ) {
-//
-//    }
+    /**
+     * 채팅방, 멤버 검증과 초대링크 생성 권한 확인
+     * @param roomId
+     * @param memberId
+     */
+    private void inviteLinkValidation(
+            Long roomId,
+            Long memberId
+    ) {
+        ChatRoomParticipationContext context = participationService
+                .requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.CHAT_ROOM
+                );
+
+        // 방장 권한 확인
+        if (!context.chatRoomMember()
+                .getRole()
+                .equals(ChatRoomMemberRole.OWNER)
+        ) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_OWNER_REQUIRED
+            );
+        }
+    }
 }
