@@ -1,5 +1,6 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
@@ -20,6 +21,7 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class ChatRoomInviteService {
 
+    private final ChatRoomService chatRoomService;
     private final ChatRoomInviteTokenGenerator inviteLinkGenerator;
     private final ChatRoomInviteLinkRepository inviteLinkRepository;
     private final ChatRoomParticipationService participationService;
@@ -79,6 +81,38 @@ public class ChatRoomInviteService {
         }
 
         inviteLinkRepository.deleteByRoomId(roomId);
+    }
+
+    @Transactional
+    public ChatMessageEvent joinInviteLink(
+            String token,
+            Long memberId
+    ) {
+        ChatRoomInviteLink foundLink = inviteLinkRepository
+                .findByToken(token)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_INVITE_LINK_NOT_FOUND
+                        )
+                );
+        Long roomId = foundLink.roomId();
+
+        participationService.requireJoinableChatRoomForUpdate(roomId);
+
+        // lock 대기 중 링크가 폐기되거나 재발급됐을 수 있으므로 다시 검증
+        inviteLinkRepository.findByRoomId(roomId)
+                .filter(activeLink ->
+                        activeLink
+                                .token()
+                                .equals(token)
+                )
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_INVITE_LINK_NOT_FOUND
+                        )
+                );
+
+        return chatRoomService.join(memberId, roomId);
     }
 
     // ==== private Method ====

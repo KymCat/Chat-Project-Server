@@ -46,6 +46,17 @@ public class ChatRoomParticipationService {
     }
 
     /**
+     * 채팅방 락 및 검증 이후에 채팅방 엔티티 반환
+     * @param roomId
+     * @return
+     */
+    public ChatRoom requireJoinableChatRoomForUpdate(Long roomId) {
+        ChatRoom chatRoom = findChatRoomLock(roomId);
+        validateJoinableChatRoom(chatRoom);
+        return chatRoom;
+    }
+
+    /**
      * 채팅방과 채팅방멤버, 멤버 엔티티 검증 및 Lock
      * @param roomId
      * @param memberId
