@@ -1,11 +1,10 @@
 package com.project.ChatProject.invite;
 
-import java.time.Duration;
 import java.util.Optional;
 
 public interface ChatRoomInviteLinkRepository {
 
-    void saveOrReplace(ChatRoomInviteLink link, Duration ttl);
+    void saveOrReplace(ChatRoomInviteLink link);
 
     Optional<ChatRoomInviteLink> findByRoomId(Long roomId);
 

@@ -32,7 +32,7 @@ public class RedisChatRoomInviteLinkRepository
     private final StringRedisTemplate redisTemplate;
 
     @Override
-    public void saveOrReplace(ChatRoomInviteLink link, Duration ttl) {
+    public void saveOrReplace(ChatRoomInviteLink link) {
 
         String roomIdKey = createRoomIdKey(link.roomId());
         String newTokenKey = createTokenKey(link.token());
@@ -49,6 +49,18 @@ public class RedisChatRoomInviteLinkRepository
                 ? newTokenKey   // temp
                 : createTokenKey(oldToken);
 
+        Duration ttl = Duration.between(
+                Instant.now(),
+                link.expiresAt()
+        );
+
+        long ttlMillis = ttl.toMillis();
+        if (ttlMillis <= 0) {
+            throw new IllegalArgumentException(
+                    "초대 링크 만료 시각은 현재보다 이후여야 합니다."
+            );
+        }
+
         Long result = redisTemplate.execute(
                 SAVE_OR_REPLACE_SCRIPT,
                 List.of(    // key
@@ -60,7 +72,7 @@ public class RedisChatRoomInviteLinkRepository
                 link.token(),
                 link.roomId().toString(),
                 link.expiresAt().toString(),
-                Long.toString(ttl.toMillis())
+                Long.toString(ttlMillis)
         );
 
         if (!Long.valueOf(1L).equals(result)) {
