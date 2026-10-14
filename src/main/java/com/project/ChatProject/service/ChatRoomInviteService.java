@@ -62,6 +62,25 @@ public class ChatRoomInviteService {
         return createTokenAndSave(roomId, expiration);
     }
 
+    @Transactional
+    public void deleteInviteLink(
+            Long roomId,
+            Long memberId
+    ) {
+        inviteLinkValidation(roomId, memberId);
+
+        if (inviteLinkRepository
+                .findByRoomId(roomId)
+                .isEmpty()
+        ) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_INVITE_LINK_NOT_FOUND
+            );
+        }
+
+        inviteLinkRepository.deleteByRoomId(roomId);
+    }
+
     // ==== private Method ====
 
     /**
