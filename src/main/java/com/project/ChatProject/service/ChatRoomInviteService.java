@@ -26,6 +26,26 @@ public class ChatRoomInviteService {
     private final ChatRoomInviteLinkRepository inviteLinkRepository;
     private final ChatRoomParticipationService participationService;
 
+    @Transactional(readOnly = true)
+    public ChatRoomInviteLink getLink(
+            Long roomId,
+            Long memberId
+    ) {
+
+        participationService.requireParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.NONE
+                );
+
+        return inviteLinkRepository.findByRoomId(roomId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_INVITE_LINK_NOT_FOUND
+                        )
+                );
+    }
+
     @Transactional
     public ChatRoomInviteLink createInviteLink(
             Long roomId,
@@ -34,7 +54,7 @@ public class ChatRoomInviteService {
     ) {
         inviteLinkValidation(roomId, memberId);
 
-        if(inviteLinkRepository.findByRoomId(roomId).isPresent()) {
+        if (inviteLinkRepository.findByRoomId(roomId).isPresent()) {
             throw new CustomException(
                     ErrorCode.CHAT_ROOM_LINK_ALREADY_EXISTS
             );
