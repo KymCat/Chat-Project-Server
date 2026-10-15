@@ -21,6 +21,7 @@ import com.project.ChatProject.entity.enums.ChatRoomEventType;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.invite.ChatRoomInviteLinkRepository;
 import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
@@ -62,6 +63,9 @@ class ChatRoomServiceTest {
     @Mock
     private ChatMessageRepository chatMessageRepository;
 
+    @Mock
+    private ChatRoomInviteLinkRepository inviteLinkRepository;
+
     private ChatRoomService chatRoomService;
 
     @BeforeEach
@@ -77,7 +81,8 @@ class ChatRoomServiceTest {
                 participation,
                 chatRoomRepository,
                 chatRoomMemberRepository,
-                chatMessageRepository
+                chatMessageRepository,
+                inviteLinkRepository
         );
     }
 
@@ -1339,6 +1344,7 @@ class ChatRoomServiceTest {
         assertThat(event.roomId()).isEqualTo(10L);
         assertThat(event.name()).isEqualTo("Backend");
         verify(chatRoomRepository).findByIdForUpdate(10L);
+        verify(inviteLinkRepository).deleteByRoomId(10L);
     }
 
     @Test
@@ -1357,6 +1363,7 @@ class ChatRoomServiceTest {
                 );
 
         assertThat(chatRoom.getDeletedAt()).isNull();
+        verify(inviteLinkRepository, never()).deleteByRoomId(10L);
     }
 
     private void assertCreationRejected(ErrorCode expectedErrorCode) {

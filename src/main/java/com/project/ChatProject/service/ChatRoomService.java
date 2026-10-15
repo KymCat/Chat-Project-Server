@@ -12,6 +12,7 @@ import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.*;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.invite.ChatRoomInviteLinkRepository;
 import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
@@ -37,6 +38,7 @@ public class ChatRoomService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final ChatRoomInviteLinkRepository inviteLinkRepository;
 
     @Transactional
     public ChatRoomCreateResponse create(Long memberId, String name) {
@@ -496,6 +498,7 @@ public class ChatRoomService {
 
         String roomName = context.chatRoom().getName();
         context.chatRoom().delete();
+        inviteLinkRepository.deleteByRoomId(roomId); // 초대링크삭제
 
         return ChatRoomEvent.deleted(roomId, roomName);
     }
