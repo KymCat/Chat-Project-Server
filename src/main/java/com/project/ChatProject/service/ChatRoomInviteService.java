@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.event.ChatMessageEvent;
+import com.project.ChatProject.dto.response.ChatRoomInviteLinkResponse;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
@@ -27,34 +28,35 @@ public class ChatRoomInviteService {
     private final ChatRoomParticipationService participationService;
 
     @Transactional(readOnly = true)
-    public ChatRoomInviteLink getLink(
+    public ChatRoomInviteLinkResponse getLink(
             Long roomId,
             Long memberId
     ) {
-
         participationService.requireParticipation(
-                        roomId,
-                        memberId,
-                        ParticipationLockMode.NONE
-                );
+                roomId,
+                memberId,
+                ParticipationLockMode.NONE
+        );
 
-        return inviteLinkRepository.findByRoomId(roomId)
+        return ChatRoomInviteLinkResponse.from(
+                inviteLinkRepository.findByRoomId(roomId)
                 .orElseThrow(() ->
                         new CustomException(
                                 ErrorCode.CHAT_ROOM_INVITE_LINK_NOT_FOUND
                         )
-                );
+                )
+        );
     }
 
     @Transactional
-    public ChatRoomInviteLink createInviteLink(
+    public ChatRoomInviteLinkResponse createInviteLink(
             Long roomId,
             Long memberId,
             InviteLinkExpiration expiration
     ) {
         inviteLinkValidation(roomId, memberId);
 
-        if (inviteLinkRepository.findByRoomId(roomId).isPresent()) {
+        if(inviteLinkRepository.findByRoomId(roomId).isPresent()) {
             throw new CustomException(
                     ErrorCode.CHAT_ROOM_LINK_ALREADY_EXISTS
             );
@@ -67,7 +69,7 @@ public class ChatRoomInviteService {
     }
 
     @Transactional
-    public ChatRoomInviteLink reissueInviteLink(
+    public ChatRoomInviteLinkResponse reissueInviteLink(
             Long roomId,
             Long memberId,
             InviteLinkExpiration expiration
@@ -143,7 +145,7 @@ public class ChatRoomInviteService {
      * @param expiration
      * @return
      */
-    private ChatRoomInviteLink createTokenAndSave(
+    private ChatRoomInviteLinkResponse createTokenAndSave(
             Long roomId,
             InviteLinkExpiration expiration
     ) {
@@ -161,7 +163,7 @@ public class ChatRoomInviteService {
         inviteLinkRepository
                 .saveOrReplace(link);
 
-        return link;
+        return ChatRoomInviteLinkResponse.from(link);
     }
 
     /**

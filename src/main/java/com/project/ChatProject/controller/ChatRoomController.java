@@ -301,14 +301,14 @@ public class ChatRoomController {
     }
 
     @PostMapping("/{roomId}/invite-links")
-    public ResponseEntity<ApiResponse<ChatRoomInviteLink>> createInviteLink(
+    public ResponseEntity<ApiResponse<ChatRoomInviteLinkResponse>> createInviteLink(
             @PathVariable Long roomId,
             @RequestBody @Valid ChatRoomInviteLinkRequest request,
             @AuthenticationPrincipal AccessTokenClaims claims
 
     ) {
         Long memberId = claims.memberId();
-        ChatRoomInviteLink response =
+        ChatRoomInviteLinkResponse response =
                 chatRoomInviteService.createInviteLink(
                         roomId,
                         memberId,
@@ -320,12 +320,12 @@ public class ChatRoomController {
     }
 
     @GetMapping("/{roomId}/invite-links")
-    public ResponseEntity<ApiResponse<ChatRoomInviteLink>> getLink(
+    public ResponseEntity<ApiResponse<ChatRoomInviteLinkResponse>> getLink(
             @PathVariable Long roomId,
             @AuthenticationPrincipal AccessTokenClaims claims
     ) {
         Long memberId = claims.memberId();
-        ChatRoomInviteLink response
+        ChatRoomInviteLinkResponse response
                 = chatRoomInviteService.getLink(roomId, memberId);
 
         return ResponseEntity
@@ -365,13 +365,13 @@ public class ChatRoomController {
     }
 
     @PostMapping("/{roomId}/invite-links/reissue")
-    public ResponseEntity<ApiResponse<ChatRoomInviteLink>> reissueInviteLink(
+    public ResponseEntity<ApiResponse<ChatRoomInviteLinkResponse>> reissueInviteLink(
             @PathVariable Long roomId,
             @RequestBody @Valid ChatRoomInviteLinkRequest request,
             @AuthenticationPrincipal AccessTokenClaims claims
     ) {
         Long memberId = claims.memberId();
-        ChatRoomInviteLink response
+        ChatRoomInviteLinkResponse response
                 = chatRoomInviteService.reissueInviteLink(
                         roomId,
                         memberId,
