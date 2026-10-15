@@ -169,6 +169,32 @@ class ChatRoomParticipationServiceTest {
     }
 
     @Test
+    void requireJoinableChatRoomForUpdateUsesLockedRoomLookup() {
+        ChatRoom chatRoom = ChatRoom.create("Backend");
+        when(chatRoomRepository.findByIdForUpdate(ROOM_ID))
+                .thenReturn(Optional.of(chatRoom));
+
+        ChatRoom result = participationService
+                .requireJoinableChatRoomForUpdate(ROOM_ID);
+
+        assertThat(result).isSameAs(chatRoom);
+        verify(chatRoomRepository).findByIdForUpdate(ROOM_ID);
+        verify(chatRoomRepository, never()).findById(ROOM_ID);
+    }
+
+    @Test
+    void requireJoinableChatRoomForUpdateRejectsUnknownRoom() {
+        when(chatRoomRepository.findByIdForUpdate(ROOM_ID))
+                .thenReturn(Optional.empty());
+
+        assertErrorCode(
+                () -> participationService
+                        .requireJoinableChatRoomForUpdate(ROOM_ID),
+                ErrorCode.CHAT_ROOM_NOT_FOUND
+        );
+    }
+
+    @Test
     void requireParticipationWithoutLockReturnsValidatedContext() {
         Member member = member(MemberStatus.ACTIVE, Instant.now());
         ChatRoom chatRoom = ChatRoom.create("Backend");

@@ -3,6 +3,7 @@ package com.project.ChatProject.controller;
 import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.event.ChatRoomEvent;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.dto.response.ChatRoomInviteLinkResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
@@ -13,7 +14,9 @@ import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.exception.GlobalExceptionHandler;
+import com.project.ChatProject.invite.InviteLinkExpiration;
 import com.project.ChatProject.service.ChatMessageService;
+import com.project.ChatProject.service.ChatRoomInviteService;
 import com.project.ChatProject.service.ChatRoomService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,6 +58,9 @@ class ChatRoomControllerTest {
     private ChatMessageService chatMessageService;
 
     @Mock
+    private ChatRoomInviteService chatRoomInviteService;
+
+    @Mock
     private SimpMessagingTemplate template;
 
     private MockMvc mockMvc;
@@ -65,7 +71,8 @@ class ChatRoomControllerTest {
                 new ChatRoomController(
                         template,
                         chatRoomService,
-                        chatMessageService
+                        chatMessageService,
+                        chatRoomInviteService
                 );
 
         mockMvc = MockMvcBuilders
@@ -614,6 +621,139 @@ class ChatRoomControllerTest {
 
         verify(chatRoomService).delete(10L, 1L);
         verify(template).convertAndSend("/sub/chat-rooms/10", event);
+    }
+
+    @Test
+    void createInviteLinkReturnsCreatedLink() throws Exception {
+        Instant expiresAt = Instant.parse("2026-10-16T00:00:00Z");
+        ChatRoomInviteLinkResponse response = new ChatRoomInviteLinkResponse(
+                10L,
+                "invite-token",
+                expiresAt
+        );
+        when(chatRoomInviteService.createInviteLink(
+                10L,
+                1L,
+                InviteLinkExpiration.ONE_DAY
+        )).thenReturn(response);
+
+        mockMvc.perform(post("/chat-rooms/10/invite-links")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expiration\":\"ONE_DAY\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roomId").value(10L))
+                .andExpect(jsonPath("$.data.token").value("invite-token"))
+                .andExpect(jsonPath("$.data.expiresAt").exists());
+
+        verify(chatRoomInviteService).createInviteLink(
+                10L,
+                1L,
+                InviteLinkExpiration.ONE_DAY
+        );
+    }
+
+    @Test
+    void createInviteLinkRejectsMissingExpiration() throws Exception {
+        mockMvc.perform(post("/chat-rooms/10/invite-links")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(chatRoomInviteService, never()).createInviteLink(
+                any(Long.class),
+                any(Long.class),
+                any(InviteLinkExpiration.class)
+        );
+    }
+
+    @Test
+    void getInviteLinkReturnsActiveLink() throws Exception {
+        ChatRoomInviteLinkResponse response = new ChatRoomInviteLinkResponse(
+                10L,
+                "invite-token",
+                Instant.parse("2026-10-16T00:00:00Z")
+        );
+        when(chatRoomInviteService.getLink(10L, 1L))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/chat-rooms/10/invite-links"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roomId").value(10L))
+                .andExpect(jsonPath("$.data.token").value("invite-token"));
+
+        verify(chatRoomInviteService).getLink(10L, 1L);
+    }
+
+    @Test
+    void joinInviteLinkReturnsSuccessAndBroadcastsEnterMessage()
+            throws Exception {
+        ChatMessageResponse message = new ChatMessageResponse(
+                150L,
+                10L,
+                null,
+                null,
+                ChatMessageType.SYSTEM,
+                "사용자님이 입장하였습니다.",
+                null,
+                Instant.parse("2026-10-15T00:00:00Z"),
+                null,
+                false
+        );
+        ChatMessageEvent event = ChatMessageEvent.created(message);
+        when(chatRoomInviteService.joinInviteLink("invite-token", 1L))
+                .thenReturn(event);
+
+        mockMvc.perform(post(
+                        "/chat-rooms/invite-links/invite-token/join"
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomInviteService)
+                .joinInviteLink("invite-token", 1L);
+        verify(template).convertAndSend("/sub/msg/10", event);
+    }
+
+    @Test
+    void deleteInviteLinkReturnsSuccess() throws Exception {
+        mockMvc.perform(delete("/chat-rooms/10/invite-links"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomInviteService).deleteInviteLink(10L, 1L);
+    }
+
+    @Test
+    void reissueInviteLinkReturnsNewLink() throws Exception {
+        ChatRoomInviteLinkResponse response = new ChatRoomInviteLinkResponse(
+                10L,
+                "new-token",
+                Instant.parse("2026-10-18T00:00:00Z")
+        );
+        when(chatRoomInviteService.reissueInviteLink(
+                10L,
+                1L,
+                InviteLinkExpiration.THREE_DAYS
+        )).thenReturn(response);
+
+        mockMvc.perform(post("/chat-rooms/10/invite-links/reissue")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expiration\":\"THREE_DAYS\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roomId").value(10L))
+                .andExpect(jsonPath("$.data.token").value("new-token"));
+
+        verify(chatRoomInviteService).reissueInviteLink(
+                10L,
+                1L,
+                InviteLinkExpiration.THREE_DAYS
+        );
     }
 
     private HandlerMethodArgumentResolver authenticationPrincipalResolver(

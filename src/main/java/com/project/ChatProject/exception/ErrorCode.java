@@ -70,6 +70,16 @@ public enum ErrorCode {
             "CHAT_ROOM_008",
             "방장 권한을 위임할 수 없는 회원입니다."
     ),
+    CHAT_ROOM_LINK_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "CHAT_ROOM_009",
+            "이미 존재하는 채팅방 링크가 있습니다."
+    ),
+    CHAT_ROOM_INVITE_LINK_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "CHAT_ROOM_010",
+            "존재하지 않거나 만료된 초대 링크입니다."
+    ),
 
     // Chat Message Exception
     CHAT_MESSAGE_NOT_FOUND(

@@ -5,8 +5,10 @@ import com.project.ChatProject.dto.event.ChatRoomEvent;
 import com.project.ChatProject.dto.request.*;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
+import com.project.ChatProject.invite.ChatRoomInviteLink;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatMessageService;
+import com.project.ChatProject.service.ChatRoomInviteService;
 import com.project.ChatProject.service.ChatRoomService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -30,6 +32,7 @@ public class ChatRoomController {
     private final SimpMessagingTemplate template;
     private final ChatRoomService chatRoomService;
     private final ChatMessageService chatMessageService;
+    private final ChatRoomInviteService chatRoomInviteService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ChatRoomCreateResponse>> create(
@@ -291,6 +294,88 @@ public class ChatRoomController {
                         keyword,
                         size,
                         beforeMessageId
+                );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/{roomId}/invite-links")
+    public ResponseEntity<ApiResponse<ChatRoomInviteLinkResponse>> createInviteLink(
+            @PathVariable Long roomId,
+            @RequestBody @Valid ChatRoomInviteLinkRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+
+    ) {
+        Long memberId = claims.memberId();
+        ChatRoomInviteLinkResponse response =
+                chatRoomInviteService.createInviteLink(
+                        roomId,
+                        memberId,
+                        request.expiration()
+                );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{roomId}/invite-links")
+    public ResponseEntity<ApiResponse<ChatRoomInviteLinkResponse>> getLink(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        ChatRoomInviteLinkResponse response
+                = chatRoomInviteService.getLink(roomId, memberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/invite-links/{token}/join")
+    public ResponseEntity<ApiResponse<Void>> joinInviteLink(
+            @PathVariable String token,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+
+        Long memberId = claims.memberId();
+        ChatMessageEvent event
+                = chatRoomInviteService.joinInviteLink(token, memberId);
+
+        template.convertAndSend(
+                "/sub/msg/" + event.message().roomId(),
+                event
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
+    @DeleteMapping("/{roomId}/invite-links")
+    public ResponseEntity<ApiResponse<Void>> deleteInviteLink(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+
+        Long memberId = claims.memberId();
+        chatRoomInviteService.deleteInviteLink(roomId, memberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
+    @PostMapping("/{roomId}/invite-links/reissue")
+    public ResponseEntity<ApiResponse<ChatRoomInviteLinkResponse>> reissueInviteLink(
+            @PathVariable Long roomId,
+            @RequestBody @Valid ChatRoomInviteLinkRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        ChatRoomInviteLinkResponse response
+                = chatRoomInviteService.reissueInviteLink(
+                        roomId,
+                        memberId,
+                        request.expiration()
                 );
 
         return ResponseEntity
