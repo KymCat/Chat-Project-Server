@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.request.SignupRequest;
+import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.MemberCredential;
@@ -21,6 +22,14 @@ public class MemberService {
     private final PasswordEncoder passwordEncoder;
     private final MemberRepository memberRepository;
     private final MemberCredentialRepository memberCredentialRepository;
+
+    @Transactional(readOnly = true)
+    public MemberProfileResponse getProfile(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+
+        return MemberProfileResponse.from(member);
+    }
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
