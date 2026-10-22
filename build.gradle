@@ -33,6 +33,11 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
+	// AWS SDK for Java 2.x
+	// BOM 으로 AWS SDK module들의 버전을 하나로 통일
+	implementation platform('software.amazon.awssdk:bom:2.56.0')
+	implementation 'software.amazon.awssdk:s3'
+
 	// Apache Tika
 	implementation 'org.apache.tika:tika-core:4.0.0'
 
