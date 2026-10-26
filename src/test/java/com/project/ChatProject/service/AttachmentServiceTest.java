@@ -238,7 +238,7 @@ class AttachmentServiceTest {
                 "image/png"
         );
         CustomException failure =
-                new CustomException(ErrorCode.ATTACHMENT_STORAGE_FAILED);
+                new CustomException(ErrorCode.STORAGE_OPERATION_FAILED);
         when(participation.requireParticipation(
                 ROOM_ID,
                 MEMBER_ID,
@@ -299,7 +299,7 @@ class AttachmentServiceTest {
         DataIntegrityViolationException databaseFailure =
                 new DataIntegrityViolationException("DB 저장 실패");
         CustomException cleanupFailure =
-                new CustomException(ErrorCode.ATTACHMENT_STORAGE_FAILED);
+                new CustomException(ErrorCode.STORAGE_OPERATION_FAILED);
         stubBeforeDatabaseSave(validated, storedFile);
         when(attachmentRepository.saveAndFlush(
                 org.mockito.ArgumentMatchers.any(Attachment.class)
@@ -413,7 +413,7 @@ class AttachmentServiceTest {
                 attachment
         );
         CustomException failure =
-                new CustomException(ErrorCode.ATTACHMENT_NOT_FOUND);
+                new CustomException(ErrorCode.STORAGE_OBJECT_NOT_FOUND);
         when(chatMessageRepository
                 .findActiveMessageByRoomIdAndAttachmentId(ROOM_ID, 100L))
                 .thenReturn(java.util.Optional.of(message));

@@ -138,7 +138,7 @@ class LocalFileStorageTest {
         ).isInstanceOfSatisfying(
                 CustomException.class,
                 exception -> assertThat(exception.getErrorCode())
-                        .isEqualTo(ErrorCode.ATTACHMENT_NOT_FOUND)
+                        .isEqualTo(ErrorCode.STORAGE_OBJECT_NOT_FOUND)
         );
     }
 
@@ -149,7 +149,7 @@ class LocalFileStorageTest {
         ).isInstanceOfSatisfying(
                 CustomException.class,
                 exception -> assertThat(exception.getErrorCode())
-                        .isEqualTo(ErrorCode.INVALID_ATTACHMENT_STORAGE_KEY)
+                        .isEqualTo(ErrorCode.INVALID_STORAGE_KEY)
         );
     }
 
@@ -181,7 +181,7 @@ class LocalFileStorageTest {
                 .isInstanceOfSatisfying(
                         CustomException.class,
                         exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ErrorCode.ATTACHMENT_STORAGE_FAILED)
+                                .isEqualTo(ErrorCode.STORAGE_OPERATION_FAILED)
                 );
 
         try (Stream<Path> paths = Files.walk(root)) {

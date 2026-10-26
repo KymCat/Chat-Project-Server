@@ -128,7 +128,7 @@ class AttachmentCleanupServiceTest {
                 cutoff.minusSeconds(1)
         );
         CustomException failure =
-                new CustomException(ErrorCode.ATTACHMENT_STORAGE_FAILED);
+                new CustomException(ErrorCode.STORAGE_OPERATION_FAILED);
         when(attachmentRepository.findByForUpdate(ATTACHMENT_ID))
                 .thenReturn(Optional.of(attachment));
         doThrow(failure).when(fileStorage).delete(STORAGE_KEY);
