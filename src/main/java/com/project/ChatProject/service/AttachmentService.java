@@ -15,6 +15,7 @@ import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
 import com.project.ChatProject.service.support.ParticipationLockMode;
 import com.project.ChatProject.storage.FileStorage;
+import com.project.ChatProject.storage.StorageCategory;
 import com.project.ChatProject.storage.StoredFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -52,7 +53,8 @@ public class AttachmentService {
         ValidatedAttachment validated =
                 attachmentValidator.validate(file);
 
-        StoredFile storedFile = fileStorage.store(file);
+        StoredFile storedFile =
+                fileStorage.store(file, StorageCategory.CHAT_ATTACHMENT);
 
         try {
             Attachment attachment = Attachment.createPending(

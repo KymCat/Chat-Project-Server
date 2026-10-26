@@ -4,6 +4,7 @@ import com.project.ChatProject.config.storage.S3Properties;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.storage.FileStorage;
+import com.project.ChatProject.storage.StorageCategory;
 import com.project.ChatProject.storage.StoredFile;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,12 +42,11 @@ public class S3FileStorage implements FileStorage {
     /**
      * MultipartFile을 S3에 저장
      *
-     * AttachmentValidator가 이 메서드보다 먼저 호출되므로,
      * 실제 서비스 흐름에서는 허용된 파일만 이곳에 도달
      */
     @Override
-    public StoredFile store(MultipartFile file) {
-        String storageKey = createStorageKey();
+    public StoredFile store(MultipartFile file, StorageCategory category) {
+        String storageKey = createStorageKey(category);
         String originalName = resolveOriginalName(file);
         String contentType = resolveContentType(file);
 
@@ -182,10 +182,11 @@ public class S3FileStorage implements FileStorage {
      * 2. 경로 조작 문자열 차단
      * 3. 사용자 파일명 노출 방지
      */
-    private String createStorageKey() {
+    private String createStorageKey(StorageCategory category) {
         LocalDate currentDate = LocalDate.now(ZoneOffset.UTC);
 
-        return "%d/%02d/%02d/%s".formatted(
+        return "%s/%d/%02d/%02d/%s".formatted(
+                category.getPrefix(),
                 currentDate.getYear(),
                 currentDate.getMonthValue(),
                 currentDate.getDayOfMonth(),

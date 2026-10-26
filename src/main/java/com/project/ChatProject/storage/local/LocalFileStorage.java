@@ -4,6 +4,7 @@ import com.project.ChatProject.config.storage.StorageProperties;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.storage.FileStorage;
+import com.project.ChatProject.storage.StorageCategory;
 import com.project.ChatProject.storage.StoredFile;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -51,8 +52,8 @@ public class LocalFileStorage implements FileStorage {
     }
 
     @Override
-    public StoredFile store(MultipartFile file) {
-        String storageKey = createStorageKey();
+    public StoredFile store(MultipartFile file, StorageCategory category) {
+        String storageKey = createStorageKey(category);
         Path target = resolveStorageKey(storageKey);
         boolean targetCreated = false;
 
@@ -131,10 +132,11 @@ public class LocalFileStorage implements FileStorage {
 
     }
 
-    private String createStorageKey() {
+    private String createStorageKey(StorageCategory category) {
         LocalDate currentDate = LocalDate.now(ZoneOffset.UTC);
 
-        return "%d/%02d/%02d/%s".formatted(
+        return "%s/%d/%02d/%02d/%s".formatted(
+                category.getPrefix(),
                 currentDate.getYear(),
                 currentDate.getMonthValue(),
                 currentDate.getDayOfMonth(),
