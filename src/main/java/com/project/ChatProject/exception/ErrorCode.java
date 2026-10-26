@@ -188,50 +188,57 @@ public enum ErrorCode {
             "ATTACHMENT-001",
             "존재하지 않는 첨부파일입니다."
     ),
-    ATTACHMENT_STORAGE_FAILED(
-            HttpStatus.INTERNAL_SERVER_ERROR,
-            "ATTACHMENT-002",
-            "첨부파일 저장 처리에 실패했습니다."
-    ),
-    INVALID_ATTACHMENT_STORAGE_KEY(
-            HttpStatus.INTERNAL_SERVER_ERROR,
-            "ATTACHMENT-003",
-            "잘못된 첨부파일 저장 경로입니다."
-    ),
     ATTACHMENT_EMPTY(
             HttpStatus.BAD_REQUEST,
-            "ATTACHMENT-004",
+            "ATTACHMENT-002",
             "빈 파일은 첨부할 수 없습니다."
     ),
     ATTACHMENT_TOO_LARGE(
             HttpStatus.PAYLOAD_TOO_LARGE,
-            "ATTACHMENT-005",
+            "ATTACHMENT-003",
             "첨부파일 허용 크기를 초과했습니다."
     ),
     ATTACHMENT_TYPE_NOT_ALLOWED(
             HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-            "ATTACHMENT-006",
+            "ATTACHMENT-004",
             "허용되지 않는 첨부파일 형식입니다."
     ),
     ATTACHMENT_INVALID_IMAGE(
             HttpStatus.BAD_REQUEST,
-            "ATTACHMENT-007",
+            "ATTACHMENT-005",
             "유효한 이미지 파일이 아닙니다."
     ),
     ATTACHMENT_INVALID_FILENAME(
             HttpStatus.BAD_REQUEST,
-            "ATTACHMENT-008",
+            "ATTACHMENT-006",
             "유효하지 않은 첨부파일 이름입니다."
     ),
     ATTACHMENT_ALREADY_USED(
             HttpStatus.CONFLICT,
-            "ATTACHMENT-009",
+            "ATTACHMENT-007",
             "이미 메시지에 사용된 첨부파일입니다."
     ),
     ATTACHMENT_UPLOAD_TOO_MANY_REQUESTS(
             HttpStatus.TOO_MANY_REQUESTS,
-            "ATTACHMENT-010",
+            "ATTACHMENT-008",
             "첨부파일 업로드 요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+    ),
+
+    // Storage Exception
+    STORAGE_OBJECT_NOT_FOUND(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "STORAGE-001",
+            "저장된 파일을 찾을 수 없습니다."
+    ),
+    STORAGE_OPERATION_FAILED(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "STORAGE-002",
+            "파일 저장소 처리에 실패했습니다."
+    ),
+    INVALID_STORAGE_KEY(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "STORAGE-003",
+            "잘못된 파일 저장 경로입니다."
     ),
 
     // Common Exception

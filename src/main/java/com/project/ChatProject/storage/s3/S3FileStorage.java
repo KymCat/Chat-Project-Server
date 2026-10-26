@@ -87,7 +87,7 @@ public class S3FileStorage implements FileStorage {
             );
 
             throw new CustomException(
-                    ErrorCode.ATTACHMENT_STORAGE_FAILED
+                    ErrorCode.STORAGE_OPERATION_FAILED
             );
         }
     }
@@ -115,7 +115,7 @@ public class S3FileStorage implements FileStorage {
         } catch (S3Exception exception) {
             if (exception.statusCode() == 404) {
                 throw new CustomException(
-                        ErrorCode.ATTACHMENT_NOT_FOUND
+                        ErrorCode.STORAGE_OBJECT_NOT_FOUND
                 );
             }
 
@@ -127,7 +127,7 @@ public class S3FileStorage implements FileStorage {
             );
 
             throw new CustomException(
-                    ErrorCode.ATTACHMENT_STORAGE_FAILED
+                    ErrorCode.STORAGE_OPERATION_FAILED
             );
         } catch (SdkException exception) {
             log.error(
@@ -138,7 +138,7 @@ public class S3FileStorage implements FileStorage {
             );
 
             throw new CustomException(
-                    ErrorCode.ATTACHMENT_STORAGE_FAILED
+                    ErrorCode.STORAGE_OPERATION_FAILED
             );
         }
     }
@@ -169,7 +169,7 @@ public class S3FileStorage implements FileStorage {
             );
 
             throw new CustomException(
-                    ErrorCode.ATTACHMENT_STORAGE_FAILED
+                    ErrorCode.STORAGE_OPERATION_FAILED
             );
         }
     }
@@ -222,7 +222,7 @@ public class S3FileStorage implements FileStorage {
     private void validateStorageKey(String storageKey) {
         if (storageKey == null || storageKey.isBlank()) {
             throw new CustomException(
-                    ErrorCode.INVALID_ATTACHMENT_STORAGE_KEY
+                    ErrorCode.INVALID_STORAGE_KEY
             );
         }
     }

@@ -92,7 +92,7 @@ public class LocalFileStorage implements FileStorage {
             }
 
             throw new CustomException(
-                    ErrorCode.ATTACHMENT_STORAGE_FAILED
+                    ErrorCode.STORAGE_OPERATION_FAILED
             );
         }
     }
@@ -104,7 +104,7 @@ public class LocalFileStorage implements FileStorage {
         // 해당 경로가 실제로 존재하는 일반 파일인지 확인
         if (!Files.isRegularFile(target)) {
             throw new CustomException(
-                    ErrorCode.ATTACHMENT_NOT_FOUND
+                    ErrorCode.STORAGE_OBJECT_NOT_FOUND
             );
         }
 
@@ -125,7 +125,7 @@ public class LocalFileStorage implements FileStorage {
             );
 
             throw new CustomException(
-                    ErrorCode.ATTACHMENT_STORAGE_FAILED
+                    ErrorCode.STORAGE_OPERATION_FAILED
             );
         }
 
@@ -150,7 +150,7 @@ public class LocalFileStorage implements FileStorage {
     private Path resolveStorageKey(String storageKey) {
         if (storageKey == null || storageKey.isBlank()) {
             throw new CustomException(
-                    ErrorCode.INVALID_ATTACHMENT_STORAGE_KEY
+                    ErrorCode.INVALID_STORAGE_KEY
             );
         }
 
@@ -159,7 +159,7 @@ public class LocalFileStorage implements FileStorage {
 
             if (!target.startsWith(root)) {
                 throw new CustomException(
-                        ErrorCode.INVALID_ATTACHMENT_STORAGE_KEY
+                        ErrorCode.INVALID_STORAGE_KEY
                 );
             }
 
@@ -172,7 +172,7 @@ public class LocalFileStorage implements FileStorage {
             );
 
             throw new CustomException(
-                    ErrorCode.INVALID_ATTACHMENT_STORAGE_KEY
+                    ErrorCode.INVALID_STORAGE_KEY
             );
         }
 
