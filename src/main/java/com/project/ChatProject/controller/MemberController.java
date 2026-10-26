@@ -9,13 +9,11 @@ import com.project.ChatProject.service.MemberService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/member")
@@ -30,6 +28,32 @@ public class MemberController {
         MemberProfileResponse response = memberService.getProfile(claims.memberId());
 
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PutMapping(
+            value = "/me/profile-image",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<ApiResponse<Void>> profileUpload(
+            @RequestPart("file") MultipartFile file,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        memberService.profileUpload(memberId, file);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
+    @DeleteMapping("/me/profile-image")
+    public ResponseEntity<ApiResponse<Void>> deleteProfileImage(
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        memberService.deleteProfileImage(memberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
     }
 
     @PostMapping("/signup")

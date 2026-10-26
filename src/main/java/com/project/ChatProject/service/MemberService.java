@@ -5,14 +5,22 @@ import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.MemberCredential;
+import com.project.ChatProject.entity.StorageDeletionTask;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.profile.ProfileImageValidator;
+import com.project.ChatProject.profile.ValidatedProfileImage;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
+import com.project.ChatProject.repository.StorageDeletionTaskRepository;
+import com.project.ChatProject.storage.FileStorage;
+import com.project.ChatProject.storage.StorageCategory;
+import com.project.ChatProject.storage.StoredFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Locale;
 
@@ -22,11 +30,18 @@ public class MemberService {
     private final PasswordEncoder passwordEncoder;
     private final MemberRepository memberRepository;
     private final MemberCredentialRepository memberCredentialRepository;
+    private final FileStorage fileStorage;
+    private final ProfileImageValidator profileImageValidator;
+    private final StorageDeletionTaskRepository storageDeletionTaskRepository;
 
     @Transactional(readOnly = true)
     public MemberProfileResponse getProfile(Long memberId) {
         Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
 
         return MemberProfileResponse.from(member);
     }
@@ -52,5 +67,79 @@ public class MemberService {
         );
 
         return SignupResponse.from(memberSaved);
+    }
+
+    @Transactional
+    public void profileUpload(
+            Long memberId,
+            MultipartFile file
+    ) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+
+        String previousStorageKey =
+                member.getProfileImageStorageKey();
+
+        ValidatedProfileImage validated = profileImageValidator.validate(file);
+        StoredFile storedFile = fileStorage.store(
+                file,
+                StorageCategory.MEMBER_PROFILE
+        );
+
+        try {
+            member.updateProfileImage(
+                    storedFile.storageKey(),
+                    validated.contentType(),
+                    storedFile.sizeBytes()
+            );
+
+            if (previousStorageKey != null) {
+                StorageDeletionTask deletionTask =
+                        StorageDeletionTask.create(previousStorageKey);
+
+                storageDeletionTaskRepository.save(deletionTask);
+            }
+
+            // member가 이미 영속 상태이지만 보상 삭제를 위한 saveAndFlush
+            memberRepository.saveAndFlush(member);
+        } catch (RuntimeException exception) {
+            try {
+                // DB 반영 실패 시, S3 저장된 파일을 보상 삭제
+                fileStorage.delete(storedFile.storageKey());
+            } catch (RuntimeException cleanupException) {
+                exception.addSuppressed(cleanupException);
+            }
+
+            throw exception;
+        }
+    }
+
+    @Transactional
+    public void deleteProfileImage(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+
+        String previousStorageKey =
+                member.getProfileImageStorageKey();
+
+        member.deleteProfileImage();
+
+        // 이전 스토리지키를 S3 객체 삭제를 위한 Task 테이블에 저장
+        if (previousStorageKey != null) {
+            StorageDeletionTask deletionTask =
+                    StorageDeletionTask.create(previousStorageKey);
+
+            storageDeletionTaskRepository.save(deletionTask);
+        }
+
+        memberRepository.saveAndFlush(member);
     }
 }
