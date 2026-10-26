@@ -3,6 +3,7 @@ package com.project.ChatProject.storage.local;
 import com.project.ChatProject.config.storage.StorageProperties;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.storage.StorageCategory;
 import com.project.ChatProject.storage.StoredFile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,10 +63,13 @@ class LocalFileStorageTest {
                 content
         );
 
-        StoredFile storedFile = fileStorage.store(file);
+        StoredFile storedFile = fileStorage.store(
+                file,
+                StorageCategory.CHAT_ATTACHMENT
+        );
 
         assertThat(storedFile.storageKey())
-                .matches("\\d{4}/\\d{2}/\\d{2}/[0-9a-f-]{36}");
+                .matches("attachments/\\d{4}/\\d{2}/\\d{2}/[0-9a-f-]{36}");
         assertThat(storedFile.originalName()).isEqualTo("photo.png");
         assertThat(storedFile.contentType()).isEqualTo("image/png");
         assertThat(storedFile.sizeBytes()).isEqualTo(content.length);
@@ -82,7 +86,10 @@ class LocalFileStorageTest {
                 "content".getBytes()
         );
 
-        StoredFile storedFile = fileStorage.store(file);
+        StoredFile storedFile = fileStorage.store(
+                file,
+                StorageCategory.CHAT_ATTACHMENT
+        );
 
         assertThat(storedFile.originalName()).isEqualTo("file");
         assertThat(storedFile.contentType())
@@ -104,8 +111,14 @@ class LocalFileStorageTest {
                 "second".getBytes()
         );
 
-        StoredFile firstStoredFile = fileStorage.store(firstFile);
-        StoredFile secondStoredFile = fileStorage.store(secondFile);
+        StoredFile firstStoredFile = fileStorage.store(
+                firstFile,
+                StorageCategory.CHAT_ATTACHMENT
+        );
+        StoredFile secondStoredFile = fileStorage.store(
+                secondFile,
+                StorageCategory.CHAT_ATTACHMENT
+        );
 
         assertThat(firstStoredFile.storageKey())
                 .isNotEqualTo(secondStoredFile.storageKey());
@@ -120,7 +133,8 @@ class LocalFileStorageTest {
                         "document.txt",
                         "text/plain",
                         content
-                )
+                ),
+                StorageCategory.CHAT_ATTACHMENT
         );
 
         Resource resource = fileStorage.load(storedFile.storageKey());
@@ -161,7 +175,8 @@ class LocalFileStorageTest {
                         "document.txt",
                         "text/plain",
                         "content".getBytes()
-                )
+                ),
+                StorageCategory.CHAT_ATTACHMENT
         );
         Path storedPath = root.resolve(storedFile.storageKey());
 
@@ -177,7 +192,10 @@ class LocalFileStorageTest {
         when(file.getInputStream())
                 .thenReturn(new FailingInputStream("partial-content".getBytes(), 4));
 
-        assertThatThrownBy(() -> fileStorage.store(file))
+        assertThatThrownBy(() -> fileStorage.store(
+                file,
+                StorageCategory.CHAT_ATTACHMENT
+        ))
                 .isInstanceOfSatisfying(
                         CustomException.class,
                         exception -> assertThat(exception.getErrorCode())
