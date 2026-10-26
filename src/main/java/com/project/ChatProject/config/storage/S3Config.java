@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.util.StringUtils;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
@@ -25,8 +26,8 @@ public class S3Config {
         // 운영에서는 IAM Role credential을 자동으로 탐색
         return S3Client.builder()
                 .region(Region.of(properties.region()))
+                .credentialsProvider(DefaultCredentialsProvider.builder().build())
                 .build();
-
     }
 
     private void validateProperties(S3Properties properties) {
