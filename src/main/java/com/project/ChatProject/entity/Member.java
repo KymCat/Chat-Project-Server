@@ -67,13 +67,14 @@ public class Member extends BaseTimeEntity {
     @Column(name = "withdrawn_at")
     private Instant withdrawnAt;
 
-    public static Member create(
-        String email,
-        String nickname
-    )
-    {
+    private static Member createMember(
+            String profileImageUrl,
+            String email,
+            String nickname
+    ) {
         Member member = new Member();
-        member.profileImageUrl = null;
+
+        member.profileImageUrl = profileImageUrl;
         member.profileImageStorageKey = null;
         member.profileImageContentType = null;
         member.profileImageSizeBytes = null;
@@ -85,6 +86,29 @@ public class Member extends BaseTimeEntity {
         member.withdrawnAt = null;
 
         return member;
+    }
+
+    public static Member create(
+            String email,
+            String nickname
+    ) {
+        return createMember(
+                null,
+                email,
+                nickname
+        );
+    }
+
+    public static Member createWithExternalProfileImage(
+            String profileImageUrl,
+            String email,
+            String nickname
+    ) {
+        return createMember(
+                profileImageUrl,
+                email,
+                nickname
+        );
     }
 
     public void updateLastLoginAt() {

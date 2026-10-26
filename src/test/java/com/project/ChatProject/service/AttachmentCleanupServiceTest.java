@@ -148,7 +148,6 @@ class AttachmentCleanupServiceTest {
 
     private Attachment pendingAttachment(Instant createdAt) {
         Member uploader = Member.create(
-                null,
                 "user@example.com",
                 "사용자"
         );

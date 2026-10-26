@@ -1398,7 +1398,6 @@ class ChatRoomServiceTest {
             Instant emailVerifiedAt
     ) {
         Member member = Member.create(
-                null,
                 "user@example.com",
                 "사용자"
         );
@@ -1418,7 +1417,6 @@ class ChatRoomServiceTest {
             MemberStatus status
     ) {
         Member member = Member.create(
-                null,
                 nickname + "@example.com",
                 nickname
         );

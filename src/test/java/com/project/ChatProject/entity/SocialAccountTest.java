@@ -12,7 +12,6 @@ class SocialAccountTest {
     @Test
     void createInitializesSocialAccount() {
         Member member = Member.create(
-                null,
                 "member@example.com",
                 "member"
         );
@@ -47,7 +46,6 @@ class SocialAccountTest {
     @Test
     void synchronizeProfileUpdatesProfileAndKeepsIdentity() {
         Member member = Member.create(
-                null,
                 "member@example.com",
                 "member"
         );

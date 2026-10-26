@@ -2,6 +2,8 @@ package com.project.ChatProject.oauth;
 
 import com.project.ChatProject.entity.enums.SocialProvider;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,7 +23,9 @@ class GoogleOidcProfileMapperTest {
         when(oidcUser.getEmailVerified()).thenReturn(true);
         when(oidcUser.getFullName()).thenReturn("Google User");
         when(oidcUser.getPicture())
-                .thenReturn("https://example.com/profile.png");
+                .thenReturn(
+                        "https://lh3.googleusercontent.com/profile.png"
+                );
 
         SocialUserProfile profile = mapper.map(oidcUser);
 
@@ -31,7 +35,9 @@ class GoogleOidcProfileMapperTest {
         assertThat(profile.emailVerified()).isTrue();
         assertThat(profile.displayName()).isEqualTo("Google User");
         assertThat(profile.profileImageUrl())
-                .isEqualTo("https://example.com/profile.png");
+                .isEqualTo(
+                        "https://lh3.googleusercontent.com/profile.png"
+                );
     }
 
     @Test
@@ -47,6 +53,25 @@ class GoogleOidcProfileMapperTest {
 
         assertThat(profile.emailVerified()).isFalse();
         assertThat(profile.displayName()).isNull();
+        assertThat(profile.profileImageUrl()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "",
+            "   ",
+            "/profile.png",
+            "http://lh3.googleusercontent.com/profile.png",
+            "https://example.com/profile.png",
+            "https://evilgoogleusercontent.com/profile.png",
+            "https://[invalid"
+    })
+    void mapsUnsafeProfileImageUrlToNull(String profileImageUrl) {
+        OidcUser oidcUser = mock(OidcUser.class);
+        when(oidcUser.getPicture()).thenReturn(profileImageUrl);
+
+        SocialUserProfile profile = mapper.map(oidcUser);
+
         assertThat(profile.profileImageUrl()).isNull();
     }
 }

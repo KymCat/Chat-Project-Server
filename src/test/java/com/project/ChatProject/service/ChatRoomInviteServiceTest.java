@@ -290,7 +290,7 @@ class ChatRoomInviteServiceTest {
 
     private ChatRoomParticipationContext ownerParticipation() {
         ChatRoom chatRoom = ChatRoom.create("Backend");
-        Member member = Member.create(null, "owner@example.com", "방장");
+        Member member = Member.create("owner@example.com", "방장");
         ChatRoomMember roomMember = ChatRoomMember.create(chatRoom, member);
         return new ChatRoomParticipationContext(
                 chatRoom,
@@ -301,7 +301,7 @@ class ChatRoomInviteServiceTest {
 
     private ChatRoomParticipationContext memberParticipation() {
         ChatRoom chatRoom = ChatRoom.create("Backend");
-        Member member = Member.create(null, "member@example.com", "멤버");
+        Member member = Member.create("member@example.com", "멤버");
         ChatRoomMember roomMember =
                 ChatRoomMember.createMember(chatRoom, member);
         return new ChatRoomParticipationContext(

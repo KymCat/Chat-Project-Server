@@ -338,7 +338,6 @@ class ChatRoomParticipationServiceTest {
             Instant emailVerifiedAt
     ) {
         Member member = Member.create(
-                null,
                 "user@example.com",
                 "사용자"
         );

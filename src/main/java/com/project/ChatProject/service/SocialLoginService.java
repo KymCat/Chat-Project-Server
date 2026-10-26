@@ -159,11 +159,12 @@ public class SocialLoginService {
             SocialUserProfile profile,
             String email
     ) {
-        Member member = Member.create(
-                profile.profileImageUrl(),
-                email,
-                createNickName(profile.displayName())
-        );
+        Member member =
+                Member.createWithExternalProfileImage(
+                        profile.profileImageUrl(),
+                        email,
+                        createNickName(profile.displayName())
+                );
         member.verifyEmail();
         memberRepository.save(member);
 
