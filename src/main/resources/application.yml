@@ -89,5 +89,9 @@ chat:
             pending-retention-hours: 24
             batch-size: 100
             cron: "0 0 * * * *"
+
+        deletion:
+            batch-size: 100
+            cron: "0 * * * * *"
 oauth2:
     frontend-callback-uri: ${OAUTH2_FRONTEND_CALLBACK_URI}
