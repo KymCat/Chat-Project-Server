@@ -18,21 +18,42 @@ public class Member extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "email",
+    @Column(
+            name = "email",
             nullable = false,
-            length = 254)
+            length = 254
+    )
     private String email;
 
     @Column(name = "email_verified_at")
     private Instant emailVerifiedAt;
 
-    @Column(name = "nickname",
+    @Column(
+            name = "nickname",
             nullable = false,
-            length = 30)
+            length = 30
+    )
     private String nickname;
 
     @Column(name = "profile_image_url", length = 2048)
     private String profileImageUrl;
+
+    @Column(
+            name = "profile_image_storage_key",
+            length = 1024,
+            nullable = true
+    )
+    private String profileImageStorageKey;
+
+    @Column(
+            name = "profile_image_content_type",
+            length = 100,
+            nullable = true
+    )
+    private String profileImageContentType;
+
+    @Column(name = "profile_image_size_bytes", nullable = true)
+    private Long profileImageSizeBytes;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status",
@@ -54,6 +75,9 @@ public class Member extends BaseTimeEntity {
     {
         Member member = new Member();
         member.profileImageUrl = profileImageUrl;
+        member.profileImageStorageKey = null;
+        member.profileImageContentType = null;
+        member.profileImageSizeBytes = null;
         member.email = email;
         member.nickname = nickname;
         member.emailVerifiedAt = null;
@@ -70,5 +94,27 @@ public class Member extends BaseTimeEntity {
 
     public void verifyEmail() {
         this.emailVerifiedAt = Instant.now();
+    }
+
+    public void updateProfileImage(
+            String profileImageStorageKey,
+            String profileImageContentType,
+            long profileImageSizeBytes
+    ) {
+        this.profileImageUrl = null;
+        this.profileImageStorageKey = profileImageStorageKey;
+        this.profileImageContentType = profileImageContentType;
+        this.profileImageSizeBytes = profileImageSizeBytes;
+    }
+
+    public void deleteProfileImage() {
+        this.profileImageUrl = null;
+        this.profileImageStorageKey = null;
+        this.profileImageContentType = null;
+        this.profileImageSizeBytes = null;
+    }
+
+    public boolean hasStoredProfileImage() {
+        return this.profileImageStorageKey != null;
     }
 }
