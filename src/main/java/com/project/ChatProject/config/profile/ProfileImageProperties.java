@@ -12,6 +12,6 @@ public record ProfileImageProperties(
         @NotNull DataSize maxSize,
         @Min(1) int maxWidth,
         @Min(1) int maxHeight,
-        @Min(1) int maxPixels
+        @Min(1) long maxPixels
 ) {
 }
