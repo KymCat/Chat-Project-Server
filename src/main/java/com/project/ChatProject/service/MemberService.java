@@ -3,6 +3,7 @@ package com.project.ChatProject.service;
 import com.project.ChatProject.dto.request.SignupRequest;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
+import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.MemberCredential;
 import com.project.ChatProject.entity.StorageDeletionTask;
@@ -17,6 +18,7 @@ import com.project.ChatProject.storage.FileStorage;
 import com.project.ChatProject.storage.StorageCategory;
 import com.project.ChatProject.storage.StoredFile;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +48,39 @@ public class MemberService {
         return MemberProfileResponse.from(member);
     }
 
+    @Transactional(readOnly = true)
+    public ProfileImageResult getProfileImage(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+
+        if (member.hasStoredProfileImage()) {
+            Resource resource = fileStorage.load(
+                    member.getProfileImageStorageKey()
+            );
+
+            return ProfileImageResult.stored(
+                    resource,
+                    member.getProfileImageContentType(),
+                    member.getProfileImageSizeBytes()
+            );
+        }
+
+        if (member.getProfileImageUrl() != null) {
+            return ProfileImageResult.external(
+                    member.getProfileImageUrl()
+            );
+        }
+
+        throw new CustomException(
+                ErrorCode.PROFILE_IMAGE_NOT_FOUND
+        );
+
+    }
+
     @Transactional
     public SignupResponse signup(SignupRequest request) {
         String email = request.email()
@@ -57,7 +92,6 @@ public class MemberService {
         String passwordHash = passwordEncoder.encode(request.password());
 
         Member member = Member.create(
-                request.profileImageUrl(),
                 email,
                 request.nickname());
 

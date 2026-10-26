@@ -8,12 +8,6 @@ import jakarta.validation.constraints.Size;
 
 public record SignupRequest(
 
-        @Size(
-                max = 2048,
-                message = "프로필 URL 최대 길이는 2048자 입니다."
-        )
-        String profileImageUrl,
-
         @NotBlank(message = "이메일은 필수입니다.")
         @Email(message = "올바른 이메일 형식이 아닙니다.")
         @Size(

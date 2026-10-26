@@ -48,6 +48,11 @@ public enum ErrorCode {
             "MEMBER-008",
             "유효한 프로필 이미지가 아닙니다."
     ),
+    PROFILE_IMAGE_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "MEMBER-009",
+            "등록된 프로필 이미지가 없습니다."
+    ),
 
     // ChatRoom Exception
     CHAT_ROOM_NOT_FOUND(

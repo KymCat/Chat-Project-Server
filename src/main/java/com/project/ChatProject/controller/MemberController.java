@@ -4,16 +4,20 @@ import com.project.ChatProject.dto.request.SignupRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
+import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.MemberService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.net.URI;
 
 @RestController
 @RequestMapping("/member")
@@ -28,6 +32,31 @@ public class MemberController {
         MemberProfileResponse response = memberService.getProfile(claims.memberId());
 
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{memberId}/profile-image")
+    public ResponseEntity<Resource> getProfileImage(
+            @PathVariable Long memberId
+    ) {
+        ProfileImageResult result =
+                memberService.getProfileImage(memberId);
+
+        if (result.isExternal()) {
+            return ResponseEntity
+                    .status(HttpStatus.FOUND)
+                    .location(URI.create(result.externalUrl()))
+                    .build();
+        }
+
+        return ResponseEntity
+                .ok()
+                .contentType(
+                        MediaType.parseMediaType(
+                                result.contentType()
+                        )
+                )
+                .contentLength(result.sizeBytes())
+                .body(result.resource());
     }
 
     @PutMapping(

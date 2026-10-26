@@ -68,13 +68,12 @@ public class Member extends BaseTimeEntity {
     private Instant withdrawnAt;
 
     public static Member create(
-        String profileImageUrl,
         String email,
         String nickname
     )
     {
         Member member = new Member();
-        member.profileImageUrl = profileImageUrl;
+        member.profileImageUrl = null;
         member.profileImageStorageKey = null;
         member.profileImageContentType = null;
         member.profileImageSizeBytes = null;
