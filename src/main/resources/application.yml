@@ -46,6 +46,12 @@ spring:
                             - openid
                             - profile
                             - email
+profile-image:
+    max-size: 5MB
+    max-width: 4096
+    max-height: 4096
+    max-pixels: 16777216
+
 jwt:
     access-token-expiration: ${ACCESS_TOKEN_EXPIRATION}
     secret: ${JWT_SECRET}
