@@ -28,6 +28,26 @@ public enum ErrorCode {
             "MEMBER-004",
             "존재하지 않은 유저입니다."
     ),
+    PROFILE_IMAGE_EMPTY(
+            HttpStatus.BAD_REQUEST,
+            "MEMBER-005",
+            "빈 프로필 이미지는 업로드할 수 없습니다."
+    ),
+    PROFILE_IMAGE_TOO_LARGE(
+            HttpStatus.PAYLOAD_TOO_LARGE,
+            "MEMBER-006",
+            "프로필 이미지 허용 크기를 초과했습니다."
+    ),
+    PROFILE_IMAGE_TYPE_NOT_ALLOWED(
+            HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+            "MEMBER-007",
+            "허용되지 않는 프로필 이미지 형식입니다."
+    ),
+    PROFILE_IMAGE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "MEMBER-008",
+            "유효한 프로필 이미지가 아닙니다."
+    ),
 
     // ChatRoom Exception
     CHAT_ROOM_NOT_FOUND(
