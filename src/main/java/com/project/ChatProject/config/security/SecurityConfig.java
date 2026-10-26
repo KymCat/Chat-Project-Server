@@ -49,7 +49,11 @@ public class SecurityConfig {
                                         "/member/signup",
                                         "/auth/login",
                                         "/auth/reissue",
-                                        "/auth/oauth/exchange",
+                                        "/auth/oauth/exchange"
+                                ).permitAll()
+
+                                .requestMatchers(
+                                        HttpMethod.GET,
                                         "/member/*/profile-image"
                                 ).permitAll()
 
