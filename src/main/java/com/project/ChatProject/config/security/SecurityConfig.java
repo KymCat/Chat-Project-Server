@@ -49,7 +49,8 @@ public class SecurityConfig {
                                         "/member/signup",
                                         "/auth/login",
                                         "/auth/reissue",
-                                        "/auth/oauth/exchange"
+                                        "/auth/oauth/exchange",
+                                        "/member/*/profile-image"
                                 ).permitAll()
 
                                 .requestMatchers(
