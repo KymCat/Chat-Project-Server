@@ -1,18 +1,22 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.request.SignupRequest;
+import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
 import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.MemberCredential;
+import com.project.ChatProject.entity.SocialAccount;
 import com.project.ChatProject.entity.StorageDeletionTask;
+import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.profile.ProfileImageValidator;
 import com.project.ChatProject.profile.ValidatedProfileImage;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
+import com.project.ChatProject.repository.SocialAccountRepository;
 import com.project.ChatProject.repository.StorageDeletionTaskRepository;
 import com.project.ChatProject.storage.FileStorage;
 import com.project.ChatProject.storage.StorageCategory;
@@ -22,6 +26,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Locale;
@@ -35,6 +40,7 @@ public class MemberService {
     private final FileStorage fileStorage;
     private final ProfileImageValidator profileImageValidator;
     private final StorageDeletionTaskRepository storageDeletionTaskRepository;
+    private final SocialAccountRepository socialAccountRepository;
 
     @Transactional(readOnly = true)
     public MemberProfileResponse getProfile(Long memberId) {
@@ -101,6 +107,55 @@ public class MemberService {
         );
 
         return SignupResponse.from(memberSaved);
+    }
+
+    @Transactional
+    public void applySocialProfileImage(
+            Long memberId,
+            SocialProfileProviderRequest request
+    ) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+
+        SocialProvider provider = request.provider();
+        SocialAccount account = socialAccountRepository
+                        .findByProviderAndMemberId(
+                                provider,
+                                memberId
+                        )
+                        .orElseThrow(() ->
+                                new CustomException(
+                                        ErrorCode.SOCIAL_ACCOUNT_NOT_FOUND
+                                )
+                        );
+        String socialProfileImageUrl =
+                account.getProviderProfileImageUrl();
+
+        if (!StringUtils.hasText(socialProfileImageUrl)) {
+            throw new CustomException(
+                    ErrorCode.PROFILE_IMAGE_NOT_FOUND
+            );
+        }
+
+        String previousStorageKey =
+                member.getProfileImageStorageKey();
+
+        member.applyExternalProfileImage(
+                socialProfileImageUrl
+        );
+
+        if (previousStorageKey != null) {
+            StorageDeletionTask deletionTask =
+                    StorageDeletionTask.create(previousStorageKey);
+
+            storageDeletionTaskRepository.save(deletionTask);
+        }
+
+        memberRepository.saveAndFlush(member);
     }
 
     @Transactional

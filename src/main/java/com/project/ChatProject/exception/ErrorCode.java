@@ -154,6 +154,11 @@ public enum ErrorCode {
             "AUTH-004",
             "유효하지 않거나 만료된 소셜 로그인 코드입니다."
     ),
+    SOCIAL_ACCOUNT_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "AUTH-005",
+            "해당하는 소셜 계정 정보가 존재하지 않습니다."
+    ),
 
     // Email Verification Exception
     EMAIL_ALREADY_VERIFIED(

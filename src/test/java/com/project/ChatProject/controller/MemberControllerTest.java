@@ -1,8 +1,10 @@
 package com.project.ChatProject.controller;
 
+import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
+import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.MemberService;
 import org.junit.jupiter.api.Test;
@@ -110,6 +112,22 @@ class MemberControllerTest {
                 memberController.profileUpload(file, claims);
 
         verify(memberService).profileUpload(2L, file);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).isNull();
+    }
+
+    @Test
+    void applySocialProfileImageUsesAuthenticatedMemberId() {
+        AccessTokenClaims claims = claims();
+        SocialProfileProviderRequest request =
+                new SocialProfileProviderRequest(SocialProvider.GOOGLE);
+
+        ResponseEntity<ApiResponse<Void>> response =
+                memberController.applySocialProfileImage(request, claims);
+
+        verify(memberService).applySocialProfileImage(2L, request);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().success()).isTrue();

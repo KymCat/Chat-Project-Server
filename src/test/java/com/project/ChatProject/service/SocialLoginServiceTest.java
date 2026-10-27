@@ -67,6 +67,9 @@ class SocialLoginServiceTest {
                 "새이름",
                 "https://example.com/new.png"
         );
+        verify(member).synchronizeExternalProfileImage(
+                "https://example.com/new.png"
+        );
         verify(member).updateLastLoginAt();
         verifyNoInteractions(memberRepository);
         verify(socialAccountRepository, never()).save(
@@ -100,6 +103,9 @@ class SocialLoginServiceTest {
 
         assertThat(result).isSameAs(member);
         verify(member).verifyEmail();
+        verify(member).synchronizeExternalProfileImage(
+                "https://example.com/profile.png"
+        );
         verify(member).updateLastLoginAt();
 
         ArgumentCaptor<SocialAccount> accountCaptor =

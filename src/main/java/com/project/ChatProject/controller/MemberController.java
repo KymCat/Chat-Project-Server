@@ -1,6 +1,7 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.request.SignupRequest;
+import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
@@ -29,7 +30,8 @@ public class MemberController {
     public ResponseEntity<ApiResponse<MemberProfileResponse>> getProfile(
             @AuthenticationPrincipal AccessTokenClaims claims
     ) {
-        MemberProfileResponse response = memberService.getProfile(claims.memberId());
+        MemberProfileResponse response =
+                memberService.getProfile(claims.memberId());
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -57,6 +59,18 @@ public class MemberController {
                 )
                 .contentLength(result.sizeBytes())
                 .body(result.resource());
+    }
+
+    @PutMapping("/me/profile-image/social")
+    public ResponseEntity<ApiResponse<Void>> applySocialProfileImage(
+            @Valid @RequestBody SocialProfileProviderRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        memberService.applySocialProfileImage(memberId, request);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
     }
 
     @PutMapping(

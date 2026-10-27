@@ -140,4 +140,19 @@ public class Member extends BaseTimeEntity {
     public boolean hasStoredProfileImage() {
         return this.profileImageStorageKey != null;
     }
+
+    public void synchronizeExternalProfileImage(String profileImageUrl) {
+        if (hasStoredProfileImage()) {
+            return;
+        }
+
+        this.profileImageUrl = profileImageUrl;
+    }
+
+    public void applyExternalProfileImage(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
+        this.profileImageStorageKey = null;
+        this.profileImageContentType = null;
+        this.profileImageSizeBytes = null;
+    }
 }

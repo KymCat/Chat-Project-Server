@@ -19,4 +19,9 @@ public interface SocialAccountRepository
             Long memberId,
             SocialProvider provider
     );
+
+    Optional<SocialAccount> findByProviderAndMemberId(
+            SocialProvider provider,
+            Long memberId
+    );
 }

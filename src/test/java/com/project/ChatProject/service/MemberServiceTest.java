@@ -1,15 +1,19 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.SocialAccount;
 import com.project.ChatProject.entity.StorageDeletionTask;
+import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.profile.ProfileImageValidator;
 import com.project.ChatProject.profile.ValidatedProfileImage;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
+import com.project.ChatProject.repository.SocialAccountRepository;
 import com.project.ChatProject.repository.StorageDeletionTaskRepository;
 import com.project.ChatProject.storage.FileStorage;
 import com.project.ChatProject.storage.StorageCategory;
@@ -58,6 +62,9 @@ class MemberServiceTest {
 
     @Mock
     private StorageDeletionTaskRepository storageDeletionTaskRepository;
+
+    @Mock
+    private SocialAccountRepository socialAccountRepository;
 
     @InjectMocks
     private MemberService memberService;
@@ -168,6 +175,122 @@ class MemberServiceTest {
         );
 
         verifyNoInteractions(fileStorage);
+    }
+
+    @Test
+    void applySocialProfileImageQueuesStoredImageDeletion() {
+        Member member = mock(Member.class);
+        SocialAccount account = mock(SocialAccount.class);
+        SocialProfileProviderRequest request =
+                new SocialProfileProviderRequest(SocialProvider.GOOGLE);
+        String storageKey = "member-profiles/2026/10/27/old-key";
+        String socialImageUrl =
+                "https://lh3.googleusercontent.com/profile.png";
+
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndMemberId(
+                SocialProvider.GOOGLE,
+                MEMBER_ID
+        )).thenReturn(Optional.of(account));
+        when(account.getProviderProfileImageUrl())
+                .thenReturn(socialImageUrl);
+        when(member.getProfileImageStorageKey())
+                .thenReturn(storageKey);
+
+        memberService.applySocialProfileImage(MEMBER_ID, request);
+
+        verify(member).applyExternalProfileImage(socialImageUrl);
+        verify(memberRepository).saveAndFlush(member);
+        verify(fileStorage, never()).delete(storageKey);
+
+        ArgumentCaptor<StorageDeletionTask> taskCaptor =
+                ArgumentCaptor.forClass(StorageDeletionTask.class);
+        verify(storageDeletionTaskRepository).save(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getStorageKey())
+                .isEqualTo(storageKey);
+    }
+
+    @Test
+    void applySocialProfileImageDoesNotQueueDeletionWithoutStoredImage() {
+        Member member = mock(Member.class);
+        SocialAccount account = mock(SocialAccount.class);
+        SocialProfileProviderRequest request =
+                new SocialProfileProviderRequest(SocialProvider.GOOGLE);
+        String socialImageUrl =
+                "https://lh3.googleusercontent.com/profile.png";
+
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndMemberId(
+                SocialProvider.GOOGLE,
+                MEMBER_ID
+        )).thenReturn(Optional.of(account));
+        when(account.getProviderProfileImageUrl())
+                .thenReturn(socialImageUrl);
+
+        memberService.applySocialProfileImage(MEMBER_ID, request);
+
+        verify(member).applyExternalProfileImage(socialImageUrl);
+        verify(memberRepository).saveAndFlush(member);
+        verifyNoInteractions(storageDeletionTaskRepository, fileStorage);
+    }
+
+    @Test
+    void applySocialProfileImageRejectsMissingSocialAccount() {
+        Member member = mock(Member.class);
+        SocialProfileProviderRequest request =
+                new SocialProfileProviderRequest(SocialProvider.GOOGLE);
+
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndMemberId(
+                SocialProvider.GOOGLE,
+                MEMBER_ID
+        )).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                memberService.applySocialProfileImage(MEMBER_ID, request)
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.SOCIAL_ACCOUNT_NOT_FOUND)
+        );
+
+        verify(member, never()).applyExternalProfileImage(
+                org.mockito.ArgumentMatchers.any()
+        );
+        verify(memberRepository, never()).saveAndFlush(member);
+        verifyNoInteractions(storageDeletionTaskRepository, fileStorage);
+    }
+
+    @Test
+    void applySocialProfileImageRejectsMissingSocialProfileImage() {
+        Member member = mock(Member.class);
+        SocialAccount account = mock(SocialAccount.class);
+        SocialProfileProviderRequest request =
+                new SocialProfileProviderRequest(SocialProvider.GOOGLE);
+
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndMemberId(
+                SocialProvider.GOOGLE,
+                MEMBER_ID
+        )).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() ->
+                memberService.applySocialProfileImage(MEMBER_ID, request)
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.PROFILE_IMAGE_NOT_FOUND)
+        );
+
+        verify(member, never()).applyExternalProfileImage(
+                org.mockito.ArgumentMatchers.any()
+        );
+        verify(memberRepository, never()).saveAndFlush(member);
+        verifyNoInteractions(storageDeletionTaskRepository, fileStorage);
     }
 
     @Test
