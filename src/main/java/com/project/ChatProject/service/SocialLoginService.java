@@ -96,6 +96,7 @@ public class SocialLoginService {
                 profile.profileImageUrl()   // 최신 정보
         );
 
+        member.synchronizeExternalProfileImage(profile.profileImageUrl());
         member.updateLastLoginAt();
         return member;
     }
@@ -144,6 +145,8 @@ public class SocialLoginService {
                 profile.profileImageUrl()
         );
         socialAccountRepository.save(account);
+
+        member.synchronizeExternalProfileImage(profile.profileImageUrl());
         member.updateLastLoginAt();
 
         return member;
