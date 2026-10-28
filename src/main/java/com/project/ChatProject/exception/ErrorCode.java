@@ -26,7 +26,7 @@ public enum ErrorCode {
     MEMBER_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "MEMBER-004",
-            "존재하지 않은 유저입니다."
+            "존재하지 않은 회원입니다."
     ),
     PROFILE_IMAGE_EMPTY(
             HttpStatus.BAD_REQUEST,
@@ -249,6 +249,28 @@ public enum ErrorCode {
             HttpStatus.INTERNAL_SERVER_ERROR,
             "STORAGE-003",
             "잘못된 파일 저장 경로입니다."
+    ),
+
+    // Friendship Exception
+    FRIEND_REQUEST_EXISTS(
+            HttpStatus.CONFLICT,
+            "FRIENDSHIP-001",
+            "이미 존재하는 친구요청이 있습니다."
+    ),
+    ALREADY_FRIENDS(
+            HttpStatus.CONFLICT,
+            "FRIENDSHIP-002",
+            "이미 친구인 회원입니다."
+    ),
+    SELF_FRIEND_REQUEST_NOT_ALLOWED(
+            HttpStatus.BAD_REQUEST,
+            "FRIENDSHIP-003",
+            "자기 자신에게 친구 요청을 보낼 수 없습니다."
+    ),
+    FRIEND_RELATION_ALREADY_EXISTS( // 동시 요청 예외를 위한
+            HttpStatus.CONFLICT,
+            "FRIENDSHIP-004",
+            "이미 친구 관계 또는 친구 요청이 존재합니다."
     ),
 
     // Common Exception
