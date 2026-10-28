@@ -5,10 +5,7 @@ import com.project.ChatProject.dto.event.ChatRoomEvent;
 import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
-import com.project.ChatProject.entity.ChatMessage;
-import com.project.ChatProject.entity.ChatRoom;
-import com.project.ChatProject.entity.ChatRoomMember;
-import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.*;
 import com.project.ChatProject.entity.enums.*;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
@@ -16,6 +13,7 @@ import com.project.ChatProject.invite.ChatRoomInviteLinkRepository;
 import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
+import com.project.ChatProject.repository.StorageDeletionTaskRepository;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
 import com.project.ChatProject.service.support.ParticipationLockMode;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +37,7 @@ public class ChatRoomService {
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatRoomInviteLinkRepository inviteLinkRepository;
+    private final StorageDeletionTaskRepository deletionTaskRepository;
 
     @Transactional
     public ChatRoomCreateResponse create(Long memberId, String name) {
@@ -351,8 +350,8 @@ public class ChatRoomService {
         ChatMessage message
                 = findChatMessageForUpdate(messageId, roomId);
 
-        // 일반 메세지가 아닌 경우, 삭제 불가
-        if (message.getType() != ChatMessageType.TEXT) {
+        // 시스템 메세지인 경우, 삭제 불가
+        if (message.getType() == ChatMessageType.SYSTEM) {
             throw new CustomException(
                     ErrorCode.CHAT_MESSAGE_TYPE_DELETE_NOT_ALLOWED
             );
@@ -375,7 +374,22 @@ public class ChatRoomService {
             );
         }
 
-        message.deleteMessage();
+        if (message.getDeletedAt() == null) {
+            Attachment attachment = message.getAttachment();
+
+            message.deleteMessage();
+
+            if (attachment != null) {
+                attachment.delete();
+                String storageKey = attachment.getStorageKey();
+
+                StorageDeletionTask task =
+                        StorageDeletionTask.create(storageKey);
+
+                deletionTaskRepository.save(task);
+            }
+        }
+
         ChatMessageResponse response =
                 ChatMessageResponse.from(message);
 

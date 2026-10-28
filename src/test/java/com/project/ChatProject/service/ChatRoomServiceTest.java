@@ -9,10 +9,13 @@ import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
 import com.project.ChatProject.dto.response.ChatRoomResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
+import com.project.ChatProject.entity.Attachment;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.StorageDeletionTask;
+import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
@@ -26,6 +29,7 @@ import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
 import com.project.ChatProject.repository.MemberRepository;
+import com.project.ChatProject.repository.StorageDeletionTaskRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -66,6 +70,9 @@ class ChatRoomServiceTest {
     @Mock
     private ChatRoomInviteLinkRepository inviteLinkRepository;
 
+    @Mock
+    private StorageDeletionTaskRepository deletionTaskRepository;
+
     private ChatRoomService chatRoomService;
 
     @BeforeEach
@@ -82,7 +89,8 @@ class ChatRoomServiceTest {
                 chatRoomRepository,
                 chatRoomMemberRepository,
                 chatMessageRepository,
-                inviteLinkRepository
+                inviteLinkRepository,
+                deletionTaskRepository
         );
     }
 
@@ -896,6 +904,132 @@ class ChatRoomServiceTest {
         assertThat(event.message().content()).isNull();
         assertThat(event.message().deleted()).isTrue();
         assertThat(message.getDeletedAt()).isNotNull();
+        verify(deletionTaskRepository, never())
+                .save(any(StorageDeletionTask.class));
+    }
+
+    @Test
+    void deleteMessageMarksImageAttachmentDeletedAndQueuesStorageDeletion() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        Attachment attachment = attachment(
+                member,
+                chatRoom,
+                "image.png",
+                "image/png",
+                "attachments/2026/09/16/image-key"
+        );
+        ChatMessage message = attachmentMessage(
+                chatRoom,
+                member,
+                100L,
+                ChatMessageType.IMAGE,
+                attachment,
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        ChatMessageEvent event =
+                chatRoomService.deleteMessage(10L, 100L, 1L);
+
+        assertThat(event.eventType()).isEqualTo(ChatMessageEventType.DELETED);
+        assertThat(event.message().attachment()).isNull();
+        assertThat(message.getDeletedAt()).isNotNull();
+        assertThat(attachment.getStatus()).isEqualTo(AttachmentStatus.DELETED);
+        assertThat(attachment.getDeletedAt()).isNotNull();
+
+        ArgumentCaptor<StorageDeletionTask> taskCaptor =
+                ArgumentCaptor.forClass(StorageDeletionTask.class);
+        verify(deletionTaskRepository).save(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getStorageKey())
+                .isEqualTo("attachments/2026/09/16/image-key");
+    }
+
+    @Test
+    void deleteMessageMarksFileAttachmentDeletedAndQueuesStorageDeletion() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        Attachment attachment = attachment(
+                member,
+                chatRoom,
+                "document.pdf",
+                "application/pdf",
+                "attachments/2026/09/16/file-key"
+        );
+        ChatMessage message = attachmentMessage(
+                chatRoom,
+                member,
+                100L,
+                ChatMessageType.FILE,
+                attachment,
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        chatRoomService.deleteMessage(10L, 100L, 1L);
+
+        assertThat(attachment.getStatus()).isEqualTo(AttachmentStatus.DELETED);
+
+        ArgumentCaptor<StorageDeletionTask> taskCaptor =
+                ArgumentCaptor.forClass(StorageDeletionTask.class);
+        verify(deletionTaskRepository).save(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getStorageKey())
+                .isEqualTo("attachments/2026/09/16/file-key");
+    }
+
+    @Test
+    void deleteAttachmentMessageDoesNotQueueStorageDeletionTwice() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom chatRoom = chatRoom();
+        ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
+        ReflectionTestUtils.setField(
+                roomMember,
+                "joinedAt",
+                Instant.parse("2026-09-16T00:00:00Z")
+        );
+        Attachment attachment = attachment(
+                member,
+                chatRoom,
+                "image.png",
+                "image/png",
+                "attachments/2026/09/16/image-key"
+        );
+        ChatMessage message = attachmentMessage(
+                chatRoom,
+                member,
+                100L,
+                ChatMessageType.IMAGE,
+                attachment,
+                "2026-09-16T01:00:00Z"
+        );
+
+        stubMessageAccess(member, chatRoom, roomMember);
+        when(chatMessageRepository.findByIdAndRoomIdForUpdate(100L, 10L))
+                .thenReturn(Optional.of(message));
+
+        chatRoomService.deleteMessage(10L, 100L, 1L);
+        chatRoomService.deleteMessage(10L, 100L, 1L);
+
+        verify(deletionTaskRepository)
+                .save(any(StorageDeletionTask.class));
     }
 
     @Test
@@ -1481,6 +1615,48 @@ class ChatRoomServiceTest {
         ChatMessage message = ChatMessage.createText(chatRoom, sender, content);
         ReflectionTestUtils.setField(message, "id", id);
         ReflectionTestUtils.setField(message, "createdAt", Instant.parse(createdAt));
+        return message;
+    }
+
+    private Attachment attachment(
+            Member uploader,
+            ChatRoom chatRoom,
+            String originalName,
+            String contentType,
+            String storageKey
+    ) {
+        Attachment attachment = Attachment.createPending(
+                uploader,
+                chatRoom,
+                originalName,
+                contentType,
+                5L,
+                storageKey
+        );
+        attachment.activate();
+        return attachment;
+    }
+
+    private ChatMessage attachmentMessage(
+            ChatRoom chatRoom,
+            Member sender,
+            Long id,
+            ChatMessageType type,
+            Attachment attachment,
+            String createdAt
+    ) {
+        ChatMessage message = ChatMessage.createAttachment(
+                chatRoom,
+                sender,
+                type,
+                attachment
+        );
+        ReflectionTestUtils.setField(message, "id", id);
+        ReflectionTestUtils.setField(
+                message,
+                "createdAt",
+                Instant.parse(createdAt)
+        );
         return message;
     }
 
