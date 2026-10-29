@@ -1,5 +1,7 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.response.CursorPageResponse;
+import com.project.ChatProject.dto.response.FriendRequestResponse;
 import com.project.ChatProject.entity.Friendship;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.FriendshipStatus;
@@ -11,8 +13,13 @@ import com.project.ChatProject.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
@@ -73,7 +80,98 @@ public class FriendshipService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public CursorPageResponse<FriendRequestResponse> requestedList(
+            Long memberId,
+            Long beforeFriendshipId,
+            int size
+    ) {
+        validateMember(memberId);
+
+        List<Friendship> result;
+        if (beforeFriendshipId == null) {
+            result = friendshipRepository.findSentRequests(
+                    memberId,
+                    FriendshipStatus.PENDING,
+                    PageRequest.of(0, size + 1)
+            );
+        }
+
+        else {
+            result = friendshipRepository.findSentRequestsBefore(
+                    beforeFriendshipId,
+                    memberId,
+                    FriendshipStatus.PENDING,
+                    PageRequest.of(0, size + 1)
+            );
+        }
+
+        return friendRequestedOrReceivedResponse(
+                result,
+                size,
+                FriendRequestResponse::sentOf
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public CursorPageResponse<FriendRequestResponse> receivedList(
+            Long memberId,
+            Long beforeFriendshipId,
+            int size
+    ) {
+        validateMember(memberId);
+
+        List<Friendship> result;
+        if (beforeFriendshipId == null) {
+            result = friendshipRepository.findReceivedRequests(
+                    memberId,
+                    FriendshipStatus.PENDING,
+                    PageRequest.of(0, size + 1)
+            );
+        }
+
+        else {
+            result = friendshipRepository.findReceivedRequestsBefore(
+                    beforeFriendshipId,
+                    memberId,
+                    FriendshipStatus.PENDING,
+                    PageRequest.of(0, size + 1)
+            );
+        }
+
+        return friendRequestedOrReceivedResponse(
+                result,
+                size,
+                FriendRequestResponse::receivedOf
+        );
+    }
+
     // === private method ===
+
+    private CursorPageResponse<FriendRequestResponse> friendRequestedOrReceivedResponse(
+            List<Friendship> result,
+            int size,
+            Function<Friendship, FriendRequestResponse> mapper
+    ) {
+        boolean hasNext = result.size() > size;
+        if (hasNext) {
+            result = new ArrayList<>(result.subList(0, size));
+        }
+
+        Long nextCursor = hasNext && !result.isEmpty()
+                ? result.get(result.size() - 1).getId()
+                : null;
+
+        List<FriendRequestResponse> response = result.stream()
+                .map(mapper)
+                .toList();
+
+        return CursorPageResponse.of(
+                response,
+                nextCursor,
+                hasNext
+        );
+    }
 
     private Member validateMember(Long memberId) {
         Member member = memberRepository

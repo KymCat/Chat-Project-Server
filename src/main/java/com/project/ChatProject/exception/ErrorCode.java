@@ -272,6 +272,11 @@ public enum ErrorCode {
             "FRIENDSHIP-004",
             "이미 친구 관계 또는 친구 요청이 존재합니다."
     ),
+    FRIEND_REQUEST_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "FRIENDSHIP-005",
+            "존재하지 않는 친구요청입니다."
+    ),
 
     // Common Exception
     INTERNAL_SERVER_ERROR(
