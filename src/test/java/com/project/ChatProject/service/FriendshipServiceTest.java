@@ -1,5 +1,7 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.response.CursorPageResponse;
+import com.project.ChatProject.dto.response.FriendRequestResponse;
 import com.project.ChatProject.entity.Friendship;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.FriendshipStatus;
@@ -16,9 +18,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.sql.SQLException;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -236,6 +241,211 @@ class FriendshipServiceTest {
         )).isSameAs(databaseFailure);
     }
 
+    @Test
+    void requestedListReturnsSentRequestsWithNextCursor() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        Member secondReceiver = member(
+                3L,
+                "second@example.com",
+                "두 번째 수신자",
+                MemberStatus.ACTIVE
+        );
+        Member thirdReceiver = member(
+                4L,
+                "third@example.com",
+                "세 번째 수신자",
+                MemberStatus.ACTIVE
+        );
+        List<Friendship> friendships = List.of(
+                friendship(30L, requester, receiver),
+                friendship(20L, requester, secondReceiver),
+                friendship(10L, requester, thirdReceiver)
+        );
+        when(friendshipRepository.findSentRequests(
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 3)
+        )).thenReturn(friendships);
+
+        CursorPageResponse<FriendRequestResponse> response =
+                friendshipService.requestedList(
+                        REQUESTER_ID,
+                        null,
+                        2
+                );
+
+        assertThat(response.content()).hasSize(2);
+        assertThat(response.nextCursor()).isEqualTo(20L);
+        assertThat(response.hasNext()).isTrue();
+        assertThat(response.content().get(0).requestId()).isEqualTo(30L);
+        assertThat(response.content().get(0).targetMemberId())
+                .isEqualTo(RECEIVER_ID);
+        assertThat(response.content().get(0).targetNickname())
+                .isEqualTo("수신자");
+        assertThat(response.content().get(1).targetMemberId())
+                .isEqualTo(3L);
+
+        verify(friendshipRepository).findSentRequests(
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 3)
+        );
+        verify(friendshipRepository, never()).findSentRequestsBefore(
+                any(Long.class),
+                any(Long.class),
+                any(FriendshipStatus.class),
+                any(PageRequest.class)
+        );
+    }
+
+    @Test
+    void requestedListUsesCursorAndReturnsNoNextPage() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        Friendship friendship = friendship(
+                10L,
+                requester,
+                receiver
+        );
+        when(friendshipRepository.findSentRequestsBefore(
+                20L,
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 3)
+        )).thenReturn(List.of(friendship));
+
+        CursorPageResponse<FriendRequestResponse> response =
+                friendshipService.requestedList(
+                        REQUESTER_ID,
+                        20L,
+                        2
+                );
+
+        assertThat(response.content()).hasSize(1);
+        assertThat(response.content().get(0).requestId()).isEqualTo(10L);
+        assertThat(response.nextCursor()).isNull();
+        assertThat(response.hasNext()).isFalse();
+
+        verify(friendshipRepository).findSentRequestsBefore(
+                20L,
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 3)
+        );
+        verify(friendshipRepository, never()).findSentRequests(
+                any(Long.class),
+                any(FriendshipStatus.class),
+                any(PageRequest.class)
+        );
+    }
+
+    @Test
+    void receivedListReturnsRequestersAsTargetMembers() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        Member secondRequester = member(
+                3L,
+                "second@example.com",
+                "두 번째 요청자",
+                MemberStatus.ACTIVE
+        );
+        List<Friendship> friendships = List.of(
+                friendship(30L, receiver, requester),
+                friendship(20L, secondRequester, requester)
+        );
+        when(friendshipRepository.findReceivedRequests(
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 3)
+        )).thenReturn(friendships);
+
+        CursorPageResponse<FriendRequestResponse> response =
+                friendshipService.receivedList(
+                        REQUESTER_ID,
+                        null,
+                        2
+                );
+
+        assertThat(response.content()).hasSize(2);
+        assertThat(response.nextCursor()).isNull();
+        assertThat(response.hasNext()).isFalse();
+        assertThat(response.content().get(0).targetMemberId())
+                .isEqualTo(RECEIVER_ID);
+        assertThat(response.content().get(0).targetNickname())
+                .isEqualTo("수신자");
+        assertThat(response.content().get(1).targetMemberId())
+                .isEqualTo(3L);
+
+        verify(friendshipRepository).findReceivedRequests(
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 3)
+        );
+        verify(friendshipRepository, never()).findReceivedRequestsBefore(
+                any(Long.class),
+                any(Long.class),
+                any(FriendshipStatus.class),
+                any(PageRequest.class)
+        );
+    }
+
+    @Test
+    void receivedListUsesCursorAndReturnsNextCursor() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        Member secondRequester = member(
+                3L,
+                "second@example.com",
+                "두 번째 요청자",
+                MemberStatus.ACTIVE
+        );
+        Member thirdRequester = member(
+                4L,
+                "third@example.com",
+                "세 번째 요청자",
+                MemberStatus.ACTIVE
+        );
+        List<Friendship> friendships = List.of(
+                friendship(30L, receiver, requester),
+                friendship(20L, secondRequester, requester),
+                friendship(10L, thirdRequester, requester)
+        );
+        when(friendshipRepository.findReceivedRequestsBefore(
+                40L,
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 3)
+        )).thenReturn(friendships);
+
+        CursorPageResponse<FriendRequestResponse> response =
+                friendshipService.receivedList(
+                        REQUESTER_ID,
+                        40L,
+                        2
+                );
+
+        assertThat(response.content()).hasSize(2);
+        assertThat(response.nextCursor()).isEqualTo(20L);
+        assertThat(response.hasNext()).isTrue();
+        assertThat(response.content().get(0).targetMemberId())
+                .isEqualTo(RECEIVER_ID);
+        assertThat(response.content().get(1).targetMemberId())
+                .isEqualTo(3L);
+
+        verify(friendshipRepository).findReceivedRequestsBefore(
+                40L,
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 3)
+        );
+        verify(friendshipRepository, never()).findReceivedRequests(
+                any(Long.class),
+                any(FriendshipStatus.class),
+                any(PageRequest.class)
+        );
+    }
+
     private void stubMembers() {
         when(memberRepository.findById(REQUESTER_ID))
                 .thenReturn(Optional.of(requester));
@@ -276,6 +486,21 @@ class FriendshipServiceTest {
         ReflectionTestUtils.setField(member, "id", id);
         ReflectionTestUtils.setField(member, "status", status);
         return member;
+    }
+
+    private Friendship friendship(
+            Long id,
+            Member requester,
+            Member receiver
+    ) {
+        Friendship friendship = Friendship.create(requester, receiver);
+        ReflectionTestUtils.setField(friendship, "id", id);
+        ReflectionTestUtils.setField(
+                friendship,
+                "createdAt",
+                Instant.parse("2026-10-29T00:00:00Z")
+        );
+        return friendship;
     }
 
     private DataIntegrityViolationException databaseFailure(
