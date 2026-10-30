@@ -563,7 +563,7 @@ class FriendshipServiceTest {
     }
 
     @Test
-    void rejectRequestDeletesPendingReceivedRequest() {
+    void deleteRequestDeletesPendingReceivedRequest() {
         when(memberRepository.findById(RECEIVER_ID))
                 .thenReturn(Optional.of(receiver));
         Friendship request = friendship(
@@ -571,17 +571,17 @@ class FriendshipServiceTest {
                 requester,
                 receiver
         );
-        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+        when(friendshipRepository.findRequestByIdForUpdate(
                 REQUEST_ID,
                 RECEIVER_ID
         )).thenReturn(Optional.of(request));
 
-        friendshipService.rejectRequest(
+        friendshipService.deleteRequest(
                 REQUEST_ID,
                 RECEIVER_ID
         );
 
-        verify(friendshipRepository).findReceivedRequestByIdForUpdate(
+        verify(friendshipRepository).findRequestByIdForUpdate(
                 REQUEST_ID,
                 RECEIVER_ID
         );
@@ -589,15 +589,41 @@ class FriendshipServiceTest {
     }
 
     @Test
-    void rejectRequestIgnoresUnknownOrUnauthorizedRequest() {
+    void deleteRequestDeletesPendingSentRequest() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        Friendship request = friendship(
+                REQUEST_ID,
+                requester,
+                receiver
+        );
+        when(friendshipRepository.findRequestByIdForUpdate(
+                REQUEST_ID,
+                REQUESTER_ID
+        )).thenReturn(Optional.of(request));
+
+        friendshipService.deleteRequest(
+                REQUEST_ID,
+                REQUESTER_ID
+        );
+
+        verify(friendshipRepository).findRequestByIdForUpdate(
+                REQUEST_ID,
+                REQUESTER_ID
+        );
+        verify(friendshipRepository).delete(request);
+    }
+
+    @Test
+    void deleteRequestIgnoresUnknownOrUnauthorizedRequest() {
         when(memberRepository.findById(RECEIVER_ID))
                 .thenReturn(Optional.of(receiver));
-        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+        when(friendshipRepository.findRequestByIdForUpdate(
                 REQUEST_ID,
                 RECEIVER_ID
         )).thenReturn(Optional.empty());
 
-        friendshipService.rejectRequest(
+        friendshipService.deleteRequest(
                 REQUEST_ID,
                 RECEIVER_ID
         );
@@ -607,7 +633,7 @@ class FriendshipServiceTest {
     }
 
     @Test
-    void rejectRequestRejectsAcceptedFriendship() {
+    void deleteRequestRejectsAcceptedFriendship() {
         when(memberRepository.findById(RECEIVER_ID))
                 .thenReturn(Optional.of(receiver));
         Friendship request = friendship(
@@ -616,12 +642,12 @@ class FriendshipServiceTest {
                 receiver
         );
         request.acceptRequest();
-        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+        when(friendshipRepository.findRequestByIdForUpdate(
                 REQUEST_ID,
                 RECEIVER_ID
         )).thenReturn(Optional.of(request));
 
-        assertThatThrownBy(() -> friendshipService.rejectRequest(
+        assertThatThrownBy(() -> friendshipService.deleteRequest(
                 REQUEST_ID,
                 RECEIVER_ID
         )).isInstanceOfSatisfying(
