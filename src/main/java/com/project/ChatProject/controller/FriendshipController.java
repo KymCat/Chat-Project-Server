@@ -64,4 +64,28 @@ public class FriendshipController {
         return ResponseEntity
                 .ok(ApiResponse.success(response));
     }
+
+    @PostMapping("/requests/{requestId}/accept")
+    public ResponseEntity<ApiResponse<Void>> acceptRequest(
+            @PathVariable Long requestId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        friendshipService.acceptRequest(requestId, memberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
+    @DeleteMapping("/requests/{requestId}")
+    public ResponseEntity<ApiResponse<Void>> rejectRequest(
+            @PathVariable Long requestId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        friendshipService.rejectRequest(requestId, memberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
 }

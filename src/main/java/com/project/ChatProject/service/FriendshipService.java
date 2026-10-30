@@ -146,6 +146,54 @@ public class FriendshipService {
         );
     }
 
+    @Transactional
+    public void acceptRequest(Long requestId, Long memberId) {
+        validateMember(memberId);
+
+        Friendship request = friendshipRepository
+                .findReceivedRequestByIdForUpdate(requestId, memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.FRIEND_REQUEST_NOT_FOUND
+                        )
+                );
+
+        if (request.getStatus().equals(FriendshipStatus.ACCEPTED)) {
+            throw new CustomException(
+                    ErrorCode.FRIEND_REQUEST_ALREADY_ACCEPTED
+            );
+        }
+
+        // 상대 회원 검증
+        validateMember(request.getRequester().getId());
+
+        request.acceptRequest();
+    }
+
+    @Transactional
+    public void rejectRequest(Long requestId, Long memberId) {
+        validateMember(memberId);
+
+        Friendship request = friendshipRepository
+                .findReceivedRequestByIdForUpdate(
+                        requestId,
+                        memberId
+                )
+                .orElse(null);
+
+        if (request == null) {
+            return;
+        }
+
+        if (request.getStatus() == FriendshipStatus.ACCEPTED) {
+            throw new CustomException(
+                    ErrorCode.FRIEND_REQUEST_ALREADY_ACCEPTED
+            );
+        }
+
+        friendshipRepository.delete(request);
+    }
+
     // === private method ===
 
     private CursorPageResponse<FriendRequestResponse> friendRequestedOrReceivedResponse(

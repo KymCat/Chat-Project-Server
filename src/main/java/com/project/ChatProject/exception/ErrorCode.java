@@ -275,7 +275,12 @@ public enum ErrorCode {
     FRIEND_REQUEST_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "FRIENDSHIP-005",
-            "존재하지 않는 친구요청입니다."
+            "존재하지 않는 친구 요청입니다."
+    ),
+    FRIEND_REQUEST_ALREADY_ACCEPTED(
+            HttpStatus.CONFLICT,
+            "FRIENDSHIP-006",
+            "이미 수락한 친구 요청입니다."
     ),
 
     // Common Exception
