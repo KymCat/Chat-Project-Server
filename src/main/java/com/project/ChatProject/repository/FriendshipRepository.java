@@ -106,17 +106,31 @@ public interface FriendshipRepository
             Pageable pageable
     );
 
+    // 요청 수락
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT f
+        FROM Friendship f
+        WHERE f.id = :requestId
+          AND f.receiver.id = :receiverId
+        """)
+    Optional<Friendship> findReceivedRequestByIdForUpdate(
+            @Param("requestId") Long requestId,
+            @Param("receiverId") Long receiverId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(value =
                     """
                     SELECT f
                     FROM Friendship f
                     WHERE f.id = :id
-                        AND f.receiver.id = :receiverId
+                        AND (f.receiver.id = :memberId OR
+                            f.requester.id = :memberId)
                     """
     )
-    Optional<Friendship> findReceivedRequestByIdForUpdate(
+    Optional<Friendship> findRequestByIdForUpdate(
             @Param("id") Long requestId,
-            @Param("receiverId") Long memberId
+            @Param("memberId") Long memberId
     );
 }

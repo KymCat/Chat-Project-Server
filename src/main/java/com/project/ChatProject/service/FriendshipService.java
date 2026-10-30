@@ -171,11 +171,11 @@ public class FriendshipService {
     }
 
     @Transactional
-    public void rejectRequest(Long requestId, Long memberId) {
+    public void deleteRequest(Long requestId, Long memberId) {
         validateMember(memberId);
 
         Friendship request = friendshipRepository
-                .findReceivedRequestByIdForUpdate(
+                .findRequestByIdForUpdate(
                         requestId,
                         memberId
                 )
@@ -185,7 +185,7 @@ public class FriendshipService {
             return;
         }
 
-        if (request.getStatus() == FriendshipStatus.ACCEPTED) {
+        if (request.getStatus() != FriendshipStatus.PENDING) {
             throw new CustomException(
                     ErrorCode.FRIEND_REQUEST_ALREADY_ACCEPTED
             );

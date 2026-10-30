@@ -78,12 +78,12 @@ public class FriendshipController {
     }
 
     @DeleteMapping("/requests/{requestId}")
-    public ResponseEntity<ApiResponse<Void>> rejectRequest(
+    public ResponseEntity<ApiResponse<Void>> deleteRequest(
             @PathVariable Long requestId,
             @AuthenticationPrincipal AccessTokenClaims claims
     ) {
         Long memberId = claims.memberId();
-        friendshipService.rejectRequest(requestId, memberId);
+        friendshipService.deleteRequest(requestId, memberId);
 
         return ResponseEntity
                 .ok(ApiResponse.success(null));
