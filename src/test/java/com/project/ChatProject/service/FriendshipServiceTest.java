@@ -39,6 +39,7 @@ class FriendshipServiceTest {
 
     private static final Long REQUESTER_ID = 1L;
     private static final Long RECEIVER_ID = 2L;
+    private static final Long REQUEST_ID = 100L;
 
     @Mock
     private MemberRepository memberRepository;
@@ -446,6 +447,194 @@ class FriendshipServiceTest {
         );
     }
 
+    @Test
+    void acceptRequestAcceptsPendingReceivedRequest() {
+        stubMembers();
+        Friendship request = friendship(
+                REQUEST_ID,
+                requester,
+                receiver
+        );
+        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        )).thenReturn(Optional.of(request));
+
+        friendshipService.acceptRequest(
+                REQUEST_ID,
+                RECEIVER_ID
+        );
+
+        assertThat(request.getStatus())
+                .isEqualTo(FriendshipStatus.ACCEPTED);
+        assertThat(request.getAcceptedAt()).isNotNull();
+        verify(friendshipRepository).findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        );
+    }
+
+    @Test
+    void acceptRequestRejectsUnknownOrUnauthorizedRequest() {
+        when(memberRepository.findById(RECEIVER_ID))
+                .thenReturn(Optional.of(receiver));
+        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        )).thenReturn(Optional.empty());
+
+        assertAcceptRequestRejected(
+                ErrorCode.FRIEND_REQUEST_NOT_FOUND
+        );
+
+        verify(memberRepository, never()).findById(REQUESTER_ID);
+    }
+
+    @Test
+    void acceptRequestRejectsAlreadyAcceptedRequest() {
+        when(memberRepository.findById(RECEIVER_ID))
+                .thenReturn(Optional.of(receiver));
+        Friendship request = friendship(
+                REQUEST_ID,
+                requester,
+                receiver
+        );
+        request.acceptRequest();
+        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        )).thenReturn(Optional.of(request));
+
+        assertAcceptRequestRejected(
+                ErrorCode.FRIEND_REQUEST_ALREADY_ACCEPTED
+        );
+
+        verify(memberRepository, never()).findById(REQUESTER_ID);
+    }
+
+    @Test
+    void acceptRequestRejectsSuspendedRequester() {
+        ReflectionTestUtils.setField(
+                requester,
+                "status",
+                MemberStatus.SUSPENDED
+        );
+        stubMembers();
+        Friendship request = friendship(
+                REQUEST_ID,
+                requester,
+                receiver
+        );
+        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        )).thenReturn(Optional.of(request));
+
+        assertAcceptRequestRejected(ErrorCode.MEMBER_BLOCKED);
+
+        assertThat(request.getStatus())
+                .isEqualTo(FriendshipStatus.PENDING);
+        assertThat(request.getAcceptedAt()).isNull();
+    }
+
+    @Test
+    void acceptRequestRejectsWithdrawnRequester() {
+        ReflectionTestUtils.setField(
+                requester,
+                "status",
+                MemberStatus.WITHDRAWN
+        );
+        stubMembers();
+        Friendship request = friendship(
+                REQUEST_ID,
+                requester,
+                receiver
+        );
+        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        )).thenReturn(Optional.of(request));
+
+        assertAcceptRequestRejected(ErrorCode.MEMBER_WITHDRAWN);
+
+        assertThat(request.getStatus())
+                .isEqualTo(FriendshipStatus.PENDING);
+        assertThat(request.getAcceptedAt()).isNull();
+    }
+
+    @Test
+    void rejectRequestDeletesPendingReceivedRequest() {
+        when(memberRepository.findById(RECEIVER_ID))
+                .thenReturn(Optional.of(receiver));
+        Friendship request = friendship(
+                REQUEST_ID,
+                requester,
+                receiver
+        );
+        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        )).thenReturn(Optional.of(request));
+
+        friendshipService.rejectRequest(
+                REQUEST_ID,
+                RECEIVER_ID
+        );
+
+        verify(friendshipRepository).findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        );
+        verify(friendshipRepository).delete(request);
+    }
+
+    @Test
+    void rejectRequestIgnoresUnknownOrUnauthorizedRequest() {
+        when(memberRepository.findById(RECEIVER_ID))
+                .thenReturn(Optional.of(receiver));
+        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        )).thenReturn(Optional.empty());
+
+        friendshipService.rejectRequest(
+                REQUEST_ID,
+                RECEIVER_ID
+        );
+
+        verify(friendshipRepository, never())
+                .delete(any(Friendship.class));
+    }
+
+    @Test
+    void rejectRequestRejectsAcceptedFriendship() {
+        when(memberRepository.findById(RECEIVER_ID))
+                .thenReturn(Optional.of(receiver));
+        Friendship request = friendship(
+                REQUEST_ID,
+                requester,
+                receiver
+        );
+        request.acceptRequest();
+        when(friendshipRepository.findReceivedRequestByIdForUpdate(
+                REQUEST_ID,
+                RECEIVER_ID
+        )).thenReturn(Optional.of(request));
+
+        assertThatThrownBy(() -> friendshipService.rejectRequest(
+                REQUEST_ID,
+                RECEIVER_ID
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(
+                                ErrorCode.FRIEND_REQUEST_ALREADY_ACCEPTED
+                        )
+        );
+
+        verify(friendshipRepository, never()).delete(request);
+    }
+
     private void stubMembers() {
         when(memberRepository.findById(REQUESTER_ID))
                 .thenReturn(Optional.of(requester));
@@ -469,6 +658,19 @@ class FriendshipServiceTest {
         assertThatThrownBy(() -> friendshipService.requestFriend(
                 requesterId,
                 receiverId
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(expectedErrorCode)
+        );
+    }
+
+    private void assertAcceptRequestRejected(
+            ErrorCode expectedErrorCode
+    ) {
+        assertThatThrownBy(() -> friendshipService.acceptRequest(
+                REQUEST_ID,
+                RECEIVER_ID
         )).isInstanceOfSatisfying(
                 CustomException.class,
                 exception -> assertThat(exception.getErrorCode())
