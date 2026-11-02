@@ -34,6 +34,23 @@ public interface FriendshipRepository
             @Param("status") FriendshipStatus status
     );
 
+    @Query("""
+        SELECT f
+        FROM Friendship f
+        WHERE (
+            f.requester.id = :memberId
+                AND f.receiver.id = :targetMemberId
+        )
+        OR (
+            f.requester.id = :targetMemberId
+                AND f.receiver.id = :memberId
+        )
+        """)
+    Optional<Friendship> findBetweenMembers(
+            @Param("memberId") Long memberId,
+            @Param("targetMemberId") Long targetMemberId
+    );
+
     // 보낸 요청 리스트 조회 (최초 조회)
     @Query(
             value = """
@@ -151,6 +168,7 @@ public interface FriendshipRepository
             @Param("status") FriendshipStatus status
     );
 
+    // 친구 리스트 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(
             value = """

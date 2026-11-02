@@ -5,6 +5,7 @@ import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.request.UpdateStatusMessage;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
+import com.project.ChatProject.dto.response.MemberPublicProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
 import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
@@ -35,6 +36,19 @@ public class MemberController {
                 memberService.getProfile(claims.memberId());
 
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{memberId}/profile")
+    public ResponseEntity<ApiResponse<MemberPublicProfileResponse>> getPublicProfile(
+            @PathVariable(name = "memberId") Long targetMemberId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long myMemberId = claims.memberId();
+        MemberPublicProfileResponse response =
+                memberService.getPublicProfile(myMemberId, targetMemberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
     }
 
     @GetMapping("/{memberId}/profile-image")

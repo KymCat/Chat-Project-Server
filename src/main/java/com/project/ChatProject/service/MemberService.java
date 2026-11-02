@@ -1,23 +1,21 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.enums.ProfileRelationStatus;
 import com.project.ChatProject.dto.request.SignupRequest;
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
+import com.project.ChatProject.dto.response.MemberPublicProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
 import com.project.ChatProject.dto.result.ProfileImageResult;
-import com.project.ChatProject.entity.Member;
-import com.project.ChatProject.entity.MemberCredential;
-import com.project.ChatProject.entity.SocialAccount;
-import com.project.ChatProject.entity.StorageDeletionTask;
+import com.project.ChatProject.entity.*;
+import com.project.ChatProject.entity.enums.FriendshipStatus;
+import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.profile.ProfileImageValidator;
 import com.project.ChatProject.profile.ValidatedProfileImage;
-import com.project.ChatProject.repository.MemberCredentialRepository;
-import com.project.ChatProject.repository.MemberRepository;
-import com.project.ChatProject.repository.SocialAccountRepository;
-import com.project.ChatProject.repository.StorageDeletionTaskRepository;
+import com.project.ChatProject.repository.*;
 import com.project.ChatProject.storage.FileStorage;
 import com.project.ChatProject.storage.StorageCategory;
 import com.project.ChatProject.storage.StoredFile;
@@ -41,17 +39,42 @@ public class MemberService {
     private final ProfileImageValidator profileImageValidator;
     private final StorageDeletionTaskRepository storageDeletionTaskRepository;
     private final SocialAccountRepository socialAccountRepository;
+    private final FriendshipRepository friendshipRepository;
 
     @Transactional(readOnly = true)
     public MemberProfileResponse getProfile(Long memberId) {
-        Member member = memberRepository.findById(memberId)
+        Member member = validateMember(memberId);
+
+        return MemberProfileResponse.from(member);
+    }
+
+    @Transactional(readOnly = true)
+    public MemberPublicProfileResponse getPublicProfile(
+            Long memberId,
+            Long targetMemberId
+    ) {
+        Member member = validateMember(memberId);
+        if (memberId.equals(targetMemberId)) {
+            return MemberPublicProfileResponse.from(
+                    member,
+                    ProfileRelationStatus.SELF
+            );
+        }
+
+        Member targetMember = memberRepository.findById(targetMemberId)
                 .orElseThrow(() ->
                         new CustomException(
                                 ErrorCode.MEMBER_NOT_FOUND
                         )
                 );
 
-        return MemberProfileResponse.from(member);
+        ProfileRelationStatus relationStatus =
+                findRelation(memberId, targetMemberId);
+
+        return MemberPublicProfileResponse.from(
+                targetMember,
+                relationStatus
+        );
     }
 
     @Transactional(readOnly = true)
@@ -62,6 +85,12 @@ public class MemberService {
                                 ErrorCode.MEMBER_NOT_FOUND
                         )
                 );
+
+        if (member.getStatus() != MemberStatus.ACTIVE) {
+            throw new CustomException(
+                    ErrorCode.PROFILE_IMAGE_NOT_FOUND
+            );
+        }
 
         if (member.hasStoredProfileImage()) {
             Resource resource = fileStorage.load(
@@ -84,7 +113,6 @@ public class MemberService {
         throw new CustomException(
                 ErrorCode.PROFILE_IMAGE_NOT_FOUND
         );
-
     }
 
     @Transactional
@@ -245,5 +273,58 @@ public class MemberService {
                 );
 
         member.updateStatusMessage(newStatusMessage);
+    }
+
+    // === private method ===
+
+    private Member validateMember(Long memberId) {
+        Member member = memberRepository
+                .findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+
+        if (member.getStatus().equals(MemberStatus.SUSPENDED)) {
+            throw new CustomException(
+                    ErrorCode.MEMBER_BLOCKED
+            );
+        }
+
+        if (member.getStatus().equals(MemberStatus.WITHDRAWN)) {
+            throw new CustomException(
+                    ErrorCode.MEMBER_WITHDRAWN
+            );
+        }
+
+        return member;
+    }
+
+    private ProfileRelationStatus findRelation(
+            Long memberId,
+            Long targetMemberId
+    ) {
+        return friendshipRepository
+                .findBetweenMembers(memberId, targetMemberId)
+                .map(friendship ->
+                        resolveRelationStatus(friendship, memberId)
+                )
+                .orElse(ProfileRelationStatus.NONE);
+    }
+
+    private ProfileRelationStatus resolveRelationStatus(
+            Friendship friendship,
+            Long memberId
+    ) {
+        if (friendship.getStatus() == FriendshipStatus.ACCEPTED) {
+            return ProfileRelationStatus.ACCEPTED;
+        }
+
+        if (friendship.getRequester().getId().equals(memberId)) {
+            return ProfileRelationStatus.PENDING_SENT;
+        }
+
+        return ProfileRelationStatus.PENDING_RECEIVED;
     }
 }
