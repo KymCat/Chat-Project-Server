@@ -1,16 +1,22 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.enums.ProfileRelationStatus;
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
-import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
+import com.project.ChatProject.dto.response.MemberPublicProfileResponse;
+import com.project.ChatProject.dto.result.ProfileImageResult;
+import com.project.ChatProject.entity.Friendship;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.SocialAccount;
 import com.project.ChatProject.entity.StorageDeletionTask;
+import com.project.ChatProject.entity.enums.FriendshipStatus;
+import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.profile.ProfileImageValidator;
 import com.project.ChatProject.profile.ValidatedProfileImage;
+import com.project.ChatProject.repository.FriendshipRepository;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import com.project.ChatProject.repository.SocialAccountRepository;
@@ -66,6 +72,9 @@ class MemberServiceTest {
     @Mock
     private SocialAccountRepository socialAccountRepository;
 
+    @Mock
+    private FriendshipRepository friendshipRepository;
+
     @InjectMocks
     private MemberService memberService;
 
@@ -74,9 +83,9 @@ class MemberServiceTest {
         Member member = mock(Member.class);
         when(member.getNickname()).thenReturn("베리타스");
         when(member.getEmail()).thenReturn("veritas@example.com");
-        when(member.getProfileImageUrl())
-                .thenReturn("https://example.com/profile.png");
         when(member.getStatusMessage()).thenReturn("개발 공부 중");
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
+        when(member.hasStoredProfileImage()).thenReturn(false);
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(member));
 
@@ -85,10 +94,9 @@ class MemberServiceTest {
 
         assertThat(response.nickname()).isEqualTo("베리타스");
         assertThat(response.email()).isEqualTo("veritas@example.com");
-        assertThat(response.profileImageUrl())
-                .isEqualTo("https://example.com/profile.png");
         assertThat(response.statusMessage()).isEqualTo("개발 공부 중");
-        assertThat(response.hasStoredProfileImage()).isFalse();
+        assertThat(response.status()).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(response.usesStoredProfileImage()).isFalse();
     }
 
     @Test
@@ -101,6 +109,118 @@ class MemberServiceTest {
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.MEMBER_NOT_FOUND)
                 );
+    }
+
+    @Test
+    void getPublicProfileReturnsSelfWithoutLookingUpFriendship() {
+        Member member = mock(Member.class);
+        when(member.getId()).thenReturn(MEMBER_ID);
+        when(member.getNickname()).thenReturn("베리타스");
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+
+        MemberPublicProfileResponse response =
+                memberService.getPublicProfile(MEMBER_ID, MEMBER_ID);
+
+        assertThat(response.memberId()).isEqualTo(MEMBER_ID);
+        assertThat(response.relationStatus())
+                .isEqualTo(ProfileRelationStatus.SELF);
+        verifyNoInteractions(friendshipRepository);
+    }
+
+    @Test
+    void getPublicProfileReturnsNoneWithoutFriendship() {
+        Long targetMemberId = 3L;
+        Member member = activeAuthenticatedMember();
+        Member targetMember = activePublicMember(targetMemberId, "상대방");
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(memberRepository.findById(targetMemberId))
+                .thenReturn(Optional.of(targetMember));
+        when(friendshipRepository.findBetweenMembers(
+                MEMBER_ID,
+                targetMemberId
+        )).thenReturn(Optional.empty());
+
+        MemberPublicProfileResponse response =
+                memberService.getPublicProfile(MEMBER_ID, targetMemberId);
+
+        assertThat(response.memberId()).isEqualTo(targetMemberId);
+        assertThat(response.displayName()).isEqualTo("상대방");
+        assertThat(response.relationStatus())
+                .isEqualTo(ProfileRelationStatus.NONE);
+    }
+
+    @Test
+    void getPublicProfileReturnsAcceptedFriendship() {
+        Long targetMemberId = 3L;
+        Member member = activeAuthenticatedMember();
+        Member targetMember = activePublicMember(targetMemberId, "상대방");
+        Friendship friendship = mock(Friendship.class);
+        when(friendship.getStatus()).thenReturn(FriendshipStatus.ACCEPTED);
+        mockPublicProfileLookup(member, targetMember, friendship);
+
+        MemberPublicProfileResponse response =
+                memberService.getPublicProfile(MEMBER_ID, targetMemberId);
+
+        assertThat(response.relationStatus())
+                .isEqualTo(ProfileRelationStatus.ACCEPTED);
+    }
+
+    @Test
+    void getPublicProfileReturnsPendingSentByAuthenticatedMember() {
+        Long targetMemberId = 3L;
+        Member member = activeAuthenticatedMember();
+        Member targetMember = activePublicMember(targetMemberId, "상대방");
+        Friendship friendship = mock(Friendship.class);
+        when(friendship.getStatus()).thenReturn(FriendshipStatus.PENDING);
+        when(member.getId()).thenReturn(MEMBER_ID);
+        when(friendship.getRequester()).thenReturn(member);
+        mockPublicProfileLookup(member, targetMember, friendship);
+
+        MemberPublicProfileResponse response =
+                memberService.getPublicProfile(MEMBER_ID, targetMemberId);
+
+        assertThat(response.relationStatus())
+                .isEqualTo(ProfileRelationStatus.PENDING_SENT);
+    }
+
+    @Test
+    void getPublicProfileReturnsPendingReceivedByAuthenticatedMember() {
+        Long targetMemberId = 3L;
+        Member member = activeAuthenticatedMember();
+        Member targetMember = activePublicMember(targetMemberId, "상대방");
+        Friendship friendship = mock(Friendship.class);
+        when(friendship.getStatus()).thenReturn(FriendshipStatus.PENDING);
+        when(friendship.getRequester()).thenReturn(targetMember);
+        mockPublicProfileLookup(member, targetMember, friendship);
+
+        MemberPublicProfileResponse response =
+                memberService.getPublicProfile(MEMBER_ID, targetMemberId);
+
+        assertThat(response.relationStatus())
+                .isEqualTo(ProfileRelationStatus.PENDING_RECEIVED);
+    }
+
+    @Test
+    void getPublicProfileRejectsUnknownTargetMember() {
+        Long targetMemberId = 999L;
+        Member member = activeAuthenticatedMember();
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(memberRepository.findById(targetMemberId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                memberService.getPublicProfile(MEMBER_ID, targetMemberId)
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.MEMBER_NOT_FOUND)
+        );
+
+        verifyNoInteractions(friendshipRepository);
     }
 
     @Test
@@ -158,6 +278,7 @@ class MemberServiceTest {
 
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(member));
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
         when(member.hasStoredProfileImage()).thenReturn(true);
         when(member.getProfileImageStorageKey()).thenReturn(storageKey);
         when(member.getProfileImageContentType()).thenReturn("image/png");
@@ -181,6 +302,7 @@ class MemberServiceTest {
 
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(member));
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
         when(member.hasStoredProfileImage()).thenReturn(false);
         when(member.getProfileImageUrl()).thenReturn(externalUrl);
 
@@ -198,6 +320,7 @@ class MemberServiceTest {
         Member member = mock(Member.class);
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(member));
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
 
         assertThatThrownBy(() ->
                 memberService.getProfileImage(MEMBER_ID)
@@ -208,6 +331,16 @@ class MemberServiceTest {
         );
 
         verifyNoInteractions(fileStorage);
+    }
+
+    @Test
+    void getProfileImageRejectsSuspendedMember() {
+        assertInactiveMemberProfileImageRejected(MemberStatus.SUSPENDED);
+    }
+
+    @Test
+    void getProfileImageRejectsWithdrawnMember() {
+        assertInactiveMemberProfileImageRejected(MemberStatus.WITHDRAWN);
     }
 
     @Test
@@ -491,6 +624,54 @@ class MemberServiceTest {
                 "image/png",
                 "image".getBytes()
         );
+    }
+
+    private Member activeAuthenticatedMember() {
+        Member member = mock(Member.class);
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
+        return member;
+    }
+
+    private Member activePublicMember(Long memberId, String nickname) {
+        Member member = mock(Member.class);
+        when(member.getId()).thenReturn(memberId);
+        when(member.getNickname()).thenReturn(nickname);
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
+        return member;
+    }
+
+    private void mockPublicProfileLookup(
+            Member member,
+            Member targetMember,
+            Friendship friendship
+    ) {
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(memberRepository.findById(targetMember.getId()))
+                .thenReturn(Optional.of(targetMember));
+        when(friendshipRepository.findBetweenMembers(
+                MEMBER_ID,
+                targetMember.getId()
+        )).thenReturn(Optional.of(friendship));
+    }
+
+    private void assertInactiveMemberProfileImageRejected(
+            MemberStatus status
+    ) {
+        Member member = mock(Member.class);
+        when(member.getStatus()).thenReturn(status);
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+
+        assertThatThrownBy(() ->
+                memberService.getProfileImage(MEMBER_ID)
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.PROFILE_IMAGE_NOT_FOUND)
+        );
+
+        verifyNoInteractions(fileStorage);
     }
 
     private StoredFile storedProfile() {
