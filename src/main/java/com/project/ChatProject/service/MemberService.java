@@ -231,4 +231,19 @@ public class MemberService {
 
         memberRepository.saveAndFlush(member);
     }
+
+    @Transactional
+    public void updateStatusMessage(
+            Long memberId,
+            String newStatusMessage
+    ) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+
+        member.updateStatusMessage(newStatusMessage);
+    }
 }

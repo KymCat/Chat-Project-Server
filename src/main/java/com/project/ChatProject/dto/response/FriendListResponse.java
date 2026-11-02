@@ -22,7 +22,7 @@ public record FriendListResponse(
                 target.getId(),
                 target.getEmail(),
                 target.getNickname(),
-                "상태메세지"
+                target.getStatusMessage()
         );
     }
 }

@@ -6,6 +6,7 @@ public record MemberProfileResponse(
         String nickname,
         String email,
         String profileImageUrl,
+        String statusMessage,
         boolean hasStoredProfileImage
 ) {
     public static MemberProfileResponse from(Member member) {
@@ -13,6 +14,7 @@ public record MemberProfileResponse(
                 member.getNickname(),
                 member.getEmail(),
                 member.getProfileImageUrl(),
+                member.getStatusMessage(),
                 member.hasStoredProfileImage()
         );
     }

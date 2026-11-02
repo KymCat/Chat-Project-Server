@@ -2,6 +2,7 @@ package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.request.SignupRequest;
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
+import com.project.ChatProject.dto.request.UpdateStatusMessage;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
@@ -108,5 +109,20 @@ public class MemberController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/me/status-message")
+    public ResponseEntity<ApiResponse<Void>> updateStatusMessage(
+            @RequestBody @Valid UpdateStatusMessage statusMessage,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        memberService.updateStatusMessage(
+                memberId,
+                statusMessage.newStatusMessage()
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
     }
 }

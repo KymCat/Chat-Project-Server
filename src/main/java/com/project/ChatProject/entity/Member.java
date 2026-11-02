@@ -55,6 +55,13 @@ public class Member extends BaseTimeEntity {
     @Column(name = "profile_image_size_bytes", nullable = true)
     private Long profileImageSizeBytes;
 
+    @Column(
+            name = "status_message",
+            length = 50,
+            nullable = true
+    )
+    private String statusMessage;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status",
             nullable = false,
@@ -81,6 +88,7 @@ public class Member extends BaseTimeEntity {
         member.email = email;
         member.nickname = nickname;
         member.emailVerifiedAt = null;
+        member.statusMessage = null;
         member.status = MemberStatus.ACTIVE;
         member.lastLoginAt = null;
         member.withdrawnAt = null;
@@ -154,5 +162,9 @@ public class Member extends BaseTimeEntity {
         this.profileImageStorageKey = null;
         this.profileImageContentType = null;
         this.profileImageSizeBytes = null;
+    }
+
+    public void updateStatusMessage(String statusMessage) {
+        this.statusMessage = statusMessage;
     }
 }
