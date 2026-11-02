@@ -282,6 +282,16 @@ public enum ErrorCode {
             "FRIENDSHIP-006",
             "이미 수락한 친구 요청입니다."
     ),
+    FRIEND_RELATION_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "FRIENDSHIP-007",
+            "해당 회원과는 친구 관계가 아닙니다."
+    ),
+    SELF_FRIEND_DELETE_NOT_ALLOWED(
+            HttpStatus.BAD_REQUEST,
+            "FRIENDSHIP-008",
+            "자기 자신에게 친구 끊기를 할 수 없습니다."
+    ),
 
     // Common Exception
     INTERNAL_SERVER_ERROR(

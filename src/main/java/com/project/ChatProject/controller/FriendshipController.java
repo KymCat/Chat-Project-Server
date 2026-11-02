@@ -103,4 +103,17 @@ public class FriendshipController {
         return ResponseEntity
                 .ok(ApiResponse.success(null));
     }
+
+    @DeleteMapping("/unfollow/{targetMemberId}")
+    public ResponseEntity<ApiResponse<Void>> unfollow(
+            @PathVariable Long targetMemberId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        friendshipService.unfollow(memberId, targetMemberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
+
 }

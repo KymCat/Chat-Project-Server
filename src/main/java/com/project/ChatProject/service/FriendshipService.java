@@ -212,6 +212,34 @@ public class FriendshipService {
                 .toList();
     }
 
+    @Transactional
+    public void unfollow(
+            Long memberId,
+            Long targetMemberId
+    ) {
+        if (memberId.equals(targetMemberId)) {
+            throw new CustomException(
+                    ErrorCode.SELF_FRIEND_DELETE_NOT_ALLOWED
+            );
+        }
+
+        validateMember(memberId);
+
+        Friendship friendship = friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        memberId,
+                        targetMemberId,
+                        FriendshipStatus.ACCEPTED
+                )
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.FRIEND_RELATION_NOT_FOUND
+                        )
+                );
+
+        friendshipRepository.delete(friendship);
+    }
+
     // === private method ===
 
     private CursorPageResponse<FriendRequestResponse> friendRequestedOrReceivedResponse(

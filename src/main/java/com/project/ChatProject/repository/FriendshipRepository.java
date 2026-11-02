@@ -150,4 +150,20 @@ public interface FriendshipRepository
             @Param("memberId") Long memberId,
             @Param("status") FriendshipStatus status
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+            value = """
+                    SELECT f
+                    FROM Friendship f
+                    WHERE ((f.receiver.id = :memberId AND f.requester.id =:targetMemberId) OR
+                        (f.requester.id = :memberId AND f.receiver.id =:targetMemberId)) AND
+                        f.status = :status
+                    """
+    )
+    Optional<Friendship> findByMemberIdAndTargetMemberIdForUpdate(
+            @Param("memberId") Long memberId,
+            @Param("targetMemberId") Long targetMemberId,
+            @Param("status") FriendshipStatus status
+    );
 }
