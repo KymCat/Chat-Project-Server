@@ -742,6 +742,108 @@ class FriendshipServiceTest {
         verify(friendshipRepository, never()).delete(request);
     }
 
+    @Test
+    void unfollowDeletesAcceptedFriendshipEvenWhenTargetIsWithdrawn() {
+        ReflectionTestUtils.setField(
+                receiver,
+                "status",
+                MemberStatus.WITHDRAWN
+        );
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        Friendship friendship = friendship(
+                REQUEST_ID,
+                requester,
+                receiver
+        );
+        friendship.acceptRequest();
+        when(friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        REQUESTER_ID,
+                        RECEIVER_ID,
+                        FriendshipStatus.ACCEPTED
+                )).thenReturn(Optional.of(friendship));
+
+        friendshipService.unfollow(
+                REQUESTER_ID,
+                RECEIVER_ID
+        );
+
+        verify(friendshipRepository)
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        REQUESTER_ID,
+                        RECEIVER_ID,
+                        FriendshipStatus.ACCEPTED
+                );
+        verify(friendshipRepository).delete(friendship);
+        verify(memberRepository, never()).findById(RECEIVER_ID);
+    }
+
+    @Test
+    void unfollowRejectsSelfTargetWithoutRepositoryAccess() {
+        assertThatThrownBy(() -> friendshipService.unfollow(
+                REQUESTER_ID,
+                REQUESTER_ID
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(
+                                ErrorCode.SELF_FRIEND_DELETE_NOT_ALLOWED
+                        )
+        );
+
+        verifyNoInteractions(
+                memberRepository,
+                friendshipRepository
+        );
+    }
+
+    @Test
+    void unfollowRejectsMissingFriendRelation() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        when(friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        REQUESTER_ID,
+                        RECEIVER_ID,
+                        FriendshipStatus.ACCEPTED
+                )).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> friendshipService.unfollow(
+                REQUESTER_ID,
+                RECEIVER_ID
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.FRIEND_RELATION_NOT_FOUND)
+        );
+
+        verify(friendshipRepository, never())
+                .delete(any(Friendship.class));
+    }
+
+    @Test
+    void unfollowRejectsSuspendedMember() {
+        ReflectionTestUtils.setField(
+                requester,
+                "status",
+                MemberStatus.SUSPENDED
+        );
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+
+        assertThatThrownBy(() -> friendshipService.unfollow(
+                REQUESTER_ID,
+                RECEIVER_ID
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.MEMBER_BLOCKED)
+        );
+
+        verifyNoInteractions(friendshipRepository);
+    }
+
     private void stubMembers() {
         when(memberRepository.findById(REQUESTER_ID))
                 .thenReturn(Optional.of(requester));
