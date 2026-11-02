@@ -76,6 +76,7 @@ class MemberServiceTest {
         when(member.getEmail()).thenReturn("veritas@example.com");
         when(member.getProfileImageUrl())
                 .thenReturn("https://example.com/profile.png");
+        when(member.getStatusMessage()).thenReturn("개발 공부 중");
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(member));
 
@@ -86,6 +87,7 @@ class MemberServiceTest {
         assertThat(response.email()).isEqualTo("veritas@example.com");
         assertThat(response.profileImageUrl())
                 .isEqualTo("https://example.com/profile.png");
+        assertThat(response.statusMessage()).isEqualTo("개발 공부 중");
         assertThat(response.hasStoredProfileImage()).isFalse();
     }
 
@@ -99,6 +101,53 @@ class MemberServiceTest {
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.MEMBER_NOT_FOUND)
                 );
+    }
+
+    @Test
+    void updateStatusMessageChangesMembersStatusMessage() {
+        Member member = Member.create(
+                "veritas@example.com",
+                "베리타스"
+        );
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+
+        memberService.updateStatusMessage(
+                MEMBER_ID,
+                "개발 공부 중"
+        );
+
+        assertThat(member.getStatusMessage()).isEqualTo("개발 공부 중");
+    }
+
+    @Test
+    void updateStatusMessageClearsStatusMessageWithNull() {
+        Member member = Member.create(
+                "veritas@example.com",
+                "베리타스"
+        );
+        member.updateStatusMessage("기존 상태 메시지");
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+
+        memberService.updateStatusMessage(MEMBER_ID, null);
+
+        assertThat(member.getStatusMessage()).isNull();
+    }
+
+    @Test
+    void updateStatusMessageRejectsUnknownMember() {
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> memberService.updateStatusMessage(
+                MEMBER_ID,
+                "개발 공부 중"
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.MEMBER_NOT_FOUND)
+        );
     }
 
     @Test

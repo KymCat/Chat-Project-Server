@@ -458,6 +458,16 @@ class FriendshipServiceTest {
                 "두 번째 친구",
                 MemberStatus.ACTIVE
         );
+        ReflectionTestUtils.setField(
+                receiver,
+                "statusMessage",
+                "수신자 상태 메시지"
+        );
+        ReflectionTestUtils.setField(
+                secondFriend,
+                "statusMessage",
+                "두 번째 친구 상태 메시지"
+        );
         Friendship sentFriendship = friendship(
                 10L,
                 requester,
@@ -484,12 +494,14 @@ class FriendshipServiceTest {
                 .isEqualTo("receiver@example.com");
         assertThat(response.get(0).nickname()).isEqualTo("수신자");
         assertThat(response.get(0).statusMessage())
-                .isEqualTo("상태메세지");
+                .isEqualTo("수신자 상태 메시지");
         assertThat(response.get(1).memberId()).isEqualTo(3L);
         assertThat(response.get(1).email())
                 .isEqualTo("second@example.com");
         assertThat(response.get(1).nickname())
                 .isEqualTo("두 번째 친구");
+        assertThat(response.get(1).statusMessage())
+                .isEqualTo("두 번째 친구 상태 메시지");
 
         verify(friendshipRepository).findAllByMemberIdAndStatus(
                 REQUESTER_ID,
