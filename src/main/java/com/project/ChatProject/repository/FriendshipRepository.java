@@ -133,4 +133,21 @@ public interface FriendshipRepository
             @Param("id") Long requestId,
             @Param("memberId") Long memberId
     );
+
+    @Query("""
+        SELECT f
+        FROM Friendship f
+        JOIN FETCH f.requester requester
+        JOIN FETCH f.receiver receiver
+        WHERE (
+            requester.id = :memberId
+            OR receiver.id = :memberId
+        )
+        AND f.status = :status
+        ORDER BY f.id ASC
+        """)
+    List<Friendship> findAllByMemberIdAndStatus(
+            @Param("memberId") Long memberId,
+            @Param("status") FriendshipStatus status
+    );
 }

@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.response.CursorPageResponse;
+import com.project.ChatProject.dto.response.FriendListResponse;
 import com.project.ChatProject.dto.response.FriendRequestResponse;
 import com.project.ChatProject.entity.Friendship;
 import com.project.ChatProject.entity.Member;
@@ -192,6 +193,23 @@ public class FriendshipService {
         }
 
         friendshipRepository.delete(request);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FriendListResponse> getFriendList(Long memberId) {
+        validateMember(memberId);
+
+        List<Friendship> result = friendshipRepository
+                .findAllByMemberIdAndStatus(
+                        memberId,
+                        FriendshipStatus.ACCEPTED
+                );
+
+        return result.stream()
+                .map(friendship ->
+                        FriendListResponse.from(friendship, memberId)
+                )
+                .toList();
     }
 
     // === private method ===
