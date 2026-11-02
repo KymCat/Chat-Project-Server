@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.response.CursorPageResponse;
+import com.project.ChatProject.dto.response.FriendListResponse;
 import com.project.ChatProject.dto.response.FriendRequestResponse;
 import com.project.ChatProject.entity.Friendship;
 import com.project.ChatProject.entity.Member;
@@ -444,6 +445,74 @@ class FriendshipServiceTest {
                 any(Long.class),
                 any(FriendshipStatus.class),
                 any(PageRequest.class)
+        );
+    }
+
+    @Test
+    void getFriendListReturnsTargetMembersFromBothDirections() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        Member secondFriend = member(
+                3L,
+                "second@example.com",
+                "두 번째 친구",
+                MemberStatus.ACTIVE
+        );
+        Friendship sentFriendship = friendship(
+                10L,
+                requester,
+                receiver
+        );
+        Friendship receivedFriendship = friendship(
+                20L,
+                secondFriend,
+                requester
+        );
+        sentFriendship.acceptRequest();
+        receivedFriendship.acceptRequest();
+        when(friendshipRepository.findAllByMemberIdAndStatus(
+                REQUESTER_ID,
+                FriendshipStatus.ACCEPTED
+        )).thenReturn(List.of(sentFriendship, receivedFriendship));
+
+        List<FriendListResponse> response =
+                friendshipService.getFriendList(REQUESTER_ID);
+
+        assertThat(response).hasSize(2);
+        assertThat(response.get(0).memberId()).isEqualTo(RECEIVER_ID);
+        assertThat(response.get(0).email())
+                .isEqualTo("receiver@example.com");
+        assertThat(response.get(0).nickname()).isEqualTo("수신자");
+        assertThat(response.get(0).statusMessage())
+                .isEqualTo("상태메세지");
+        assertThat(response.get(1).memberId()).isEqualTo(3L);
+        assertThat(response.get(1).email())
+                .isEqualTo("second@example.com");
+        assertThat(response.get(1).nickname())
+                .isEqualTo("두 번째 친구");
+
+        verify(friendshipRepository).findAllByMemberIdAndStatus(
+                REQUESTER_ID,
+                FriendshipStatus.ACCEPTED
+        );
+    }
+
+    @Test
+    void getFriendListReturnsEmptyListWhenMemberHasNoFriends() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        when(friendshipRepository.findAllByMemberIdAndStatus(
+                REQUESTER_ID,
+                FriendshipStatus.ACCEPTED
+        )).thenReturn(List.of());
+
+        List<FriendListResponse> response =
+                friendshipService.getFriendList(REQUESTER_ID);
+
+        assertThat(response).isEmpty();
+        verify(friendshipRepository).findAllByMemberIdAndStatus(
+                REQUESTER_ID,
+                FriendshipStatus.ACCEPTED
         );
     }
 
