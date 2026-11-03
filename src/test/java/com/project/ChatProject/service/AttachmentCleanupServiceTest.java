@@ -151,7 +151,7 @@ class AttachmentCleanupServiceTest {
                 "user@example.com",
                 "사용자"
         );
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         ReflectionTestUtils.setField(chatRoom, "id", 10L);
         Attachment attachment = Attachment.createPending(
                 uploader,

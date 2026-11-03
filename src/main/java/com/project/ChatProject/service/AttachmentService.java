@@ -41,7 +41,7 @@ public class AttachmentService {
             Long memberId
     ) {
         ChatRoomParticipationContext context =
-                participation.requireParticipation(
+                participation.requireConversationParticipation(
                         roomId,
                         memberId,
                         ParticipationLockMode.NONE
@@ -88,7 +88,7 @@ public class AttachmentService {
             Long attachmentId,
             Long memberId
     ) {
-        participation.requireParticipation(
+        participation.requireConversationParticipation(
                 roomId,
                 memberId,
                 ParticipationLockMode.NONE

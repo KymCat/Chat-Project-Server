@@ -10,10 +10,7 @@ import com.project.ChatProject.entity.enums.*;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.invite.ChatRoomInviteLinkRepository;
-import com.project.ChatProject.repository.ChatMessageRepository;
-import com.project.ChatProject.repository.ChatRoomMemberRepository;
-import com.project.ChatProject.repository.ChatRoomRepository;
-import com.project.ChatProject.repository.StorageDeletionTaskRepository;
+import com.project.ChatProject.repository.*;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
 import com.project.ChatProject.service.support.ParticipationLockMode;
 import lombok.RequiredArgsConstructor;
@@ -38,12 +35,13 @@ public class ChatRoomService {
     private final ChatMessageRepository chatMessageRepository;
     private final ChatRoomInviteLinkRepository inviteLinkRepository;
     private final StorageDeletionTaskRepository deletionTaskRepository;
+    private final FriendshipRepository friendshipRepository;
 
     @Transactional
     public ChatRoomCreateResponse create(Long memberId, String name) {
         Member member = participation.requireActiveMember(memberId);
 
-        ChatRoom chatRoom = ChatRoom.create(name);
+        ChatRoom chatRoom = ChatRoom.createGroup(name);
         ChatRoomMember chatRoomMember = ChatRoomMember.create(chatRoom, member);
 
         chatRoomRepository.save(chatRoom);
@@ -139,7 +137,7 @@ public class ChatRoomService {
     )
     {
         ChatRoomParticipationContext context = participation
-                .requireParticipation(
+                .requireConversationParticipation(
                         roomId,
                         memberId,
                         ParticipationLockMode.NONE
@@ -296,7 +294,7 @@ public class ChatRoomService {
     )
     {
         ChatRoomParticipationContext context = participation
-                .requireParticipation(
+                .requireConversationParticipation(
                         roomId,
                         memberId,
                         ParticipationLockMode.CHAT_ROOM_MEMBER
@@ -341,7 +339,7 @@ public class ChatRoomService {
             Long memberId
     ) {
         ChatRoomParticipationContext context = participation
-                .requireParticipation(
+                .requireConversationParticipation(
                         roomId,
                         memberId,
                         ParticipationLockMode.NONE
@@ -405,7 +403,7 @@ public class ChatRoomService {
     )
     {
         ChatRoomParticipationContext context = participation
-                .requireParticipation(
+                .requireConversationParticipation(
                         roomId,
                         memberId,
                         ParticipationLockMode.NONE
@@ -517,8 +515,153 @@ public class ChatRoomService {
         return ChatRoomEvent.deleted(roomId, roomName);
     }
 
+    @Transactional
+    public DirectChatResponse createDirect(
+            Long memberId,
+            Long targetMemberId,
+            String content
+    ) {
 
-    // == Private Method ==
+        String directKey = createDirectKey(
+                memberId,
+                targetMemberId
+        );
+
+        Optional<ChatRoom> existingRoom = chatRoomRepository
+                .findByDirectKey(directKey);
+
+        // DIRECT 채팅방 존재할 경우
+        if (existingRoom.isPresent()) {
+            return existingRoomResponse(
+                    existingRoom.get(),
+                    memberId,
+                    targetMemberId,
+                    content
+            );
+        }
+
+        // 친구 관계 row Lock
+        friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        memberId,
+                        targetMemberId,
+                        FriendshipStatus.ACCEPTED
+                )
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.FRIEND_RELATION_NOT_FOUND
+                        )
+                );
+
+        // Lock을 기다리는 동안 다른 transaction이 만들었는지 재확인
+        existingRoom = chatRoomRepository.findByDirectKey(directKey);
+
+        if (existingRoom.isPresent()) {
+            return existingRoomResponse(
+                    existingRoom.get(),
+                    memberId,
+                    targetMemberId,
+                    content
+            );
+        }
+
+        // DIRECT 채팅방 생성
+        ChatRoom directRoom = ChatRoom.createDirect(directKey);
+
+        ChatRoomMember myChatRoomMember = validateAndCreateMember(
+                directRoom,
+                memberId
+        );
+
+        ChatRoomMember targetChatRoomMember = validateAndCreateMember(
+                directRoom,
+                targetMemberId
+        );
+
+        ChatMessage message = ChatMessage.createText(
+                directRoom,
+                myChatRoomMember.getMember(),
+                content.strip()
+        );
+
+        chatRoomRepository.save(directRoom);
+        chatRoomMemberRepository.save(myChatRoomMember);
+        chatRoomMemberRepository.save(targetChatRoomMember);
+        chatMessageRepository.save(message);
+        directRoom.updateLastMessageAt(message.getCreatedAt());
+
+        return DirectChatResponse.of(
+                directRoom.getId(),
+                ChatMessageResponse.from(message)
+        );
+    }
+
+
+    // === Private Method ===
+
+    private DirectChatResponse existingRoomResponse(
+            ChatRoom chatRoom,
+            Long senderId,
+            Long receiverId,
+            String content
+    ) {
+
+        ChatRoomParticipationContext context = participation
+                .requireDirectParticipation(
+                        chatRoom.getId(),
+                        senderId,
+                        ParticipationLockMode.NONE
+                );
+
+        // 상대방 검증
+        participation.requireDirectParticipation(
+                        chatRoom.getId(),
+                        receiverId,
+                        ParticipationLockMode.NONE
+                );
+
+        ChatMessage message = ChatMessage.createText(
+                chatRoom,
+                context.member(),
+                content.strip()
+        );
+
+        chatMessageRepository.save(message);
+        chatRoom.updateLastMessageAt(message.getCreatedAt());
+
+        return DirectChatResponse.of(
+                chatRoom.getId(),
+                ChatMessageResponse.from(message)
+        );
+    }
+
+    private ChatRoomMember validateAndCreateMember(
+            ChatRoom chatRoom,
+            Long memberId
+    ) {
+        Member member = participation.requireActiveMember(memberId);
+
+        return ChatRoomMember.createMember(
+                chatRoom,
+                member
+        );
+    }
+
+    /**
+     * Direct(1:1) 채팅방을 위한 key 생성
+     * @param memberId
+     * @param targetMemberId
+     * @return 멤버id(min):멤버id(max)
+     */
+    private String createDirectKey(
+            Long memberId,
+            Long targetMemberId
+    ) {
+        long smallerId = Math.min(memberId, targetMemberId);
+        long largerId = Math.max(memberId, targetMemberId);
+
+        return smallerId + ":" + largerId;
+    }
 
     /**
      * 읽음 요청된 메세지가 이전에 읽었던 메세지보다 나중에 작성된 메세지인지 검증

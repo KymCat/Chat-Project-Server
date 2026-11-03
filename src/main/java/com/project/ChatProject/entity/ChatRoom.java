@@ -44,20 +44,29 @@ public class ChatRoom extends BaseTimeEntity {
 
     private ChatRoom(
             ChatRoomType type,
-            String name
-    )
-    {
+            String name,
+            String directKey
+    ) {
         this.type = type;
         this.name = name;
-        this.directKey = null;
+        this.directKey = directKey;
         this.lastMessageAt = null;
         this.deletedAt = null;
     }
 
-    public static ChatRoom create(String name) {
+    public static ChatRoom createGroup(String name) {
         return new ChatRoom(
                 ChatRoomType.GROUP,
-                name
+                name,
+                null
+        );
+    }
+
+    public static ChatRoom createDirect(String directKey) {
+        return new ChatRoom(
+                ChatRoomType.DIRECT,
+                null,
+                directKey
         );
     }
 

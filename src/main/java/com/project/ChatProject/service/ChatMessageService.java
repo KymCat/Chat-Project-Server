@@ -40,7 +40,7 @@ public class ChatMessageService {
             ChatMessageRequest request
     ) {
         ChatRoomParticipationContext context =
-                participation.requireParticipation(
+                participation.requireConversationParticipation(
                         request.roomId(),
                         memberId,
                         ParticipationLockMode.NONE
@@ -69,7 +69,7 @@ public class ChatMessageService {
             ChatAttachmentMessageRequest request
     ) {
         ChatRoomParticipationContext context =
-                participation.requireParticipation(
+                participation.requireConversationParticipation(
                         request.roomId(),
                         memberId,
                         ParticipationLockMode.NONE
@@ -116,7 +116,7 @@ public class ChatMessageService {
             Long beforeMessageId
     ) {
         ChatRoomParticipationContext context =
-                participation.requireParticipation(
+                participation.requireConversationParticipation(
                         roomId,
                         memberId,
                         ParticipationLockMode.NONE
