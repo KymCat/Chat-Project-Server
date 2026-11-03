@@ -117,7 +117,7 @@ class ChatRoomParticipationServiceTest {
 
     @Test
     void requireJoinableChatRoomReturnsGroupRoom() {
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         when(chatRoomRepository.findById(ROOM_ID))
                 .thenReturn(Optional.of(chatRoom));
 
@@ -140,7 +140,7 @@ class ChatRoomParticipationServiceTest {
 
     @Test
     void requireJoinableChatRoomRejectsDeletedRoom() {
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         chatRoom.delete();
         when(chatRoomRepository.findById(ROOM_ID))
                 .thenReturn(Optional.of(chatRoom));
@@ -153,7 +153,7 @@ class ChatRoomParticipationServiceTest {
 
     @Test
     void requireJoinableChatRoomRejectsDirectRoom() {
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         ReflectionTestUtils.setField(
                 chatRoom,
                 "type",
@@ -170,7 +170,7 @@ class ChatRoomParticipationServiceTest {
 
     @Test
     void requireJoinableChatRoomForUpdateUsesLockedRoomLookup() {
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         when(chatRoomRepository.findByIdForUpdate(ROOM_ID))
                 .thenReturn(Optional.of(chatRoom));
 
@@ -197,7 +197,7 @@ class ChatRoomParticipationServiceTest {
     @Test
     void requireParticipationWithoutLockReturnsValidatedContext() {
         Member member = member(MemberStatus.ACTIVE, Instant.now());
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(chatRoom, member);
         stubActiveParticipation(chatRoom, member, chatRoomMember);
@@ -220,7 +220,7 @@ class ChatRoomParticipationServiceTest {
     @Test
     void requireParticipationWithChatRoomLockUsesLockedRoomLookup() {
         Member member = member(MemberStatus.ACTIVE, Instant.now());
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(chatRoom, member);
         when(chatRoomRepository.findByIdForUpdate(ROOM_ID))
@@ -249,7 +249,7 @@ class ChatRoomParticipationServiceTest {
     @Test
     void requireParticipationWithMemberLockUsesLockedMemberLookup() {
         Member member = member(MemberStatus.ACTIVE, Instant.now());
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(chatRoom, member);
         when(chatRoomRepository.findById(ROOM_ID))
@@ -279,7 +279,7 @@ class ChatRoomParticipationServiceTest {
     @Test
     void requireParticipationRejectsMissingMembership() {
         Member member = member(MemberStatus.ACTIVE, Instant.now());
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         when(chatRoomRepository.findById(ROOM_ID))
                 .thenReturn(Optional.of(chatRoom));
         when(memberRepository.findById(MEMBER_ID))
@@ -302,7 +302,7 @@ class ChatRoomParticipationServiceTest {
     @Test
     void requireParticipationRejectsFormerMember() {
         Member member = member(MemberStatus.ACTIVE, Instant.now());
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(chatRoom, member);
         chatRoomMember.leave();

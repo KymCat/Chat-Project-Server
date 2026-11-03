@@ -262,7 +262,7 @@ class ChatMessageServiceTest {
     void saveAttachmentRejectsAttachmentUploadedToAnotherRoom() {
         Member sender = member(MemberStatus.ACTIVE, Instant.now());
         ChatRoom requestedRoom = chatRoom();
-        ChatRoom anotherRoom = ChatRoom.create("다른 채팅방");
+        ChatRoom anotherRoom = ChatRoom.createGroup("다른 채팅방");
         ReflectionTestUtils.setField(anotherRoom, "id", 20L);
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(requestedRoom, sender);
@@ -708,7 +708,7 @@ class ChatMessageServiceTest {
     }
 
     private ChatRoom chatRoom() {
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         ReflectionTestUtils.setField(chatRoom, "id", ROOM_ID);
         return chatRoom;
     }

@@ -28,6 +28,7 @@ import com.project.ChatProject.invite.ChatRoomInviteLinkRepository;
 import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
+import com.project.ChatProject.repository.FriendshipRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import com.project.ChatProject.repository.StorageDeletionTaskRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +74,9 @@ class ChatRoomServiceTest {
     @Mock
     private StorageDeletionTaskRepository deletionTaskRepository;
 
+    @Mock
+    private FriendshipRepository friendshipRepository;
+
     private ChatRoomService chatRoomService;
 
     @BeforeEach
@@ -90,7 +94,8 @@ class ChatRoomServiceTest {
                 chatRoomMemberRepository,
                 chatMessageRepository,
                 inviteLinkRepository,
-                deletionTaskRepository
+                deletionTaskRepository,
+                friendshipRepository
         );
     }
 
@@ -184,7 +189,7 @@ class ChatRoomServiceTest {
     void getChatRoomsCombinesUnreadCountsAndDefaultsMissingRoomToZero() {
         Member member = member(MemberStatus.ACTIVE, Instant.now());
         ChatRoom unreadRoom = chatRoom();
-        ChatRoom readRoom = ChatRoom.create("Java");
+        ChatRoom readRoom = ChatRoom.createGroup("Java");
         ReflectionTestUtils.setField(readRoom, "id", 11L);
         ChatRoomMember unreadRoomMember =
                 ChatRoomMember.create(unreadRoom, member);
@@ -216,8 +221,8 @@ class ChatRoomServiceTest {
     void getGroupChatRoomsReturnsAvailableRooms() {
         Instant lastMessageAt = Instant.parse("2026-09-11T01:00:00Z");
         Member member = member(MemberStatus.ACTIVE, Instant.now());
-        ChatRoom activeRoom = ChatRoom.create("Backend");
-        ChatRoom emptyRoom = ChatRoom.create("Java");
+        ChatRoom activeRoom = ChatRoom.createGroup("Backend");
+        ChatRoom emptyRoom = ChatRoom.createGroup("Java");
         ReflectionTestUtils.setField(activeRoom, "id", 10L);
         ReflectionTestUtils.setField(
                 activeRoom,
@@ -1560,7 +1565,7 @@ class ChatRoomServiceTest {
     }
 
     private ChatRoom chatRoom() {
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         ReflectionTestUtils.setField(chatRoom, "id", 10L);
         return chatRoom;
     }

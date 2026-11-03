@@ -92,7 +92,7 @@ class AttachmentServiceTest {
                 "사용자"
         );
         ReflectionTestUtils.setField(member, "id", MEMBER_ID);
-        ChatRoom chatRoom = ChatRoom.create("Backend");
+        ChatRoom chatRoom = ChatRoom.createGroup("Backend");
         ReflectionTestUtils.setField(chatRoom, "id", ROOM_ID);
         ChatRoomMember chatRoomMember =
                 ChatRoomMember.createMember(chatRoom, member);
@@ -164,7 +164,7 @@ class AttachmentServiceTest {
     void uploadStopsWhenParticipationValidationFails() {
         CustomException failure =
                 new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
-        when(participation.requireParticipation(
+        when(participation.requireConversationParticipation(
                 ROOM_ID,
                 MEMBER_ID,
                 ParticipationLockMode.NONE
@@ -189,7 +189,7 @@ class AttachmentServiceTest {
         CustomException failure = new CustomException(
                 ErrorCode.ATTACHMENT_UPLOAD_TOO_MANY_REQUESTS
         );
-        when(participation.requireParticipation(
+        when(participation.requireConversationParticipation(
                 ROOM_ID,
                 MEMBER_ID,
                 ParticipationLockMode.NONE
@@ -215,7 +215,7 @@ class AttachmentServiceTest {
     void uploadStopsBeforeStorageWhenAttachmentValidationFails() {
         CustomException failure =
                 new CustomException(ErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED);
-        when(participation.requireParticipation(
+        when(participation.requireConversationParticipation(
                 ROOM_ID,
                 MEMBER_ID,
                 ParticipationLockMode.NONE
@@ -239,7 +239,7 @@ class AttachmentServiceTest {
         );
         CustomException failure =
                 new CustomException(ErrorCode.STORAGE_OPERATION_FAILED);
-        when(participation.requireParticipation(
+        when(participation.requireConversationParticipation(
                 ROOM_ID,
                 MEMBER_ID,
                 ParticipationLockMode.NONE
@@ -350,7 +350,7 @@ class AttachmentServiceTest {
         assertThat(result.contentType()).isEqualTo("image/png");
         assertThat(result.sizeBytes()).isEqualTo(13L);
         assertThat(result.contentDisposition()).startsWith("inline;");
-        verify(participation).requireParticipation(
+        verify(participation).requireConversationParticipation(
                 ROOM_ID,
                 MEMBER_ID,
                 ParticipationLockMode.NONE
@@ -362,7 +362,7 @@ class AttachmentServiceTest {
     void downloadStopsWhenParticipationValidationFails() {
         CustomException failure =
                 new CustomException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
-        when(participation.requireParticipation(
+        when(participation.requireConversationParticipation(
                 ROOM_ID,
                 MEMBER_ID,
                 ParticipationLockMode.NONE
@@ -434,7 +434,7 @@ class AttachmentServiceTest {
             ValidatedAttachment validated,
             StoredFile storedFile
     ) {
-        when(participation.requireParticipation(
+        when(participation.requireConversationParticipation(
                 ROOM_ID,
                 MEMBER_ID,
                 ParticipationLockMode.NONE
