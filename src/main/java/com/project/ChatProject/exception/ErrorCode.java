@@ -26,7 +26,7 @@ public enum ErrorCode {
     MEMBER_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "MEMBER-004",
-            "존재하지 않은 유저입니다."
+            "존재하지 않은 회원입니다."
     ),
     PROFILE_IMAGE_EMPTY(
             HttpStatus.BAD_REQUEST,
@@ -249,6 +249,48 @@ public enum ErrorCode {
             HttpStatus.INTERNAL_SERVER_ERROR,
             "STORAGE-003",
             "잘못된 파일 저장 경로입니다."
+    ),
+
+    // Friendship Exception
+    FRIEND_REQUEST_EXISTS(
+            HttpStatus.CONFLICT,
+            "FRIENDSHIP-001",
+            "이미 존재하는 친구요청이 있습니다."
+    ),
+    ALREADY_FRIENDS(
+            HttpStatus.CONFLICT,
+            "FRIENDSHIP-002",
+            "이미 친구인 회원입니다."
+    ),
+    SELF_FRIEND_REQUEST_NOT_ALLOWED(
+            HttpStatus.BAD_REQUEST,
+            "FRIENDSHIP-003",
+            "자기 자신에게 친구 요청을 보낼 수 없습니다."
+    ),
+    FRIEND_RELATION_ALREADY_EXISTS( // 동시 요청 예외를 위한
+            HttpStatus.CONFLICT,
+            "FRIENDSHIP-004",
+            "이미 친구 관계 또는 친구 요청이 존재합니다."
+    ),
+    FRIEND_REQUEST_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "FRIENDSHIP-005",
+            "존재하지 않는 친구 요청입니다."
+    ),
+    FRIEND_REQUEST_ALREADY_ACCEPTED(
+            HttpStatus.CONFLICT,
+            "FRIENDSHIP-006",
+            "이미 수락한 친구 요청입니다."
+    ),
+    FRIEND_RELATION_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "FRIENDSHIP-007",
+            "해당 회원과는 친구 관계가 아닙니다."
+    ),
+    SELF_FRIEND_DELETE_NOT_ALLOWED(
+            HttpStatus.BAD_REQUEST,
+            "FRIENDSHIP-008",
+            "자기 자신에게 친구 끊기를 할 수 없습니다."
     ),
 
     // Common Exception

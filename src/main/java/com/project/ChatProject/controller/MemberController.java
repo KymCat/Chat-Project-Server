@@ -2,8 +2,10 @@ package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.request.SignupRequest;
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
+import com.project.ChatProject.dto.request.UpdateStatusMessage;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
+import com.project.ChatProject.dto.response.MemberPublicProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
 import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
@@ -34,6 +36,19 @@ public class MemberController {
                 memberService.getProfile(claims.memberId());
 
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{memberId}/profile")
+    public ResponseEntity<ApiResponse<MemberPublicProfileResponse>> getPublicProfile(
+            @PathVariable(name = "memberId") Long targetMemberId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long myMemberId = claims.memberId();
+        MemberPublicProfileResponse response =
+                memberService.getPublicProfile(myMemberId, targetMemberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
     }
 
     @GetMapping("/{memberId}/profile-image")
@@ -108,5 +123,20 @@ public class MemberController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/me/status-message")
+    public ResponseEntity<ApiResponse<Void>> updateStatusMessage(
+            @RequestBody @Valid UpdateStatusMessage statusMessage,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        memberService.updateStatusMessage(
+                memberId,
+                statusMessage.newStatusMessage()
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
     }
 }

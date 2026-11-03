@@ -1,9 +1,13 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
+import com.project.ChatProject.dto.request.UpdateStatusMessage;
 import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
+import com.project.ChatProject.dto.response.MemberPublicProfileResponse;
+import com.project.ChatProject.dto.enums.ProfileRelationStatus;
+import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.MemberService;
@@ -48,7 +52,8 @@ class MemberControllerTest {
         MemberProfileResponse profile = new MemberProfileResponse(
                 "베리타스",
                 "veritas@example.com",
-                null,
+                "개발 공부 중",
+                MemberStatus.ACTIVE,
                 false
         );
         when(memberService.getProfile(2L)).thenReturn(profile);
@@ -60,6 +65,63 @@ class MemberControllerTest {
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().data()).isEqualTo(profile);
+    }
+
+    @Test
+    void getPublicProfileUsesAuthenticatedAndTargetMemberIds() {
+        AccessTokenClaims claims = claims();
+        MemberPublicProfileResponse profile =
+                new MemberPublicProfileResponse(
+                        3L,
+                        "상대방",
+                        "상태 메시지",
+                        ProfileRelationStatus.NONE,
+                        MemberStatus.ACTIVE
+                );
+        when(memberService.getPublicProfile(2L, 3L))
+                .thenReturn(profile);
+
+        ResponseEntity<ApiResponse<MemberPublicProfileResponse>> response =
+                memberController.getPublicProfile(3L, claims);
+
+        verify(memberService).getPublicProfile(2L, 3L);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data()).isEqualTo(profile);
+    }
+
+    @Test
+    void updateStatusMessageUsesAuthenticatedMemberId() {
+        AccessTokenClaims claims = claims();
+        UpdateStatusMessage request =
+                new UpdateStatusMessage("개발 공부 중");
+
+        ResponseEntity<ApiResponse<Void>> response =
+                memberController.updateStatusMessage(request, claims);
+
+        verify(memberService).updateStatusMessage(
+                2L,
+                "개발 공부 중"
+        );
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).isNull();
+    }
+
+    @Test
+    void updateStatusMessageAllowsNullToClearStatusMessage() {
+        AccessTokenClaims claims = claims();
+        UpdateStatusMessage request = new UpdateStatusMessage(null);
+
+        ResponseEntity<ApiResponse<Void>> response =
+                memberController.updateStatusMessage(request, claims);
+
+        verify(memberService).updateStatusMessage(2L, null);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).isNull();
     }
 
     @Test
