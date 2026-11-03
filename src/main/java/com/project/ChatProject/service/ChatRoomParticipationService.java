@@ -15,6 +15,8 @@ import com.project.ChatProject.service.support.ParticipationLockMode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Set;
+
 @Component
 @RequiredArgsConstructor
 public class ChatRoomParticipationService {
@@ -68,11 +70,54 @@ public class ChatRoomParticipationService {
             Long memberId,
             ParticipationLockMode lockMode
     ) {
+        return requireParticipation(
+                roomId,
+                memberId,
+                lockMode,
+                Set.of(ChatRoomType.GROUP)
+        );
+    }
+
+    public ChatRoomParticipationContext requireDirectParticipation(
+            Long roomId,
+            Long memberId,
+            ParticipationLockMode lockMode
+    ) {
+        return requireParticipation(
+                roomId,
+                memberId,
+                lockMode,
+                Set.of(ChatRoomType.DIRECT)
+        );
+    }
+
+    public ChatRoomParticipationContext requireConversationParticipation(
+            Long roomId,
+            Long memberId,
+            ParticipationLockMode lockMode
+    ) {
+        return requireParticipation(
+                roomId,
+                memberId,
+                lockMode,
+                Set.of(
+                        ChatRoomType.GROUP,
+                        ChatRoomType.DIRECT
+                )
+        );
+    }
+
+    private ChatRoomParticipationContext requireParticipation(
+            Long roomId,
+            Long memberId,
+            ParticipationLockMode lockMode,
+            Set<ChatRoomType> allowedTypes
+    ) {
         ChatRoom chatRoom = switch (lockMode) {
             case CHAT_ROOM -> findChatRoomLock(roomId);
             case CHAT_ROOM_MEMBER, NONE -> findChatRoom(roomId);
         };
-        validateJoinableChatRoom(chatRoom);
+        validateChatRoom(chatRoom, allowedTypes);
 
         Member member = findMember(memberId);
         validateMember(member);
@@ -102,13 +147,23 @@ public class ChatRoomParticipationService {
      * @param chatRoom
      */
     private void validateJoinableChatRoom(ChatRoom chatRoom) {
+        validateChatRoom(
+                chatRoom,
+                Set.of(ChatRoomType.GROUP)
+        );
+    }
+
+    private void validateChatRoom(
+            ChatRoom chatRoom,
+            Set<ChatRoomType> allowedTypes
+    ) {
         if (chatRoom.getDeletedAt() != null) {
             throw new CustomException(
                     ErrorCode.CHAT_ROOM_DELETED
             );
         }
 
-        if (chatRoom.getType() != ChatRoomType.GROUP) {
+        if (!allowedTypes.contains(chatRoom.getType())) {
             throw new CustomException(
                     ErrorCode.INVALID_CHAT_ROOM_TYPE
             );

@@ -46,4 +46,6 @@ public interface ChatRoomRepository
             @Param("memberId") Long memberId,
             @Param("type") ChatRoomType type
     );
+
+    Optional<ChatRoom> findByDirectKey(String directKey);
 }
