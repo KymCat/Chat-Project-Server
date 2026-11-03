@@ -2,12 +2,13 @@ package com.project.ChatProject.dto.response;
 
 import com.project.ChatProject.entity.Friendship;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.enums.MemberStatus;
 
 public record FriendListResponse(
         Long memberId,
-        String email,
-        String nickname,
-        String statusMessage
+        String displayName,
+        String statusMessage,
+        MemberStatus status
 ) {
 
     public static FriendListResponse from(
@@ -18,11 +19,27 @@ public record FriendListResponse(
                 ? friendship.getRequester()
                 : friendship.getReceiver();
 
+        String displayName = resolveDisplayName(target);
+
         return new FriendListResponse(
                 target.getId(),
-                target.getEmail(),
-                target.getNickname(),
-                target.getStatusMessage()
+                displayName,
+                target.getStatus() == MemberStatus.ACTIVE
+                        ? target.getStatusMessage()
+                        : null,
+                target.getStatus()
         );
+    }
+
+    private static String resolveDisplayName(Member target) {
+        if (target.getStatus() == MemberStatus.SUSPENDED) {
+            return "비활성화된 회원";
+        }
+
+        if (target.getStatus() == MemberStatus.WITHDRAWN) {
+            return "탈퇴한 유저";
+        }
+
+        return target.getNickname();
     }
 }

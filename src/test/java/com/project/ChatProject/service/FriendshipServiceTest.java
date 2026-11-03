@@ -283,7 +283,7 @@ class FriendshipServiceTest {
         assertThat(response.content().get(0).requestId()).isEqualTo(30L);
         assertThat(response.content().get(0).targetMemberId())
                 .isEqualTo(RECEIVER_ID);
-        assertThat(response.content().get(0).targetNickname())
+        assertThat(response.content().get(0).targetDisplayName())
                 .isEqualTo("수신자");
         assertThat(response.content().get(1).targetMemberId())
                 .isEqualTo(3L);
@@ -343,6 +343,34 @@ class FriendshipServiceTest {
     }
 
     @Test
+    void requestedListMasksWithdrawnReceiverDisplayName() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        ReflectionTestUtils.setField(
+                receiver,
+                "status",
+                MemberStatus.WITHDRAWN
+        );
+        when(friendshipRepository.findSentRequests(
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 2)
+        )).thenReturn(List.of(
+                friendship(10L, requester, receiver)
+        ));
+
+        CursorPageResponse<FriendRequestResponse> response =
+                friendshipService.requestedList(
+                        REQUESTER_ID,
+                        null,
+                        1
+                );
+
+        assertThat(response.content().get(0).targetDisplayName())
+                .isEqualTo("탈퇴한 유저");
+    }
+
+    @Test
     void receivedListReturnsRequestersAsTargetMembers() {
         when(memberRepository.findById(REQUESTER_ID))
                 .thenReturn(Optional.of(requester));
@@ -374,7 +402,7 @@ class FriendshipServiceTest {
         assertThat(response.hasNext()).isFalse();
         assertThat(response.content().get(0).targetMemberId())
                 .isEqualTo(RECEIVER_ID);
-        assertThat(response.content().get(0).targetNickname())
+        assertThat(response.content().get(0).targetDisplayName())
                 .isEqualTo("수신자");
         assertThat(response.content().get(1).targetMemberId())
                 .isEqualTo(3L);
@@ -390,6 +418,34 @@ class FriendshipServiceTest {
                 any(FriendshipStatus.class),
                 any(PageRequest.class)
         );
+    }
+
+    @Test
+    void receivedListMasksSuspendedRequesterDisplayName() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        ReflectionTestUtils.setField(
+                receiver,
+                "status",
+                MemberStatus.SUSPENDED
+        );
+        when(friendshipRepository.findReceivedRequests(
+                REQUESTER_ID,
+                FriendshipStatus.PENDING,
+                PageRequest.of(0, 2)
+        )).thenReturn(List.of(
+                friendship(10L, receiver, requester)
+        ));
+
+        CursorPageResponse<FriendRequestResponse> response =
+                friendshipService.receivedList(
+                        REQUESTER_ID,
+                        null,
+                        1
+                );
+
+        assertThat(response.content().get(0).targetDisplayName())
+                .isEqualTo("비활성화된 회원");
     }
 
     @Test
@@ -490,18 +546,18 @@ class FriendshipServiceTest {
 
         assertThat(response).hasSize(2);
         assertThat(response.get(0).memberId()).isEqualTo(RECEIVER_ID);
-        assertThat(response.get(0).email())
-                .isEqualTo("receiver@example.com");
-        assertThat(response.get(0).nickname()).isEqualTo("수신자");
+        assertThat(response.get(0).displayName()).isEqualTo("수신자");
         assertThat(response.get(0).statusMessage())
                 .isEqualTo("수신자 상태 메시지");
+        assertThat(response.get(0).status())
+                .isEqualTo(MemberStatus.ACTIVE);
         assertThat(response.get(1).memberId()).isEqualTo(3L);
-        assertThat(response.get(1).email())
-                .isEqualTo("second@example.com");
-        assertThat(response.get(1).nickname())
+        assertThat(response.get(1).displayName())
                 .isEqualTo("두 번째 친구");
         assertThat(response.get(1).statusMessage())
                 .isEqualTo("두 번째 친구 상태 메시지");
+        assertThat(response.get(1).status())
+                .isEqualTo(MemberStatus.ACTIVE);
 
         verify(friendshipRepository).findAllByMemberIdAndStatus(
                 REQUESTER_ID,
@@ -526,6 +582,67 @@ class FriendshipServiceTest {
                 REQUESTER_ID,
                 FriendshipStatus.ACCEPTED
         );
+    }
+
+    @Test
+    void getFriendListMasksInactiveMembers() {
+        when(memberRepository.findById(REQUESTER_ID))
+                .thenReturn(Optional.of(requester));
+        Member suspendedFriend = member(
+                3L,
+                "suspended@example.com",
+                "정지 회원 원래 닉네임",
+                MemberStatus.SUSPENDED
+        );
+        Member withdrawnFriend = member(
+                4L,
+                "withdrawn@example.com",
+                "탈퇴 회원 원래 닉네임",
+                MemberStatus.WITHDRAWN
+        );
+        ReflectionTestUtils.setField(
+                suspendedFriend,
+                "statusMessage",
+                "노출되면 안 되는 상태 메시지"
+        );
+        ReflectionTestUtils.setField(
+                withdrawnFriend,
+                "statusMessage",
+                "노출되면 안 되는 상태 메시지"
+        );
+        Friendship suspendedFriendship = friendship(
+                10L,
+                requester,
+                suspendedFriend
+        );
+        Friendship withdrawnFriendship = friendship(
+                20L,
+                requester,
+                withdrawnFriend
+        );
+        suspendedFriendship.acceptRequest();
+        withdrawnFriendship.acceptRequest();
+        when(friendshipRepository.findAllByMemberIdAndStatus(
+                REQUESTER_ID,
+                FriendshipStatus.ACCEPTED
+        )).thenReturn(List.of(
+                suspendedFriendship,
+                withdrawnFriendship
+        ));
+
+        List<FriendListResponse> response =
+                friendshipService.getFriendList(REQUESTER_ID);
+
+        assertThat(response.get(0).displayName())
+                .isEqualTo("비활성화된 회원");
+        assertThat(response.get(0).statusMessage()).isNull();
+        assertThat(response.get(0).status())
+                .isEqualTo(MemberStatus.SUSPENDED);
+        assertThat(response.get(1).displayName())
+                .isEqualTo("탈퇴한 유저");
+        assertThat(response.get(1).statusMessage()).isNull();
+        assertThat(response.get(1).status())
+                .isEqualTo(MemberStatus.WITHDRAWN);
     }
 
     @Test
