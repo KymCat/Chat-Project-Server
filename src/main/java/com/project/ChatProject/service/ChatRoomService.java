@@ -516,7 +516,7 @@ public class ChatRoomService {
     }
 
     @Transactional
-    public DirectChatResponse createDirect(
+    public DirectChatResponse sendDirectMessage(
             Long memberId,
             Long targetMemberId,
             String content
@@ -595,8 +595,6 @@ public class ChatRoomService {
                 ChatMessageResponse.from(message)
         );
     }
-
-
     // === Private Method ===
 
     private DirectChatResponse existingRoomResponse(

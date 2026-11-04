@@ -381,4 +381,22 @@ public class ChatRoomController {
         return ResponseEntity
                 .ok(ApiResponse.success(response));
     }
+
+
+
+    @PostMapping("/direct/message")
+    public ResponseEntity<ApiResponse<DirectChatResponse>> sendDirectMessage(
+            @RequestBody @Valid DirectChatRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        DirectChatResponse response = chatRoomService.sendDirectMessage(
+                memberId,
+                request.targetMemberId(),
+                request.content()
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
+    }
 }
