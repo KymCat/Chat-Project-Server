@@ -3,6 +3,7 @@ package com.project.ChatProject.service;
 import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
+import com.project.ChatProject.dto.projection.DirectChatRoomDisplayNameProjection;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
@@ -51,6 +52,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
@@ -219,6 +221,124 @@ class ChatRoomServiceTest {
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple(10L, 3L),
                         org.assertj.core.groups.Tuple.tuple(11L, 0L)
+                );
+
+        verify(chatRoomMemberRepository, never())
+                .findDirectChatRoomTargetMemberName(
+                        anyList(),
+                        any(Long.class),
+                        any(ChatRoomType.class)
+                );
+    }
+
+    @Test
+    void getChatRoomsReturnsGroupAndActiveDirectDisplayName() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom groupRoom = chatRoom();
+        ChatRoom directRoom = directRoom(20L, "1:2");
+        ChatRoomMember groupRoomMember =
+                ChatRoomMember.create(groupRoom, member);
+        ChatRoomMember directRoomMember =
+                ChatRoomMember.createMember(directRoom, member);
+        DirectChatRoomDisplayNameProjection directTarget =
+                mock(DirectChatRoomDisplayNameProjection.class);
+
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomMemberRepository.findAllActiveByMemberId(1L))
+                .thenReturn(List.of(groupRoomMember, directRoomMember));
+        when(chatRoomMemberRepository.findUnreadCountsByMemberId(1L))
+                .thenReturn(List.of());
+        when(chatRoomMemberRepository
+                .findDirectChatRoomTargetMemberName(
+                        List.of(20L),
+                        1L,
+                        ChatRoomType.DIRECT
+                )).thenReturn(List.of(directTarget));
+        when(directTarget.getRoomId()).thenReturn(20L);
+        when(directTarget.getNickname()).thenReturn("친구");
+        when(directTarget.getStatus()).thenReturn(MemberStatus.ACTIVE);
+
+        List<ChatRoomResponse> response = chatRoomService.getChatRooms(1L);
+
+        assertThat(response)
+                .extracting(
+                        ChatRoomResponse::roomId,
+                        ChatRoomResponse::type,
+                        ChatRoomResponse::name
+                )
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                10L,
+                                ChatRoomType.GROUP,
+                                "Backend"
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                20L,
+                                ChatRoomType.DIRECT,
+                                "친구"
+                        )
+                );
+
+        verify(chatRoomMemberRepository)
+                .findDirectChatRoomTargetMemberName(
+                        List.of(20L),
+                        1L,
+                        ChatRoomType.DIRECT
+                );
+    }
+
+    @Test
+    void getChatRoomsMasksInactiveDirectDisplayNames() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom suspendedRoom = directRoom(20L, "1:2");
+        ChatRoom withdrawnRoom = directRoom(21L, "1:3");
+        ChatRoomMember suspendedRoomMember =
+                ChatRoomMember.createMember(suspendedRoom, member);
+        ChatRoomMember withdrawnRoomMember =
+                ChatRoomMember.createMember(withdrawnRoom, member);
+        DirectChatRoomDisplayNameProjection suspendedTarget =
+                mock(DirectChatRoomDisplayNameProjection.class);
+        DirectChatRoomDisplayNameProjection withdrawnTarget =
+                mock(DirectChatRoomDisplayNameProjection.class);
+
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomMemberRepository.findAllActiveByMemberId(1L))
+                .thenReturn(List.of(
+                        suspendedRoomMember,
+                        withdrawnRoomMember
+                ));
+        when(chatRoomMemberRepository.findUnreadCountsByMemberId(1L))
+                .thenReturn(List.of());
+        when(chatRoomMemberRepository
+                .findDirectChatRoomTargetMemberName(
+                        List.of(20L, 21L),
+                        1L,
+                        ChatRoomType.DIRECT
+                )).thenReturn(List.of(suspendedTarget, withdrawnTarget));
+        when(suspendedTarget.getRoomId()).thenReturn(20L);
+        when(suspendedTarget.getNickname()).thenReturn("정지회원");
+        when(suspendedTarget.getStatus())
+                .thenReturn(MemberStatus.SUSPENDED);
+        when(withdrawnTarget.getRoomId()).thenReturn(21L);
+        when(withdrawnTarget.getNickname()).thenReturn("탈퇴회원");
+        when(withdrawnTarget.getStatus())
+                .thenReturn(MemberStatus.WITHDRAWN);
+
+        List<ChatRoomResponse> response = chatRoomService.getChatRooms(1L);
+
+        assertThat(response)
+                .extracting(ChatRoomResponse::roomId, ChatRoomResponse::name)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                20L,
+                                "비활성화된 회원"
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                21L,
+                                "탈퇴한 유저"
+                        )
                 );
     }
 

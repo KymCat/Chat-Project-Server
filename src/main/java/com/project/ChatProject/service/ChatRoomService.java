@@ -3,6 +3,7 @@ package com.project.ChatProject.service;
 import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.event.ChatRoomEvent;
 import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
+import com.project.ChatProject.dto.projection.DirectChatRoomDisplayNameProjection;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.entity.*;
@@ -70,6 +71,30 @@ public class ChatRoomService {
                                 ChatRoomUnreadCountProjection::getUnreadCount
                         ));
 
+        List<Long> roomIds = chatRoomMembers.stream()
+                .filter(chatRoomMember ->
+                        chatRoomMember.getChatRoom().getType() == ChatRoomType.DIRECT)
+                .map(chatRoomMember -> chatRoomMember.getChatRoom().getId())
+                .toList();
+
+        Map<Long, String> displayNameByRoomId =
+                roomIds.isEmpty()
+                    ? Map.of()
+                    : chatRoomMemberRepository
+                        .findDirectChatRoomTargetMemberName(
+                                roomIds,
+                                memberId,
+                                ChatRoomType.DIRECT
+                        )
+                        .stream()
+                        .collect(Collectors.toMap(
+                                DirectChatRoomDisplayNameProjection::getRoomId,
+                                projection -> resolveDirectDisplayName(
+                                        projection.getNickname(),
+                                        projection.getStatus()
+                                )
+                        ));
+
         return chatRoomMembers.stream()
                 .map(chatRoomMember -> {
                     Long roomId = chatRoomMember.getChatRoom().getId();
@@ -77,7 +102,18 @@ public class ChatRoomService {
                     long unreadCount =
                             unreadCountByRoomId.getOrDefault(roomId, 0L);
 
-                    return ChatRoomResponse.of(chatRoomMember, unreadCount);
+                    if (chatRoomMember.getChatRoom().getType() == ChatRoomType.GROUP) {
+                        return ChatRoomResponse.of(chatRoomMember, unreadCount);
+                    }
+
+                    String displayName =
+                            displayNameByRoomId.getOrDefault(roomId, "알수없는 채팅방");
+
+                    return ChatRoomResponse.ofDirect(
+                            chatRoomMember,
+                            unreadCount,
+                            displayName
+                    );
                 })
                 .toList();
     }
@@ -625,6 +661,17 @@ public class ChatRoomService {
         );
     }
     // === Private Method ===
+
+    private String resolveDirectDisplayName(
+            String nickname,
+            MemberStatus status
+    ) {
+        return switch (status) {
+            case ACTIVE -> nickname;
+            case SUSPENDED -> "비활성화된 회원";
+            case WITHDRAWN -> "탈퇴한 유저";
+        };
+    }
 
     private DirectChatResponse existingRoomResponse(
             ChatRoom chatRoom,
