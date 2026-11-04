@@ -515,6 +515,35 @@ public class ChatRoomService {
         return ChatRoomEvent.deleted(roomId, roomName);
     }
 
+    @Transactional(readOnly = true)
+    public DirectChatRoomResponse findDirectChatRoom(
+            Long memberId,
+            Long targetMemberId
+    ) {
+        participation.requireActiveMember(memberId);
+
+        String directKey = createDirectKey(
+                memberId,
+                targetMemberId
+        );
+
+        Optional<ChatRoom> existingRoom = chatRoomRepository
+                .findByDirectKey(directKey);
+
+        if (existingRoom.isPresent()) {
+            ChatRoomParticipationContext context = participation
+                    .requireDirectParticipation(
+                        existingRoom.get().getId(),
+                        memberId,
+                        ParticipationLockMode.NONE
+            );
+
+            return DirectChatRoomResponse.found(context.chatRoom().getId());
+        }
+
+        return DirectChatRoomResponse.notFound();
+    }
+
     @Transactional
     public DirectChatResponse sendDirectMessage(
             Long memberId,

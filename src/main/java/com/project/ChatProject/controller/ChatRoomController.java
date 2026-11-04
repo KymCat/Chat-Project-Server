@@ -5,7 +5,6 @@ import com.project.ChatProject.dto.event.ChatRoomEvent;
 import com.project.ChatProject.dto.request.*;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
-import com.project.ChatProject.invite.ChatRoomInviteLink;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatMessageService;
 import com.project.ChatProject.service.ChatRoomInviteService;
@@ -14,6 +13,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -382,6 +382,18 @@ public class ChatRoomController {
                 .ok(ApiResponse.success(response));
     }
 
+    @GetMapping("/direct")
+    public ResponseEntity<ApiResponse<DirectChatRoomResponse>> findDirectChatRoom(
+            @RequestParam @NotNull Long targetMemberId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        DirectChatRoomResponse response =
+                chatRoomService.findDirectChatRoom(memberId, targetMemberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
+    }
 
 
     @PostMapping("/direct/message")

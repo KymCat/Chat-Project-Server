@@ -7,6 +7,8 @@ import com.project.ChatProject.dto.response.ChatRoomInviteLinkResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
 import com.project.ChatProject.dto.response.ChatRoomMemberResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
+import com.project.ChatProject.dto.response.DirectChatResponse;
+import com.project.ChatProject.dto.response.DirectChatRoomResponse;
 import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatRoomType;
@@ -753,6 +755,100 @@ class ChatRoomControllerTest {
                 10L,
                 1L,
                 InviteLinkExpiration.THREE_DAYS
+        );
+    }
+
+    @Test
+    void findDirectChatRoomReturnsExistingRoomId() throws Exception {
+        when(chatRoomService.findDirectChatRoom(1L, 2L))
+                .thenReturn(DirectChatRoomResponse.found(10L));
+
+        mockMvc.perform(get("/chat-rooms/direct")
+                        .param("targetMemberId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roomId").value(10L));
+
+        verify(chatRoomService).findDirectChatRoom(1L, 2L);
+    }
+
+    @Test
+    void findDirectChatRoomReturnsNullWhenRoomDoesNotExist()
+            throws Exception {
+        when(chatRoomService.findDirectChatRoom(1L, 2L))
+                .thenReturn(DirectChatRoomResponse.notFound());
+
+        mockMvc.perform(get("/chat-rooms/direct")
+                        .param("targetMemberId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roomId").doesNotExist());
+
+        verify(chatRoomService).findDirectChatRoom(1L, 2L);
+    }
+
+    @Test
+    void findDirectChatRoomRejectsMissingTargetMemberId()
+            throws Exception {
+        mockMvc.perform(get("/chat-rooms/direct"))
+                .andExpect(status().isBadRequest());
+
+        verify(chatRoomService, never()).findDirectChatRoom(
+                any(Long.class),
+                any(Long.class)
+        );
+    }
+
+    @Test
+    void sendDirectMessageReturnsRoomAndMessage() throws Exception {
+        ChatMessageResponse message = new ChatMessageResponse(
+                100L,
+                10L,
+                1L,
+                "sender",
+                ChatMessageType.TEXT,
+                "hello",
+                null,
+                Instant.parse("2026-11-04T00:00:00Z"),
+                null,
+                false
+        );
+        when(chatRoomService.sendDirectMessage(1L, 2L, "hello"))
+                .thenReturn(DirectChatResponse.of(10L, message));
+
+        mockMvc.perform(post("/chat-rooms/direct/message")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetMemberId": 2,
+                                  "content": "hello"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.roomId").value(10L))
+                .andExpect(jsonPath("$.data.message.messageId").value(100L))
+                .andExpect(jsonPath("$.data.message.content").value("hello"));
+
+        verify(chatRoomService).sendDirectMessage(1L, 2L, "hello");
+    }
+
+    @Test
+    void sendDirectMessageRejectsBlankContent() throws Exception {
+        mockMvc.perform(post("/chat-rooms/direct/message")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "targetMemberId": 2,
+                                  "content": "   "
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verify(chatRoomService, never()).sendDirectMessage(
+                any(Long.class),
+                any(Long.class),
+                any(String.class)
         );
     }
 
