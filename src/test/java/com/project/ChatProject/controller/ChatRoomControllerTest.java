@@ -813,8 +813,9 @@ class ChatRoomControllerTest {
                 null,
                 false
         );
+        DirectChatResponse response = DirectChatResponse.of(10L, message);
         when(chatRoomService.sendDirectMessage(1L, 2L, "hello"))
-                .thenReturn(DirectChatResponse.of(10L, message));
+                .thenReturn(response);
 
         mockMvc.perform(post("/chat-rooms/direct/message")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -831,6 +832,11 @@ class ChatRoomControllerTest {
                 .andExpect(jsonPath("$.data.message.content").value("hello"));
 
         verify(chatRoomService).sendDirectMessage(1L, 2L, "hello");
+        verify(template).convertAndSendToUser(
+                "2",
+                "/queue/direct-messages",
+                response
+        );
     }
 
     @Test

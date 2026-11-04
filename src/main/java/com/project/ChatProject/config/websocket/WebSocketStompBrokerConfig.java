@@ -19,8 +19,9 @@ public class WebSocketStompBrokerConfig
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/sub");
+        config.enableSimpleBroker("/sub", "/queue");
         config.setApplicationDestinationPrefixes("/pub");
+        config.setUserDestinationPrefix("/user");
     }
 
     @Override

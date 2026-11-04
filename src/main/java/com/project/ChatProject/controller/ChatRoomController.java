@@ -408,6 +408,12 @@ public class ChatRoomController {
                 request.content()
         );
 
+        template.convertAndSendToUser(
+                request.targetMemberId().toString(),
+                "/queue/direct-messages",
+                response
+        );
+
         return ResponseEntity
                 .ok(ApiResponse.success(response));
     }
