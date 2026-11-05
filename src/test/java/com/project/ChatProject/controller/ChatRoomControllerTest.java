@@ -38,10 +38,12 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -339,7 +341,8 @@ class ChatRoomControllerTest {
                 false
         );
         ChatMessageEvent event = ChatMessageEvent.created(leaveMessage);
-        when(chatRoomService.leave(10L, 1L)).thenReturn(event);
+        when(chatRoomService.leave(10L, 1L))
+                .thenReturn(Optional.of(event));
 
         mockMvc.perform(delete("/chat-rooms/10/members"))
                 .andExpect(status().isOk())
@@ -351,6 +354,20 @@ class ChatRoomControllerTest {
                 "/sub/msg/10",
                 event
         );
+    }
+
+    @Test
+    void leaveDirectRoomReturnsSuccessWithoutBroadcast() throws Exception {
+        when(chatRoomService.leave(10L, 1L))
+                .thenReturn(Optional.empty());
+
+        mockMvc.perform(delete("/chat-rooms/10/members"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(chatRoomService).leave(10L, 1L);
+        verifyNoInteractions(template);
     }
 
     @Test

@@ -4,6 +4,8 @@ import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
 import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
+import com.project.ChatProject.dto.response.DirectChatResponse;
+import com.project.ChatProject.dto.result.ChatMessageSaveResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatMessageService;
 import jakarta.validation.Valid;
@@ -33,7 +35,7 @@ public class ChatController {
         WebSocketMemberPrincipal principal
                 = resolvePrincipal(authentication);
 
-        ChatMessageEvent event =
+        ChatMessageSaveResult result =
                 chatMessageService.save(
                         principal.memberId(),
                         request
@@ -41,10 +43,12 @@ public class ChatController {
 
         template.convertAndSend(
                 "/sub/msg/" + request.roomId(),
-                event
+                result.event()
         );
 
-        return event;
+        notifyRejoinedDirectMember(result);
+
+        return result.event();
     }
 
     @MessageMapping("/msg/attachment")
@@ -55,7 +59,7 @@ public class ChatController {
         WebSocketMemberPrincipal principal
                 = resolvePrincipal(authentication);
 
-        ChatMessageEvent event =
+        ChatMessageSaveResult result =
                 chatMessageService.saveAttachment(
                         principal.memberId(),
                         request
@@ -63,10 +67,29 @@ public class ChatController {
 
         template.convertAndSend(
                 "/sub/msg/" + request.roomId(),
-                event
+                result.event()
         );
 
-        return event;
+        notifyRejoinedDirectMember(result);
+
+        return result.event();
+    }
+
+    private void notifyRejoinedDirectMember(
+            ChatMessageSaveResult result
+    ) {
+        if (!result.hasRejoinedMember()) {
+            return;
+        }
+
+        template.convertAndSendToUser(
+                result.rejoinedMemberId().toString(),
+                "/queue/direct-messages",
+                DirectChatResponse.of(
+                        result.event().message().roomId(),
+                        result.event().message()
+                )
+        );
     }
 
     private WebSocketMemberPrincipal resolvePrincipal(

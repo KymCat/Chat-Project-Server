@@ -213,10 +213,12 @@ public class ChatRoomService {
     }
 
     @Transactional
-    public ChatMessageEvent leave(Long roomId, Long memberId) {
-
+    public Optional<ChatMessageEvent> leave(
+            Long roomId,
+            Long memberId
+    ) {
         ChatRoomParticipationContext context = participation
-                .requireParticipation(
+                .requireConversationParticipation(
                         roomId,
                         memberId,
                         ParticipationLockMode.CHAT_ROOM
@@ -226,7 +228,28 @@ public class ChatRoomService {
         Member member = context.member();
         ChatRoomMember chatRoomMember = context.chatRoomMember();
 
-        // 채팅방 OWNER 나가기 방지
+        if (chatRoom.getType() == ChatRoomType.DIRECT) {
+            ChatRoomMember lockedMember = chatRoomMemberRepository
+                    .findByChatRoomIdAndMemberIdForUpdate(
+                            roomId,
+                            memberId
+                    )
+                    .orElseThrow(() ->
+                            new CustomException(
+                                    ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                            )
+                    );
+
+            if (!lockedMember.isParticipating()) {
+                throw new CustomException(
+                        ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                );
+            }
+
+            lockedMember.leave();
+            return Optional.empty();
+        }
+
         if (chatRoomMember.getRole() == ChatRoomMemberRole.OWNER) {
             throw new CustomException(
                     ErrorCode.CHAT_ROOM_OWNER_TRANSFER_REQUIRED
@@ -234,21 +257,20 @@ public class ChatRoomService {
         }
 
         chatRoomMember.leave();
-        if (chatRoom.getType() == ChatRoomType.GROUP) {
-            ChatMessage leaveMessage =
-                    ChatMessage.createSystem(
-                            chatRoom,
-                            member.getNickname() + "님이 퇴장하였습니다."
-                    );
 
-            chatMessageRepository.save(leaveMessage);
-            chatRoom.updateLastMessageAt(leaveMessage.getCreatedAt());
+        ChatMessage leaveMessage = ChatMessage.createSystem(
+                chatRoom,
+                member.getNickname() + "님이 퇴장하였습니다."
+        );
 
-            return ChatMessageEvent
-                    .created(ChatMessageResponse.from(leaveMessage));
-        }
+        chatMessageRepository.save(leaveMessage);
+        chatRoom.updateLastMessageAt(leaveMessage.getCreatedAt());
 
-        return null;
+        return Optional.of(
+                ChatMessageEvent.created(
+                        ChatMessageResponse.from(leaveMessage)
+                )
+        );
     }
 
     @Transactional(readOnly = true)
@@ -573,13 +595,19 @@ public class ChatRoomService {
 
         if (existingRoom.isPresent()) {
             ChatRoomParticipationContext context = participation
-                    .requireDirectParticipation(
-                        existingRoom.get().getId(),
-                        memberId,
-                        ParticipationLockMode.NONE
-            );
+                    .requireDirectMembership(
+                            existingRoom.get().getId(),
+                            memberId,
+                            ParticipationLockMode.NONE
+                    );
 
-            return DirectChatRoomResponse.found(context.chatRoom().getId());
+            if (!context.chatRoomMember().isParticipating()) {
+                return DirectChatRoomResponse.notFound();
+            }
+
+            return DirectChatRoomResponse.found(
+                    context.chatRoom().getId()
+            );
         }
 
         return DirectChatRoomResponse.notFound();
@@ -673,23 +701,31 @@ public class ChatRoomService {
             String content
     ) {
 
-        ChatRoomParticipationContext context = participation
-                .requireDirectParticipation(
+        ChatRoomParticipationContext senderContext = participation
+                .requireDirectMembership(
                         chatRoom.getId(),
                         senderId,
-                        ParticipationLockMode.NONE
+                        ParticipationLockMode.CHAT_ROOM_MEMBER
                 );
 
-        // 상대방 검증
-        participation.requireDirectParticipation(
+        if (!senderContext.chatRoomMember().isParticipating()) {
+            senderContext.chatRoomMember().rejoin();
+        }
+
+        ChatRoomParticipationContext receiverContext = participation
+                .requireDirectMembership(
                         chatRoom.getId(),
                         receiverId,
-                        ParticipationLockMode.NONE
+                        ParticipationLockMode.CHAT_ROOM_MEMBER
                 );
+
+        if (!receiverContext.chatRoomMember().isParticipating()) {
+            receiverContext.chatRoomMember().rejoin();
+        }
 
         ChatMessage message = ChatMessage.createText(
                 chatRoom,
-                context.member(),
+                senderContext.member(),
                 content.strip()
         );
 

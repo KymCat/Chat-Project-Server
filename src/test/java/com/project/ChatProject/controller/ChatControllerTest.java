@@ -6,6 +6,8 @@ import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.AttachmentResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
+import com.project.ChatProject.dto.response.DirectChatResponse;
+import com.project.ChatProject.dto.result.ChatMessageSaveResult;
 import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.service.ChatMessageService;
@@ -22,6 +24,8 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 
@@ -72,7 +76,7 @@ class ChatControllerTest {
         when(chatMessageService.save(
                 1L,
                 request
-        )).thenReturn(expectedEvent);
+        )).thenReturn(ChatMessageSaveResult.of(expectedEvent, null));
 
         ChatMessageEvent result = chatController.send(
                 request,
@@ -89,6 +93,11 @@ class ChatControllerTest {
         verify(template).convertAndSend(
                 "/sub/msg/10",
                 result
+        );
+        verify(template, never()).convertAndSendToUser(
+                any(String.class),
+                any(String.class),
+                any()
         );
     }
 
@@ -118,7 +127,7 @@ class ChatControllerTest {
         );
         ChatMessageEvent expectedEvent = ChatMessageEvent.created(message);
         when(chatMessageService.saveAttachment(1L, request))
-                .thenReturn(expectedEvent);
+                .thenReturn(ChatMessageSaveResult.of(expectedEvent, 2L));
 
         ChatMessageEvent result = chatController.sendAttachment(
                 request,
@@ -130,6 +139,11 @@ class ChatControllerTest {
         verify(template).convertAndSend(
                 "/sub/msg/10",
                 expectedEvent
+        );
+        verify(template).convertAndSendToUser(
+                "2",
+                "/queue/direct-messages",
+                DirectChatResponse.of(10L, message)
         );
     }
 

@@ -5,9 +5,11 @@ import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
+import com.project.ChatProject.dto.result.ChatMessageSaveResult;
 import com.project.ChatProject.entity.Attachment;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
+import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.entity.enums.ChatMessageType;
@@ -41,7 +43,7 @@ public class ChatMessageService {
     private final FriendshipRepository friendshipRepository;
 
     @Transactional
-    public ChatMessageEvent save(
+    public ChatMessageSaveResult save(
             Long memberId,
             ChatMessageRequest request
     ) {
@@ -55,9 +57,11 @@ public class ChatMessageService {
         Member sender = context.member();
         ChatRoom chatRoom = context.chatRoom();
 
-        // Direct 채팅방 친구관계 확인
+        Long rejoinedMemberId = null;
+
+        // Direct 채팅방 친구관계 확인 및 상대방 재참여
         if (chatRoom.getType() == ChatRoomType.DIRECT) {
-            validateFriendship(
+            rejoinedMemberId = validateFriendshipAndRejoinReceiver(
                     sender.getId(),
                     chatRoom.getId()
             );
@@ -73,12 +77,18 @@ public class ChatMessageService {
 
         chatRoom.updateLastMessageAt(message.getCreatedAt());
 
-        return  ChatMessageEvent
-                .created(ChatMessageResponse.from(message));
+        ChatMessageEvent event = ChatMessageEvent.created(
+                ChatMessageResponse.from(message)
+        );
+
+        return ChatMessageSaveResult.of(
+                event,
+                rejoinedMemberId
+        );
     }
 
     @Transactional
-    public ChatMessageEvent saveAttachment(
+    public ChatMessageSaveResult saveAttachment(
             Long memberId,
             ChatAttachmentMessageRequest request
     ) {
@@ -89,9 +99,11 @@ public class ChatMessageService {
                         ParticipationLockMode.NONE
                 );
 
-        // Direct 채팅방 친구관계 확인
+        Long rejoinedMemberId = null;
+
+        // Direct 채팅방 친구관계 확인 및 상대방 재참여
         if (context.chatRoom().getType() == ChatRoomType.DIRECT) {
-            validateFriendship(
+            rejoinedMemberId = validateFriendshipAndRejoinReceiver(
                     context.member().getId(),
                     context.chatRoom().getId()
             );
@@ -125,8 +137,14 @@ public class ChatMessageService {
         context.chatRoom()
                 .updateLastMessageAt(message.getCreatedAt());
 
-        return ChatMessageEvent
-                .created(ChatMessageResponse.from(message));
+        ChatMessageEvent event = ChatMessageEvent.created(
+                ChatMessageResponse.from(message)
+        );
+
+        return ChatMessageSaveResult.of(
+                event,
+                rejoinedMemberId
+        );
     }
 
     @Transactional(readOnly = true)
@@ -196,7 +214,7 @@ public class ChatMessageService {
 
     // === private method ===
 
-    private void validateFriendship(
+    private Long validateFriendshipAndRejoinReceiver(
             Long senderId,
             Long roomId
     ) {
@@ -219,6 +237,24 @@ public class ChatMessageService {
                                 ErrorCode.FRIEND_RELATION_NOT_FOUND
                         )
                 );
+
+        ChatRoomMember receiverMember = chatRoomMemberRepository
+                .findByChatRoomIdAndMemberIdForUpdate(
+                        roomId,
+                        receiverId
+                )
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                        )
+                );
+        if (receiverMember.isParticipating()) {
+            return null;
+        }
+
+        receiverMember.rejoin();
+
+        return receiverId;
     }
 
     /**

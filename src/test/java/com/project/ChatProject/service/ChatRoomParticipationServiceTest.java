@@ -318,6 +318,45 @@ class ChatRoomParticipationServiceTest {
         );
     }
 
+    @Test
+    void requireDirectMembershipReturnsFormerMember() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom directRoom = ChatRoom.createDirect("1:2");
+        ChatRoomMember formerMember =
+                ChatRoomMember.createMember(directRoom, member);
+        formerMember.leave();
+        stubActiveParticipation(directRoom, member, formerMember);
+
+        ChatRoomParticipationContext context = participationService
+                .requireDirectMembership(
+                        ROOM_ID,
+                        MEMBER_ID,
+                        ParticipationLockMode.NONE
+                );
+
+        assertThat(context.chatRoomMember()).isSameAs(formerMember);
+        assertThat(context.chatRoomMember().isParticipating()).isFalse();
+    }
+
+    @Test
+    void requireConversationParticipationRejectsFormerDirectMember() {
+        Member member = member(MemberStatus.ACTIVE, Instant.now());
+        ChatRoom directRoom = ChatRoom.createDirect("1:2");
+        ChatRoomMember formerMember =
+                ChatRoomMember.createMember(directRoom, member);
+        formerMember.leave();
+        stubActiveParticipation(directRoom, member, formerMember);
+
+        assertErrorCode(
+                () -> participationService.requireConversationParticipation(
+                        ROOM_ID,
+                        MEMBER_ID,
+                        ParticipationLockMode.NONE
+                ),
+                ErrorCode.CHAT_ROOM_ACCESS_DENIED
+        );
+    }
+
     private void stubActiveParticipation(
             ChatRoom chatRoom,
             Member member,

@@ -42,7 +42,6 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
                     FROM ChatRoomMember crm
                     WHERE crm.chatRoom.id = :roomId
                         AND crm.member.id = :memberId
-                        AND crm.leftAt IS NULL
                     """
     )
     Optional<ChatRoomMember> findByChatRoomIdAndMemberIdForUpdate(
@@ -104,7 +103,6 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
                     WHERE crm.member.id <> :memberId
                         AND crm.chatRoom.id IN :roomIds
                         AND crm.chatRoom.type = :type
-                        AND crm.leftAt IS NULL
                     """
     )
     List<DirectChatRoomDisplayNameProjection> findDirectChatRoomTargetMemberName(
@@ -120,7 +118,6 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
                     FROM ChatRoomMember crm
                     WHERE crm.chatRoom.id = :roomId
                         AND crm.member.id <> :senderId
-                        AND crm.leftAt IS NULL
                     """
     )
     Optional<Long> findTargetMemberId(

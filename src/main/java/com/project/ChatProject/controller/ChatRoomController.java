@@ -119,15 +119,13 @@ public class ChatRoomController {
             @AuthenticationPrincipal AccessTokenClaims claims
     ) {
         Long memberId = claims.memberId();
-        ChatMessageEvent leaveMessage
-                = chatRoomService.leave(roomId, memberId);
-
-        if (leaveMessage != null) {
-            template.convertAndSend(
-                    "/sub/msg/" + roomId,
-                    leaveMessage
-            );
-        }
+        chatRoomService.leave(roomId, memberId)
+                .ifPresent(event ->
+                        template.convertAndSend(
+                                "/sub/msg/" + roomId,
+                                event
+                        )
+                );
 
         return ResponseEntity
                 .ok(ApiResponse.success(null));

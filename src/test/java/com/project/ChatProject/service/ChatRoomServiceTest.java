@@ -794,7 +794,8 @@ class ChatRoomServiceTest {
         stubLockedMessageAccess(member, chatRoom, roomMember);
         stubSavedMessage(createdAt);
 
-        ChatMessageEvent event = chatRoomService.leave(10L, 1L);
+        ChatMessageEvent event = chatRoomService.leave(10L, 1L)
+                .orElseThrow();
         ChatMessageResponse response = event.message();
 
         assertThat(roomMember.isParticipating()).isFalse();
@@ -818,6 +819,32 @@ class ChatRoomServiceTest {
         assertThat(response.type()).isEqualTo(ChatMessageType.SYSTEM);
         assertThat(response.content()).isEqualTo("사용자님이 퇴장하였습니다.");
         assertThat(response.createdAt()).isEqualTo(createdAt);
+    }
+
+    @Test
+    void leaveDirectRoomOnlyUpdatesCurrentMembership() {
+        Member member = verifiedMember(1L, "sender");
+        ChatRoom directRoom = directRoom(10L, "1:2");
+        ChatRoomMember roomMember =
+                ChatRoomMember.createMember(directRoom, member);
+
+        when(chatRoomRepository.findByIdForUpdate(10L))
+                .thenReturn(Optional.of(directRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomMemberRepository
+                .findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(roomMember));
+        when(chatRoomMemberRepository
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 1L))
+                .thenReturn(Optional.of(roomMember));
+
+        Optional<ChatMessageEvent> result =
+                chatRoomService.leave(10L, 1L);
+
+        assertThat(result).isEmpty();
+        assertThat(roomMember.isParticipating()).isFalse();
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
     }
 
     @Test
@@ -1675,6 +1702,31 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    void findDirectChatRoomReturnsNullWhenMemberHasLeft() {
+        Member member = verifiedMember(1L, "sender");
+        ChatRoom directRoom = directRoom(10L, "1:2");
+        ChatRoomMember roomMember =
+                ChatRoomMember.createMember(directRoom, member);
+        roomMember.leave();
+
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomRepository.findByDirectKey("1:2"))
+                .thenReturn(Optional.of(directRoom));
+        when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(directRoom));
+        when(chatRoomMemberRepository
+                .findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(roomMember));
+
+        DirectChatRoomResponse response =
+                chatRoomService.findDirectChatRoom(1L, 2L);
+
+        assertThat(response.roomId()).isNull();
+        assertThat(roomMember.isParticipating()).isFalse();
+    }
+
+    @Test
     void sendDirectMessageCreatesRoomMembersAndFirstMessage() {
         Member sender = verifiedMember(1L, "sender");
         Member receiver = verifiedMember(2L, "receiver");
@@ -1738,6 +1790,12 @@ class ChatRoomServiceTest {
         Member receiver = verifiedMember(2L, "receiver");
         ChatRoom directRoom = directRoom(10L, "1:2");
         stubExistingDirectRoom(directRoom, sender, receiver);
+        when(friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        1L,
+                        2L,
+                        FriendshipStatus.ACCEPTED
+                )).thenReturn(Optional.of(mock(Friendship.class)));
         when(chatRoomRepository.findByDirectKey("1:2"))
                 .thenReturn(Optional.of(directRoom));
         stubSavedMessage(Instant.parse("2026-11-04T00:00:00Z"));
@@ -1750,11 +1808,11 @@ class ChatRoomServiceTest {
 
         assertThat(response.roomId()).isEqualTo(10L);
         assertThat(response.message().content()).isEqualTo("hello");
-        verify(friendshipRepository, never())
+        verify(friendshipRepository)
                 .findByMemberIdAndTargetMemberIdForUpdate(
-                        any(Long.class),
-                        any(Long.class),
-                        any(FriendshipStatus.class)
+                        1L,
+                        2L,
+                        FriendshipStatus.ACCEPTED
                 );
         verify(chatRoomRepository, never()).save(any(ChatRoom.class));
         verify(chatRoomMemberRepository, never())
@@ -1762,38 +1820,51 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    void sendDirectMessageRechecksRoomAfterFriendshipLock() {
+    void sendDirectMessageRejoinsFormerMembersInExistingRoom() {
         Member sender = verifiedMember(1L, "sender");
         Member receiver = verifiedMember(2L, "receiver");
         ChatRoom directRoom = directRoom(10L, "1:2");
-        stubExistingDirectRoom(directRoom, sender, receiver);
-        when(chatRoomRepository.findByDirectKey("1:2"))
-                .thenReturn(Optional.empty(), Optional.of(directRoom));
+        ChatRoomMember senderRoomMember =
+                ChatRoomMember.createMember(directRoom, sender);
+        ChatRoomMember receiverRoomMember =
+                ChatRoomMember.createMember(directRoom, receiver);
+        senderRoomMember.leave();
+        receiverRoomMember.leave();
+
         when(friendshipRepository
                 .findByMemberIdAndTargetMemberIdForUpdate(
                         1L,
                         2L,
                         FriendshipStatus.ACCEPTED
                 )).thenReturn(Optional.of(mock(Friendship.class)));
+        when(chatRoomRepository.findByDirectKey("1:2"))
+                .thenReturn(Optional.of(directRoom));
+        when(chatRoomRepository.findById(10L))
+                .thenReturn(Optional.of(directRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(sender));
+        when(memberRepository.findById(2L))
+                .thenReturn(Optional.of(receiver));
+        when(chatRoomMemberRepository
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 1L))
+                .thenReturn(Optional.of(senderRoomMember));
+        when(chatRoomMemberRepository
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 2L))
+                .thenReturn(Optional.of(receiverRoomMember));
         stubSavedMessage(Instant.parse("2026-11-04T00:00:00Z"));
 
-        DirectChatResponse response = chatRoomService.sendDirectMessage(
-                1L,
-                2L,
-                "hello"
-        );
+        chatRoomService.sendDirectMessage(1L, 2L, "hello");
 
-        assertThat(response.roomId()).isEqualTo(10L);
-        verify(chatRoomRepository, times(2)).findByDirectKey("1:2");
-        verify(chatRoomRepository, never()).save(any(ChatRoom.class));
-        verify(chatRoomMemberRepository, never())
-                .save(any(ChatRoomMember.class));
+        assertThat(senderRoomMember.isParticipating()).isTrue();
+        assertThat(receiverRoomMember.isParticipating()).isTrue();
+        verify(chatRoomMemberRepository)
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 1L);
+        verify(chatRoomMemberRepository)
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 2L);
     }
 
     @Test
     void sendDirectMessageRejectsMissingFriendship() {
-        when(chatRoomRepository.findByDirectKey("1:2"))
-                .thenReturn(Optional.empty());
         when(friendshipRepository
                 .findByMemberIdAndTargetMemberIdForUpdate(
                         1L,
@@ -1910,12 +1981,12 @@ class ChatRoomServiceTest {
         when(memberRepository.findById(2L))
                 .thenReturn(Optional.of(receiver));
         when(chatRoomMemberRepository
-                .findByChatRoomIdAndMemberId(10L, 1L))
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 1L))
                 .thenReturn(Optional.of(
                         ChatRoomMember.createMember(directRoom, sender)
                 ));
         when(chatRoomMemberRepository
-                .findByChatRoomIdAndMemberId(10L, 2L))
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 2L))
                 .thenReturn(Optional.of(
                         ChatRoomMember.createMember(directRoom, receiver)
                 ));
