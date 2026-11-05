@@ -122,10 +122,12 @@ public class ChatRoomController {
         ChatMessageEvent leaveMessage
                 = chatRoomService.leave(roomId, memberId);
 
-        template.convertAndSend(
-                "/sub/msg/" + roomId,
-                leaveMessage
-        );
+        if (leaveMessage != null) {
+            template.convertAndSend(
+                    "/sub/msg/" + roomId,
+                    leaveMessage
+            );
+        }
 
         return ResponseEntity
                 .ok(ApiResponse.success(null));

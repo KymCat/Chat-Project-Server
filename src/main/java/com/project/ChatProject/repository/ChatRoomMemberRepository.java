@@ -93,7 +93,7 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
             @Param("memberId") Long memberId
     );
 
-    // direct 방, 상대방 이름 반환
+    // 내가 속해있는 direct 채팅방, 상대방 이름 반환
     @Query(
             value = """
                     SELECT  crm.chatRoom.id AS roomId,
@@ -111,5 +111,20 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
             @Param("roomIds") List<Long> roomIds,
             @Param("memberId") Long memberId,
             @Param("type") ChatRoomType type
+    );
+
+    // 현재 direct 채팅방의 상대방 id 조회
+    @Query(
+            value = """
+                    SELECT crm.member.id
+                    FROM ChatRoomMember crm
+                    WHERE crm.chatRoom.id = :roomId
+                        AND crm.member.id <> :senderId
+                        AND crm.leftAt IS NULL
+                    """
+    )
+    Optional<Long> findTargetMemberId(
+            @Param("roomId") Long roomId,
+            @Param("senderId") Long senderId
     );
 }

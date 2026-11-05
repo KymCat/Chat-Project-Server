@@ -234,16 +234,21 @@ public class ChatRoomService {
         }
 
         chatRoomMember.leave();
-        ChatMessage leaveMessage =
-                ChatMessage.createSystem(
-                        chatRoom,
-                        member.getNickname() + "님이 퇴장하였습니다."
-                );
-        chatMessageRepository.save(leaveMessage);
-        chatRoom.updateLastMessageAt(leaveMessage.getCreatedAt());
+        if (chatRoom.getType() == ChatRoomType.GROUP) {
+            ChatMessage leaveMessage =
+                    ChatMessage.createSystem(
+                            chatRoom,
+                            member.getNickname() + "님이 퇴장하였습니다."
+                    );
 
-        return ChatMessageEvent
-                .created(ChatMessageResponse.from(leaveMessage));
+            chatMessageRepository.save(leaveMessage);
+            chatRoom.updateLastMessageAt(leaveMessage.getCreatedAt());
+
+            return ChatMessageEvent
+                    .created(ChatMessageResponse.from(leaveMessage));
+        }
+
+        return null;
     }
 
     @Transactional(readOnly = true)
@@ -592,19 +597,6 @@ public class ChatRoomService {
                 targetMemberId
         );
 
-        Optional<ChatRoom> existingRoom = chatRoomRepository
-                .findByDirectKey(directKey);
-
-        // DIRECT 채팅방 존재할 경우
-        if (existingRoom.isPresent()) {
-            return existingRoomResponse(
-                    existingRoom.get(),
-                    memberId,
-                    targetMemberId,
-                    content
-            );
-        }
-
         // 친구 관계 row Lock
         friendshipRepository
                 .findByMemberIdAndTargetMemberIdForUpdate(
@@ -618,9 +610,10 @@ public class ChatRoomService {
                         )
                 );
 
-        // Lock을 기다리는 동안 다른 transaction이 만들었는지 재확인
-        existingRoom = chatRoomRepository.findByDirectKey(directKey);
+        Optional<ChatRoom> existingRoom = chatRoomRepository
+                .findByDirectKey(directKey);
 
+        // DIRECT 채팅방 존재할 경우
         if (existingRoom.isPresent()) {
             return existingRoomResponse(
                     existingRoom.get(),
