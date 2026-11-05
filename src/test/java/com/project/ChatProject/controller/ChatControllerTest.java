@@ -1,6 +1,7 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
+import com.project.ChatProject.dto.event.ChatErrorEvent;
 import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
@@ -10,6 +11,8 @@ import com.project.ChatProject.dto.response.DirectChatResponse;
 import com.project.ChatProject.dto.result.ChatMessageSaveResult;
 import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatMessageType;
+import com.project.ChatProject.exception.CustomException;
+import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.service.ChatMessageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -144,6 +147,68 @@ class ChatControllerTest {
                 "2",
                 "/queue/direct-messages",
                 DirectChatResponse.of(10L, message)
+        );
+    }
+
+    @Test
+    void sendNotifiesRequesterWhenDirectFriendshipNoLongerExists() {
+        ChatMessageRequest request = new ChatMessageRequest(
+                10L,
+                "안녕하세요"
+        );
+        Authentication authentication = authentication(1L, "홍길동");
+        when(chatMessageService.save(1L, request))
+                .thenThrow(new CustomException(
+                        ErrorCode.FRIEND_RELATION_NOT_FOUND
+                ));
+
+        ChatMessageEvent result = chatController.send(
+                request,
+                authentication
+        );
+
+        assertThat(result).isNull();
+        verify(template, never()).convertAndSend(
+                any(String.class),
+                any(Object.class)
+        );
+        verify(template).convertAndSendToUser(
+                "1",
+                "/queue/chat-errors",
+                ChatErrorEvent.from(
+                        10L,
+                        ErrorCode.FRIEND_RELATION_NOT_FOUND
+                )
+        );
+    }
+
+    @Test
+    void sendAttachmentNotifiesRequesterWhenDirectFriendshipNoLongerExists() {
+        ChatAttachmentMessageRequest request =
+                new ChatAttachmentMessageRequest(10L, 200L);
+        Authentication authentication = authentication(1L, "홍길동");
+        when(chatMessageService.saveAttachment(1L, request))
+                .thenThrow(new CustomException(
+                        ErrorCode.FRIEND_RELATION_NOT_FOUND
+                ));
+
+        ChatMessageEvent result = chatController.sendAttachment(
+                request,
+                authentication
+        );
+
+        assertThat(result).isNull();
+        verify(template, never()).convertAndSend(
+                any(String.class),
+                any(Object.class)
+        );
+        verify(template).convertAndSendToUser(
+                "1",
+                "/queue/chat-errors",
+                ChatErrorEvent.from(
+                        10L,
+                        ErrorCode.FRIEND_RELATION_NOT_FOUND
+                )
         );
     }
 
