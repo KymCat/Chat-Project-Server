@@ -5,6 +5,8 @@ import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.apache.tika.Tika;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.InputStreamSource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,17 +34,45 @@ public class ProfileImageValidator {
 
     /*
      * Tika는 요청의 Content-Type이나 확장자가 아니라
-     * 실제 파일 byte를 기반으로 MIME type을 탐지
+     * 실제 파일 byte를 기반으로 MIME type을 탐지한다.
      */
     private final Tika tika = new Tika();
 
-    public ValidatedProfileImage validate(MultipartFile file) {
+    public ValidatedProfileImage validate(
+            MultipartFile file
+    ) {
         validateNotEmpty(file);
-        validateFileSize(file);
 
-        String detectedContentType = detectContentType(file);
+        return validate(
+                file.getSize(),
+                file
+        );
+    }
+
+    public ValidatedProfileImage validate(
+            byte[] content
+    ) {
+        validateNotEmpty(content);
+
+        return validate(
+                content.length,
+                new ByteArrayResource(content)
+        );
+    }
+
+    private ValidatedProfileImage validate(
+            long sizeBytes,
+            InputStreamSource source
+    ) {
+        validateFileSize(sizeBytes);
+
+        String detectedContentType =
+                detectContentType(source);
+
         String expectedFormat =
-                ALLOWED_IMAGE_TYPES.get(detectedContentType);
+                ALLOWED_IMAGE_TYPES.get(
+                        detectedContentType
+                );
 
         if (expectedFormat == null) {
             throw new CustomException(
@@ -50,31 +80,53 @@ public class ProfileImageValidator {
             );
         }
 
-        validateImageContent(file, expectedFormat);
+        validateImageContent(
+                source,
+                expectedFormat
+        );
 
         return new ValidatedProfileImage(
                 detectedContentType
         );
     }
 
-    private void validateNotEmpty(MultipartFile file) {
-        if (file == null || file.isEmpty() || file.getSize() <= 0) {
+    private void validateNotEmpty(
+            MultipartFile file
+    ) {
+        if (file == null
+                || file.isEmpty()
+                || file.getSize() <= 0) {
             throw new CustomException(
                     ErrorCode.PROFILE_IMAGE_EMPTY
             );
         }
     }
 
-    private void validateFileSize(MultipartFile file) {
-        if (file.getSize() > properties.maxSize().toBytes()) {
+    private void validateNotEmpty(
+            byte[] content
+    ) {
+        if (content == null || content.length == 0) {
+            throw new CustomException(
+                    ErrorCode.PROFILE_IMAGE_EMPTY
+            );
+        }
+    }
+
+    private void validateFileSize(
+            long sizeBytes
+    ) {
+        if (sizeBytes > properties.maxSize().toBytes()) {
             throw new CustomException(
                     ErrorCode.PROFILE_IMAGE_TOO_LARGE
             );
         }
     }
 
-    private String detectContentType(MultipartFile file) {
-        try (InputStream inputStream = file.getInputStream()) {
+    private String detectContentType(
+            InputStreamSource source
+    ) {
+        try (InputStream inputStream =
+                     source.getInputStream()) {
             return tika.detect(inputStream)
                     .toLowerCase(Locale.ROOT);
         } catch (IOException exception) {
@@ -85,26 +137,31 @@ public class ProfileImageValidator {
     }
 
     /**
-     * ImageIO로 실제 이미지 구조와 크기를 검사한다.
+     * ImageIO로 실제 이미지 구조와 크기를 검사
      *
      * 파일 앞부분만 JPEG나 PNG처럼 위조한 경우에도
-     * ImageReader가 정상적인 이미지로 해석하지 못하면 거부한다.
+     * ImageReader가 정상 이미지로 해석하지 못하면 거부
      */
     private void validateImageContent(
-            MultipartFile file,
+            InputStreamSource source,
             String expectedFormat
     ) {
         try (
-                InputStream inputStream = file.getInputStream();
+                InputStream inputStream =
+                        source.getInputStream();
                 ImageInputStream imageInputStream =
-                        ImageIO.createImageInputStream(inputStream)
+                        ImageIO.createImageInputStream(
+                                inputStream
+                        )
         ) {
             if (imageInputStream == null) {
                 throw invalidImage();
             }
 
             Iterator<ImageReader> readers =
-                    ImageIO.getImageReaders(imageInputStream);
+                    ImageIO.getImageReaders(
+                            imageInputStream
+                    );
 
             if (!readers.hasNext()) {
                 throw invalidImage();
@@ -113,14 +170,20 @@ public class ProfileImageValidator {
             ImageReader reader = readers.next();
 
             try {
-                reader.setInput(imageInputStream, true, true);
+                reader.setInput(
+                        imageInputStream,
+                        true,
+                        true
+                );
 
-                String actualFormat = reader.getFormatName()
-                        .toUpperCase(Locale.ROOT);
+                String actualFormat =
+                        reader.getFormatName()
+                                .toUpperCase(Locale.ROOT);
 
                 int width = reader.getWidth(0);
                 int height = reader.getHeight(0);
-                long totalPixels = (long) width * height;
+                long totalPixels =
+                        (long) width * height;
 
                 if (!expectedFormat.equals(actualFormat)
                         || width <= 0
@@ -130,7 +193,8 @@ public class ProfileImageValidator {
 
                 if (width > properties.maxWidth()
                         || height > properties.maxHeight()
-                        || totalPixels > properties.maxPixels()) {
+                        || totalPixels
+                        > properties.maxPixels()) {
                     throw new CustomException(
                             ErrorCode.PROFILE_IMAGE_TOO_LARGE
                     );
