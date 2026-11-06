@@ -9,7 +9,9 @@ import com.project.ChatProject.storage.StoredFile;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.InputStreamSource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -52,34 +54,78 @@ public class LocalFileStorage implements FileStorage {
     }
 
     @Override
-    public StoredFile store(MultipartFile file, StorageCategory category) {
-        String storageKey = createStorageKey(category);
-        Path target = resolveStorageKey(storageKey);
+    public StoredFile store(
+            MultipartFile file,
+            StorageCategory category
+    ) {
+        return store(
+                file,
+                resolveOriginalName(file),
+                resolveContentType(file),
+                file.getSize(),
+                category
+        );
+    }
+
+    @Override
+    public StoredFile store(
+            byte[] content,
+            String originalName,
+            String contentType,
+            StorageCategory category
+    ) {
+        return store(
+                new ByteArrayResource(content),
+                originalName,
+                contentType,
+                content.length,
+                category
+        );
+    }
+
+    private StoredFile store(
+            InputStreamSource source,
+            String originalName,
+            String contentType,
+            long sizeBytes,
+            StorageCategory category
+    ) {
+        String storageKey =
+                createStorageKey(category);
+
+        Path target =
+                resolveStorageKey(storageKey);
+
         boolean targetCreated = false;
 
         try {
-            Files.createDirectories(target.getParent());
+            Files.createDirectories(
+                    target.getParent()
+            );
 
             try (
-                    InputStream inputStream = file.getInputStream();
-                    OutputStream outputStream = Files.newOutputStream(
-                            target,
-                            StandardOpenOption.CREATE_NEW,
-                            StandardOpenOption.WRITE
-                    )
+                    InputStream inputStream =
+                            source.getInputStream();
+                    OutputStream outputStream =
+                            Files.newOutputStream(
+                                    target,
+                                    StandardOpenOption.CREATE_NEW,
+                                    StandardOpenOption.WRITE
+                            )
             ) {
-                // 새 파일 생성하여 true로 전환
                 targetCreated = true;
-                inputStream.transferTo(outputStream); // write
+
+                inputStream.transferTo(
+                        outputStream
+                );
             }
 
             return new StoredFile(
                     storageKey,
-                    resolveOriginalName(file),
-                    resolveContentType(file),
-                    file.getSize()
+                    originalName,
+                    contentType,
+                    sizeBytes
             );
-
         } catch (IOException exception) {
             log.error(
                     "Local attachment store failed, storageKey={}",
@@ -87,7 +133,6 @@ public class LocalFileStorage implements FileStorage {
                     exception
             );
 
-            // 새 파일이 만들어졌다면 해당 파일을 삭제
             if (targetCreated) {
                 deleteQuietly(target);
             }
