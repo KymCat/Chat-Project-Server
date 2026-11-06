@@ -6,10 +6,12 @@ import com.project.ChatProject.oauth.GoogleOidcProfileMapper;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
 import com.project.ChatProject.oauth.SocialUserProfile;
 import com.project.ChatProject.service.AuthTokenService;
+import com.project.ChatProject.service.MemberService;
 import com.project.ChatProject.service.SocialLoginService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
@@ -21,6 +23,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
@@ -30,6 +33,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private final AuthTokenService authTokenService;
     private final OAuthLoginCodeStore loginCodeStore;
     private final AuthCookieFactory authCookieFactory;
+    private final MemberService memberService;
 
     @Value("${oauth2.frontend-callback-uri}")
     private String frontendCallbackUri;
@@ -51,6 +55,12 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 
         // 소셜 로그인 및 토큰 발급
         Member member = socialLoginService.login(profile);
+
+        initializeSocialProfileImage(
+                member,
+                profile
+        );
+
         TokenResponse tokenResponse = authTokenService.create(member);
 
         // redirect URL에 넣을 일회용 loginCode를 생성
@@ -79,6 +89,30 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
                 .toUriString();
 
         response.sendRedirect(redirectUri);
+    }
+
+    // === private method ===
+
+    private void initializeSocialProfileImage(
+            Member member,
+            SocialUserProfile profile
+    ) {
+        try {
+            memberService.initializeSocialProfileImageIfAbsent(
+                    member.getId(),
+                    profile.profileImageUrl()
+            );
+        } catch (RuntimeException exception) {
+            /*
+             * 프로필 이미지 초기화는 로그인 핵심 기능이 아니다.
+             * 다운로드, 검증, S3 또는 DB 저장에 실패해도 로그인은 계속한다.
+             */
+            log.warn(
+                    "Social profile image initialization failed, memberId={}",
+                    member.getId(),
+                    exception
+            );
+        }
     }
 
     private SocialUserProfile switchProfile(OidcUser oidcUser, String registrationId) {

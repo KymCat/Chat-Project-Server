@@ -16,6 +16,8 @@ import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.profile.ProfileImageValidator;
 import com.project.ChatProject.profile.ValidatedProfileImage;
+import com.project.ChatProject.profile.google.DownloadedProfileImage;
+import com.project.ChatProject.profile.google.GoogleProfileImageClient;
 import com.project.ChatProject.repository.FriendshipRepository;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
@@ -65,6 +67,9 @@ class MemberServiceTest {
 
     @Mock
     private ProfileImageValidator profileImageValidator;
+
+    @Mock
+    private GoogleProfileImageClient googleProfileImageClient;
 
     @Mock
     private StorageDeletionTaskRepository storageDeletionTaskRepository;
@@ -288,31 +293,9 @@ class MemberServiceTest {
         ProfileImageResult result =
                 memberService.getProfileImage(MEMBER_ID);
 
-        assertThat(result.isExternal()).isFalse();
         assertThat(result.resource()).isSameAs(resource);
         assertThat(result.contentType()).isEqualTo("image/png");
         assertThat(result.sizeBytes()).isEqualTo(5L);
-        assertThat(result.externalUrl()).isNull();
-    }
-
-    @Test
-    void getProfileImageReturnsExternalProfileUrl() {
-        Member member = mock(Member.class);
-        String externalUrl = "https://example.com/profile.png";
-
-        when(memberRepository.findById(MEMBER_ID))
-                .thenReturn(Optional.of(member));
-        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
-        when(member.hasStoredProfileImage()).thenReturn(false);
-        when(member.getProfileImageUrl()).thenReturn(externalUrl);
-
-        ProfileImageResult result =
-                memberService.getProfileImage(MEMBER_ID);
-
-        assertThat(result.isExternal()).isTrue();
-        assertThat(result.externalUrl()).isEqualTo(externalUrl);
-        assertThat(result.resource()).isNull();
-        verifyNoInteractions(fileStorage);
     }
 
     @Test
@@ -365,9 +348,21 @@ class MemberServiceTest {
         SocialAccount account = mock(SocialAccount.class);
         SocialProfileProviderRequest request =
                 new SocialProfileProviderRequest(SocialProvider.GOOGLE);
-        String storageKey = "member-profiles/2026/10/27/old-key";
+        String previousStorageKey =
+                "member-profiles/2026/10/27/old-key";
         String socialImageUrl =
                 "https://lh3.googleusercontent.com/profile.png";
+        byte[] content = {1, 2, 3};
+        DownloadedProfileImage downloaded =
+                new DownloadedProfileImage(content);
+        ValidatedProfileImage validated =
+                new ValidatedProfileImage("image/jpeg");
+        StoredFile storedFile = new StoredFile(
+                "member-profiles/2026/11/06/new-key",
+                "google-profile-image",
+                "image/jpeg",
+                content.length
+        );
 
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(member));
@@ -378,19 +373,33 @@ class MemberServiceTest {
         when(account.getProviderProfileImageUrl())
                 .thenReturn(socialImageUrl);
         when(member.getProfileImageStorageKey())
-                .thenReturn(storageKey);
+                .thenReturn(previousStorageKey);
+        when(googleProfileImageClient.download(socialImageUrl))
+                .thenReturn(downloaded);
+        when(profileImageValidator.validate(content))
+                .thenReturn(validated);
+        when(fileStorage.store(
+                content,
+                "google-profile-image",
+                "image/jpeg",
+                StorageCategory.MEMBER_PROFILE
+        )).thenReturn(storedFile);
 
         memberService.applySocialProfileImage(MEMBER_ID, request);
 
-        verify(member).applyExternalProfileImage(socialImageUrl);
+        verify(member).updateProfileImage(
+                storedFile.storageKey(),
+                "image/jpeg",
+                storedFile.sizeBytes()
+        );
         verify(memberRepository).saveAndFlush(member);
-        verify(fileStorage, never()).delete(storageKey);
+        verify(fileStorage, never()).delete(storedFile.storageKey());
 
         ArgumentCaptor<StorageDeletionTask> taskCaptor =
                 ArgumentCaptor.forClass(StorageDeletionTask.class);
         verify(storageDeletionTaskRepository).save(taskCaptor.capture());
         assertThat(taskCaptor.getValue().getStorageKey())
-                .isEqualTo(storageKey);
+                .isEqualTo(previousStorageKey);
     }
 
     @Test
@@ -401,6 +410,17 @@ class MemberServiceTest {
                 new SocialProfileProviderRequest(SocialProvider.GOOGLE);
         String socialImageUrl =
                 "https://lh3.googleusercontent.com/profile.png";
+        byte[] content = {1, 2, 3};
+        DownloadedProfileImage downloaded =
+                new DownloadedProfileImage(content);
+        ValidatedProfileImage validated =
+                new ValidatedProfileImage("image/jpeg");
+        StoredFile storedFile = new StoredFile(
+                "member-profiles/2026/11/06/new-key",
+                "google-profile-image",
+                "image/jpeg",
+                content.length
+        );
 
         when(memberRepository.findById(MEMBER_ID))
                 .thenReturn(Optional.of(member));
@@ -410,12 +430,27 @@ class MemberServiceTest {
         )).thenReturn(Optional.of(account));
         when(account.getProviderProfileImageUrl())
                 .thenReturn(socialImageUrl);
+        when(googleProfileImageClient.download(socialImageUrl))
+                .thenReturn(downloaded);
+        when(profileImageValidator.validate(content))
+                .thenReturn(validated);
+        when(fileStorage.store(
+                content,
+                "google-profile-image",
+                "image/jpeg",
+                StorageCategory.MEMBER_PROFILE
+        )).thenReturn(storedFile);
 
         memberService.applySocialProfileImage(MEMBER_ID, request);
 
-        verify(member).applyExternalProfileImage(socialImageUrl);
+        verify(member).updateProfileImage(
+                storedFile.storageKey(),
+                "image/jpeg",
+                storedFile.sizeBytes()
+        );
         verify(memberRepository).saveAndFlush(member);
-        verifyNoInteractions(storageDeletionTaskRepository, fileStorage);
+        verifyNoInteractions(storageDeletionTaskRepository);
+        verify(fileStorage, never()).delete(storedFile.storageKey());
     }
 
     @Test
@@ -439,11 +474,13 @@ class MemberServiceTest {
                         .isEqualTo(ErrorCode.SOCIAL_ACCOUNT_NOT_FOUND)
         );
 
-        verify(member, never()).applyExternalProfileImage(
-                org.mockito.ArgumentMatchers.any()
-        );
         verify(memberRepository, never()).saveAndFlush(member);
-        verifyNoInteractions(storageDeletionTaskRepository, fileStorage);
+        verifyNoInteractions(
+                googleProfileImageClient,
+                profileImageValidator,
+                storageDeletionTaskRepository,
+                fileStorage
+        );
     }
 
     @Test
@@ -468,11 +505,168 @@ class MemberServiceTest {
                         .isEqualTo(ErrorCode.PROFILE_IMAGE_NOT_FOUND)
         );
 
-        verify(member, never()).applyExternalProfileImage(
-                org.mockito.ArgumentMatchers.any()
+        verify(memberRepository, never()).saveAndFlush(member);
+        verifyNoInteractions(
+                googleProfileImageClient,
+                profileImageValidator,
+                storageDeletionTaskRepository,
+                fileStorage
+        );
+    }
+
+    @Test
+    void applySocialProfileImageStopsWhenDownloadFails() {
+        Member member = mock(Member.class);
+        SocialAccount account = mock(SocialAccount.class);
+        SocialProfileProviderRequest request =
+                new SocialProfileProviderRequest(SocialProvider.GOOGLE);
+        String socialImageUrl =
+                "https://lh3.googleusercontent.com/profile.png";
+        CustomException failure = new CustomException(
+                ErrorCode.SOCIAL_PROFILE_IMAGE_DOWNLOAD_FAILED
+        );
+
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndMemberId(
+                SocialProvider.GOOGLE,
+                MEMBER_ID
+        )).thenReturn(Optional.of(account));
+        when(account.getProviderProfileImageUrl())
+                .thenReturn(socialImageUrl);
+        when(googleProfileImageClient.download(socialImageUrl))
+                .thenThrow(failure);
+
+        assertThatThrownBy(() ->
+                memberService.applySocialProfileImage(MEMBER_ID, request)
+        ).isSameAs(failure);
+
+        verifyNoInteractions(
+                profileImageValidator,
+                fileStorage,
+                storageDeletionTaskRepository
         );
         verify(memberRepository, never()).saveAndFlush(member);
-        verifyNoInteractions(storageDeletionTaskRepository, fileStorage);
+    }
+
+    @Test
+    void applySocialProfileImageStopsWhenValidationFails() {
+        Member member = mock(Member.class);
+        SocialAccount account = mock(SocialAccount.class);
+        SocialProfileProviderRequest request =
+                new SocialProfileProviderRequest(SocialProvider.GOOGLE);
+        String socialImageUrl =
+                "https://lh3.googleusercontent.com/profile.png";
+        byte[] content = {1, 2, 3};
+        DownloadedProfileImage downloaded =
+                new DownloadedProfileImage(content);
+        CustomException failure =
+                new CustomException(ErrorCode.PROFILE_IMAGE_INVALID);
+
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndMemberId(
+                SocialProvider.GOOGLE,
+                MEMBER_ID
+        )).thenReturn(Optional.of(account));
+        when(account.getProviderProfileImageUrl())
+                .thenReturn(socialImageUrl);
+        when(googleProfileImageClient.download(socialImageUrl))
+                .thenReturn(downloaded);
+        when(profileImageValidator.validate(content))
+                .thenThrow(failure);
+
+        assertThatThrownBy(() ->
+                memberService.applySocialProfileImage(MEMBER_ID, request)
+        ).isSameAs(failure);
+
+        verifyNoInteractions(fileStorage, storageDeletionTaskRepository);
+        verify(memberRepository, never()).saveAndFlush(member);
+    }
+
+    @Test
+    void initializeSocialProfileImageStoresImageWhenAbsent() {
+        Member member = mock(Member.class);
+        String socialImageUrl =
+                "https://lh3.googleusercontent.com/profile.png";
+        byte[] content = {1, 2, 3};
+        DownloadedProfileImage downloaded =
+                new DownloadedProfileImage(content);
+        ValidatedProfileImage validated =
+                new ValidatedProfileImage("image/jpeg");
+        StoredFile storedFile = new StoredFile(
+                "member-profiles/2026/11/06/new-key",
+                "google-profile-image",
+                "image/jpeg",
+                content.length
+        );
+
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(googleProfileImageClient.download(socialImageUrl))
+                .thenReturn(downloaded);
+        when(profileImageValidator.validate(content))
+                .thenReturn(validated);
+        when(fileStorage.store(
+                content,
+                "google-profile-image",
+                "image/jpeg",
+                StorageCategory.MEMBER_PROFILE
+        )).thenReturn(storedFile);
+
+        memberService.initializeSocialProfileImageIfAbsent(
+                MEMBER_ID,
+                socialImageUrl
+        );
+
+        verify(member).updateProfileImage(
+                storedFile.storageKey(),
+                "image/jpeg",
+                storedFile.sizeBytes()
+        );
+        verify(memberRepository).saveAndFlush(member);
+        verifyNoInteractions(storageDeletionTaskRepository);
+    }
+
+    @Test
+    void initializeSocialProfileImagePreservesStoredImage() {
+        Member member = mock(Member.class);
+        when(member.hasStoredProfileImage()).thenReturn(true);
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+
+        memberService.initializeSocialProfileImageIfAbsent(
+                MEMBER_ID,
+                "https://lh3.googleusercontent.com/profile.png"
+        );
+
+        verifyNoInteractions(
+                googleProfileImageClient,
+                profileImageValidator,
+                fileStorage,
+                storageDeletionTaskRepository
+        );
+        verify(memberRepository, never()).saveAndFlush(member);
+    }
+
+    @Test
+    void initializeSocialProfileImageIgnoresMissingImageUrl() {
+        Member member = mock(Member.class);
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+
+        memberService.initializeSocialProfileImageIfAbsent(
+                MEMBER_ID,
+                null
+        );
+
+        verifyNoInteractions(
+                googleProfileImageClient,
+                profileImageValidator,
+                fileStorage,
+                storageDeletionTaskRepository
+        );
+        verify(memberRepository, never()).saveAndFlush(member);
     }
 
     @Test

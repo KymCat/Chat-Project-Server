@@ -7,6 +7,7 @@ import com.project.ChatProject.oauth.GoogleOidcProfileMapper;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
 import com.project.ChatProject.oauth.SocialUserProfile;
 import com.project.ChatProject.service.AuthTokenService;
+import com.project.ChatProject.service.MemberService;
 import com.project.ChatProject.service.SocialLoginService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,6 +24,7 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -45,6 +47,9 @@ class OAuth2LoginSuccessHandlerTest {
 
     @Mock
     private AuthCookieFactory authCookieFactory;
+
+    @Mock
+    private MemberService memberService;
 
     @Mock
     private HttpServletRequest request;
@@ -82,6 +87,7 @@ class OAuth2LoginSuccessHandlerTest {
                 "https://example.com/profile.png"
         );
         Member member = org.mockito.Mockito.mock(Member.class);
+        when(member.getId()).thenReturn(2L);
         TokenResponse tokenResponse = new TokenResponse(
                 "access-token",
                 "refresh-token",
@@ -110,11 +116,17 @@ class OAuth2LoginSuccessHandlerTest {
         InOrder inOrder = inOrder(
                 googleOidcProfileMapper,
                 socialLoginService,
+                memberService,
                 authTokenService,
                 loginCodeStore
         );
         inOrder.verify(googleOidcProfileMapper).map(oidcUser);
         inOrder.verify(socialLoginService).login(profile);
+        inOrder.verify(memberService)
+                .initializeSocialProfileImageIfAbsent(
+                        2L,
+                        profile.profileImageUrl()
+                );
         inOrder.verify(authTokenService).create(member);
         inOrder.verify(loginCodeStore).create(
                 "session-id",
@@ -129,6 +141,56 @@ class OAuth2LoginSuccessHandlerTest {
                 HttpHeaders.SET_COOKIE,
                 "refresh-token-cookie"
         );
+        verify(response).sendRedirect(
+                "http://localhost:3000/oauth/callback?code=login-code"
+        );
+    }
+
+    @Test
+    void profileImageInitializationFailureDoesNotStopLogin()
+            throws Exception {
+        SocialUserProfile profile = new SocialUserProfile(
+                SocialProvider.GOOGLE,
+                "google-user-id",
+                "user@example.com",
+                true,
+                "Google User",
+                "https://lh3.googleusercontent.com/profile.png"
+        );
+        Member member = org.mockito.Mockito.mock(Member.class);
+        TokenResponse tokenResponse = new TokenResponse(
+                "access-token",
+                "refresh-token",
+                "session-id"
+        );
+
+        when(member.getId()).thenReturn(2L);
+        when(authentication.getAuthorizedClientRegistrationId())
+                .thenReturn("google");
+        when(authentication.getPrincipal()).thenReturn(oidcUser);
+        when(googleOidcProfileMapper.map(oidcUser)).thenReturn(profile);
+        when(socialLoginService.login(profile)).thenReturn(member);
+        doThrow(new RuntimeException("이미지 초기화 실패"))
+                .when(memberService)
+                .initializeSocialProfileImageIfAbsent(
+                        2L,
+                        profile.profileImageUrl()
+                );
+        when(authTokenService.create(member)).thenReturn(tokenResponse);
+        when(loginCodeStore.create("session-id", "access-token"))
+                .thenReturn("login-code");
+        when(authCookieFactory.createSessionIdCookie("session-id"))
+                .thenReturn("session-id-cookie");
+        when(authCookieFactory.createRefreshTokenCookie("refresh-token"))
+                .thenReturn("refresh-token-cookie");
+
+        successHandler.onAuthenticationSuccess(
+                request,
+                response,
+                authentication
+        );
+
+        verify(authTokenService).create(member);
         verify(response).sendRedirect(
                 "http://localhost:3000/oauth/callback?code=login-code"
         );
@@ -151,6 +213,11 @@ class OAuth2LoginSuccessHandlerTest {
         verify(socialLoginService, never()).login(
                 org.mockito.ArgumentMatchers.any()
         );
+        verify(memberService, never())
+                .initializeSocialProfileImageIfAbsent(
+                        org.mockito.ArgumentMatchers.anyLong(),
+                        org.mockito.ArgumentMatchers.any()
+                );
         verify(authTokenService, never()).create(
                 org.mockito.ArgumentMatchers.any()
         );

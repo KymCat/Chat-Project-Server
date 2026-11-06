@@ -23,7 +23,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 
-import java.net.URI;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -141,23 +140,11 @@ class MemberControllerTest {
         assertThat(response.getHeaders().getContentType())
                 .isEqualTo(MediaType.IMAGE_PNG);
         assertThat(response.getHeaders().getContentLength()).isEqualTo(5L);
+        assertThat(response.getHeaders().getCacheControl())
+                .contains("max-age=3600")
+                .contains("private");
         assertThat(response.getBody()).isSameAs(resource);
         verify(memberService).getProfileImage(2L);
-    }
-
-    @Test
-    void getProfileImageRedirectsToExternalProfileUrl() {
-        String externalUrl = "https://example.com/profile.png";
-        when(memberService.getProfileImage(2L))
-                .thenReturn(ProfileImageResult.external(externalUrl));
-
-        ResponseEntity<Resource> response =
-                memberController.getProfileImage(2L);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
-        assertThat(response.getHeaders().getLocation())
-                .isEqualTo(URI.create(externalUrl));
-        assertThat(response.getBody()).isNull();
     }
 
     @Test

@@ -15,6 +15,8 @@ import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.profile.ProfileImageValidator;
 import com.project.ChatProject.profile.ValidatedProfileImage;
+import com.project.ChatProject.profile.google.DownloadedProfileImage;
+import com.project.ChatProject.profile.google.GoogleProfileImageClient;
 import com.project.ChatProject.repository.*;
 import com.project.ChatProject.storage.FileStorage;
 import com.project.ChatProject.storage.StorageCategory;
@@ -40,6 +42,7 @@ public class MemberService {
     private final StorageDeletionTaskRepository storageDeletionTaskRepository;
     private final SocialAccountRepository socialAccountRepository;
     private final FriendshipRepository friendshipRepository;
+    private final GoogleProfileImageClient googleProfileImageClient;
 
     @Transactional(readOnly = true)
     public MemberProfileResponse getProfile(Long memberId) {
@@ -78,7 +81,9 @@ public class MemberService {
     }
 
     @Transactional(readOnly = true)
-    public ProfileImageResult getProfileImage(Long memberId) {
+    public ProfileImageResult getProfileImage(
+            Long memberId
+    ) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() ->
                         new CustomException(
@@ -92,26 +97,20 @@ public class MemberService {
             );
         }
 
-        if (member.hasStoredProfileImage()) {
-            Resource resource = fileStorage.load(
-                    member.getProfileImageStorageKey()
-            );
-
-            return ProfileImageResult.stored(
-                    resource,
-                    member.getProfileImageContentType(),
-                    member.getProfileImageSizeBytes()
+        if (!member.hasStoredProfileImage()) {
+            throw new CustomException(
+                    ErrorCode.PROFILE_IMAGE_NOT_FOUND
             );
         }
 
-        if (member.getProfileImageUrl() != null) {
-            return ProfileImageResult.external(
-                    member.getProfileImageUrl()
-            );
-        }
+        Resource resource = fileStorage.load(
+                member.getProfileImageStorageKey()
+        );
 
-        throw new CustomException(
-                ErrorCode.PROFILE_IMAGE_NOT_FOUND
+        return ProfileImageResult.stored(
+                resource,
+                member.getProfileImageContentType(),
+                member.getProfileImageSizeBytes()
         );
     }
 
@@ -163,27 +162,18 @@ public class MemberService {
         String socialProfileImageUrl =
                 account.getProviderProfileImageUrl();
 
-        if (!StringUtils.hasText(socialProfileImageUrl)) {
+        if (!StringUtils.hasText(
+                socialProfileImageUrl
+        )) {
             throw new CustomException(
                     ErrorCode.PROFILE_IMAGE_NOT_FOUND
             );
         }
 
-        String previousStorageKey =
-                member.getProfileImageStorageKey();
-
-        member.applyExternalProfileImage(
+        downloadAndStoreSocialProfileImage(
+                member,
                 socialProfileImageUrl
         );
-
-        if (previousStorageKey != null) {
-            StorageDeletionTask deletionTask =
-                    StorageDeletionTask.create(previousStorageKey);
-
-            storageDeletionTaskRepository.save(deletionTask);
-        }
-
-        memberRepository.saveAndFlush(member);
     }
 
     @Transactional
@@ -198,41 +188,20 @@ public class MemberService {
                         )
                 );
 
-        String previousStorageKey =
-                member.getProfileImageStorageKey();
+        ValidatedProfileImage validated =
+                profileImageValidator.validate(file);
 
-        ValidatedProfileImage validated = profileImageValidator.validate(file);
-        StoredFile storedFile = fileStorage.store(
-                file,
-                StorageCategory.MEMBER_PROFILE
+        StoredFile storedFile =
+                fileStorage.store(
+                        file,
+                        StorageCategory.MEMBER_PROFILE
+                );
+
+        replaceStoredProfileImage(
+                member,
+                storedFile,
+                validated.contentType()
         );
-
-        try {
-            member.updateProfileImage(
-                    storedFile.storageKey(),
-                    validated.contentType(),
-                    storedFile.sizeBytes()
-            );
-
-            if (previousStorageKey != null) {
-                StorageDeletionTask deletionTask =
-                        StorageDeletionTask.create(previousStorageKey);
-
-                storageDeletionTaskRepository.save(deletionTask);
-            }
-
-            // member가 이미 영속 상태이지만 보상 삭제를 위한 saveAndFlush
-            memberRepository.saveAndFlush(member);
-        } catch (RuntimeException exception) {
-            try {
-                // DB 반영 실패 시, S3 저장된 파일을 보상 삭제
-                fileStorage.delete(storedFile.storageKey());
-            } catch (RuntimeException cleanupException) {
-                exception.addSuppressed(cleanupException);
-            }
-
-            throw exception;
-        }
     }
 
     @Transactional
@@ -275,7 +244,118 @@ public class MemberService {
         member.updateStatusMessage(newStatusMessage);
     }
 
+    @Transactional
+    public void initializeSocialProfileImageIfAbsent(
+            Long memberId,
+            String socialProfileImageUrl
+    ) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+
+        /*
+         * 사용자가 업로드했거나 이전 로그인에서 이미 S3에 저장된
+         * 프로필 이미지는 Google 로그인으로 덮어쓰지 않게 return
+         */
+        if (member.hasStoredProfileImage()) {
+            return;
+        }
+
+        /*
+         * Google 계정에 프로필 이미지가 없는 것은
+         * 로그인 실패 사유가 아니도록 멱등성 코딩
+         */
+        if (!StringUtils.hasText(
+                socialProfileImageUrl
+        )) {
+            return;
+        }
+
+        downloadAndStoreSocialProfileImage(
+                member,
+                socialProfileImageUrl
+        );
+    }
+
     // === private method ===
+
+    private void downloadAndStoreSocialProfileImage(
+            Member member,
+            String socialProfileImageUrl
+    ) {
+        DownloadedProfileImage downloaded =
+                googleProfileImageClient.download(
+                        socialProfileImageUrl
+                );
+
+        ValidatedProfileImage validated =
+                profileImageValidator.validate(
+                        downloaded.content()
+                );
+
+        StoredFile storedFile =
+                fileStorage.store(
+                        downloaded.content(),
+                        "google-profile-image",
+                        validated.contentType(),
+                        StorageCategory.MEMBER_PROFILE
+                );
+
+        replaceStoredProfileImage(
+                member,
+                storedFile,
+                validated.contentType()
+        );
+    }
+
+    private void replaceStoredProfileImage(
+            Member member,
+            StoredFile storedFile,
+            String validatedContentType
+    ) {
+        String previousStorageKey =
+                member.getProfileImageStorageKey();
+
+        try {
+            member.updateProfileImage(
+                    storedFile.storageKey(),
+                    validatedContentType,
+                    storedFile.sizeBytes()
+            );
+
+            if (previousStorageKey != null) {
+                StorageDeletionTask deletionTask =
+                        StorageDeletionTask.create(
+                                previousStorageKey
+                        );
+
+                storageDeletionTaskRepository.save(
+                        deletionTask
+                );
+            }
+
+            /*
+             * Member는 영속 상태지만 DB 반영 실패를 이 method 안에서
+             * 감지해 새 S3 object를 보상 삭제하기 위해 flush
+             */
+            memberRepository.saveAndFlush(member);
+        } catch (RuntimeException exception) {
+            try {
+                fileStorage.delete(
+                        storedFile.storageKey()
+                );
+            } catch (RuntimeException cleanupException) {
+                exception.addSuppressed(
+                        cleanupException
+                );
+            }
+
+            throw exception;
+        }
+    }
 
     private Member validateMember(Long memberId) {
         Member member = memberRepository
