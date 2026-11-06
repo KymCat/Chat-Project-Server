@@ -53,6 +53,11 @@ public enum ErrorCode {
             "MEMBER-009",
             "등록된 프로필 이미지가 없습니다."
     ),
+    SOCIAL_PROFILE_IMAGE_DOWNLOAD_FAILED(
+            HttpStatus.BAD_GATEWAY,
+            "MEMBER-010",
+            "소셜 프로필 이미지를 가져오지 못했습니다."
+    ),
 
     // ChatRoom Exception
     CHAT_ROOM_NOT_FOUND(
