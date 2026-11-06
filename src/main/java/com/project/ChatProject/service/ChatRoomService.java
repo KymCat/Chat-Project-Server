@@ -3,6 +3,7 @@ package com.project.ChatProject.service;
 import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.event.ChatRoomEvent;
 import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
+import com.project.ChatProject.dto.projection.DirectChatRoomDisplayNameProjection;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.entity.*;
@@ -70,6 +71,30 @@ public class ChatRoomService {
                                 ChatRoomUnreadCountProjection::getUnreadCount
                         ));
 
+        List<Long> roomIds = chatRoomMembers.stream()
+                .filter(chatRoomMember ->
+                        chatRoomMember.getChatRoom().getType() == ChatRoomType.DIRECT)
+                .map(chatRoomMember -> chatRoomMember.getChatRoom().getId())
+                .toList();
+
+        Map<Long, String> displayNameByRoomId =
+                roomIds.isEmpty()
+                    ? Map.of()
+                    : chatRoomMemberRepository
+                        .findDirectChatRoomTargetMemberName(
+                                roomIds,
+                                memberId,
+                                ChatRoomType.DIRECT
+                        )
+                        .stream()
+                        .collect(Collectors.toMap(
+                                DirectChatRoomDisplayNameProjection::getRoomId,
+                                projection -> resolveDirectDisplayName(
+                                        projection.getNickname(),
+                                        projection.getStatus()
+                                )
+                        ));
+
         return chatRoomMembers.stream()
                 .map(chatRoomMember -> {
                     Long roomId = chatRoomMember.getChatRoom().getId();
@@ -77,7 +102,18 @@ public class ChatRoomService {
                     long unreadCount =
                             unreadCountByRoomId.getOrDefault(roomId, 0L);
 
-                    return ChatRoomResponse.of(chatRoomMember, unreadCount);
+                    if (chatRoomMember.getChatRoom().getType() == ChatRoomType.GROUP) {
+                        return ChatRoomResponse.of(chatRoomMember, unreadCount);
+                    }
+
+                    String displayName =
+                            displayNameByRoomId.getOrDefault(roomId, "알수없는 채팅방");
+
+                    return ChatRoomResponse.ofDirect(
+                            chatRoomMember,
+                            unreadCount,
+                            displayName
+                    );
                 })
                 .toList();
     }
@@ -177,10 +213,12 @@ public class ChatRoomService {
     }
 
     @Transactional
-    public ChatMessageEvent leave(Long roomId, Long memberId) {
-
+    public Optional<ChatMessageEvent> leave(
+            Long roomId,
+            Long memberId
+    ) {
         ChatRoomParticipationContext context = participation
-                .requireParticipation(
+                .requireConversationParticipation(
                         roomId,
                         memberId,
                         ParticipationLockMode.CHAT_ROOM
@@ -190,7 +228,28 @@ public class ChatRoomService {
         Member member = context.member();
         ChatRoomMember chatRoomMember = context.chatRoomMember();
 
-        // 채팅방 OWNER 나가기 방지
+        if (chatRoom.getType() == ChatRoomType.DIRECT) {
+            ChatRoomMember lockedMember = chatRoomMemberRepository
+                    .findByChatRoomIdAndMemberIdForUpdate(
+                            roomId,
+                            memberId
+                    )
+                    .orElseThrow(() ->
+                            new CustomException(
+                                    ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                            )
+                    );
+
+            if (!lockedMember.isParticipating()) {
+                throw new CustomException(
+                        ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                );
+            }
+
+            lockedMember.leave();
+            return Optional.empty();
+        }
+
         if (chatRoomMember.getRole() == ChatRoomMemberRole.OWNER) {
             throw new CustomException(
                     ErrorCode.CHAT_ROOM_OWNER_TRANSFER_REQUIRED
@@ -198,16 +257,20 @@ public class ChatRoomService {
         }
 
         chatRoomMember.leave();
-        ChatMessage leaveMessage =
-                ChatMessage.createSystem(
-                        chatRoom,
-                        member.getNickname() + "님이 퇴장하였습니다."
-                );
+
+        ChatMessage leaveMessage = ChatMessage.createSystem(
+                chatRoom,
+                member.getNickname() + "님이 퇴장하였습니다."
+        );
+
         chatMessageRepository.save(leaveMessage);
         chatRoom.updateLastMessageAt(leaveMessage.getCreatedAt());
 
-        return ChatMessageEvent
-                .created(ChatMessageResponse.from(leaveMessage));
+        return Optional.of(
+                ChatMessageEvent.created(
+                        ChatMessageResponse.from(leaveMessage)
+                )
+        );
     }
 
     @Transactional(readOnly = true)
@@ -515,12 +578,12 @@ public class ChatRoomService {
         return ChatRoomEvent.deleted(roomId, roomName);
     }
 
-    @Transactional
-    public DirectChatResponse createDirect(
+    @Transactional(readOnly = true)
+    public DirectChatRoomResponse findDirectChatRoom(
             Long memberId,
-            Long targetMemberId,
-            String content
+            Long targetMemberId
     ) {
+        participation.requireActiveMember(memberId);
 
         String directKey = createDirectKey(
                 memberId,
@@ -530,15 +593,37 @@ public class ChatRoomService {
         Optional<ChatRoom> existingRoom = chatRoomRepository
                 .findByDirectKey(directKey);
 
-        // DIRECT 채팅방 존재할 경우
         if (existingRoom.isPresent()) {
-            return existingRoomResponse(
-                    existingRoom.get(),
-                    memberId,
-                    targetMemberId,
-                    content
+            ChatRoomParticipationContext context = participation
+                    .requireDirectMembership(
+                            existingRoom.get().getId(),
+                            memberId,
+                            ParticipationLockMode.NONE
+                    );
+
+            if (!context.chatRoomMember().isParticipating()) {
+                return DirectChatRoomResponse.notFound();
+            }
+
+            return DirectChatRoomResponse.found(
+                    context.chatRoom().getId()
             );
         }
+
+        return DirectChatRoomResponse.notFound();
+    }
+
+    @Transactional
+    public DirectChatResponse sendDirectMessage(
+            Long memberId,
+            Long targetMemberId,
+            String content
+    ) {
+
+        String directKey = createDirectKey(
+                memberId,
+                targetMemberId
+        );
 
         // 친구 관계 row Lock
         friendshipRepository
@@ -553,9 +638,10 @@ public class ChatRoomService {
                         )
                 );
 
-        // Lock을 기다리는 동안 다른 transaction이 만들었는지 재확인
-        existingRoom = chatRoomRepository.findByDirectKey(directKey);
+        Optional<ChatRoom> existingRoom = chatRoomRepository
+                .findByDirectKey(directKey);
 
+        // DIRECT 채팅방 존재할 경우
         if (existingRoom.isPresent()) {
             return existingRoomResponse(
                     existingRoom.get(),
@@ -595,9 +681,18 @@ public class ChatRoomService {
                 ChatMessageResponse.from(message)
         );
     }
-
-
     // === Private Method ===
+
+    private String resolveDirectDisplayName(
+            String nickname,
+            MemberStatus status
+    ) {
+        return switch (status) {
+            case ACTIVE -> nickname;
+            case SUSPENDED -> "비활성화된 회원";
+            case WITHDRAWN -> "탈퇴한 유저";
+        };
+    }
 
     private DirectChatResponse existingRoomResponse(
             ChatRoom chatRoom,
@@ -606,23 +701,31 @@ public class ChatRoomService {
             String content
     ) {
 
-        ChatRoomParticipationContext context = participation
-                .requireDirectParticipation(
+        ChatRoomParticipationContext senderContext = participation
+                .requireDirectMembership(
                         chatRoom.getId(),
                         senderId,
-                        ParticipationLockMode.NONE
+                        ParticipationLockMode.CHAT_ROOM_MEMBER
                 );
 
-        // 상대방 검증
-        participation.requireDirectParticipation(
+        if (!senderContext.chatRoomMember().isParticipating()) {
+            senderContext.chatRoomMember().rejoin();
+        }
+
+        ChatRoomParticipationContext receiverContext = participation
+                .requireDirectMembership(
                         chatRoom.getId(),
                         receiverId,
-                        ParticipationLockMode.NONE
+                        ParticipationLockMode.CHAT_ROOM_MEMBER
                 );
+
+        if (!receiverContext.chatRoomMember().isParticipating()) {
+            receiverContext.chatRoomMember().rejoin();
+        }
 
         ChatMessage message = ChatMessage.createText(
                 chatRoom,
-                context.member(),
+                senderContext.member(),
                 content.strip()
         );
 

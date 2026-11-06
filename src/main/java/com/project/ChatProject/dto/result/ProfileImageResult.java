@@ -4,9 +4,8 @@ import org.springframework.core.io.Resource;
 
 public record ProfileImageResult(
         Resource resource,
-        String externalUrl,
         String contentType,
-        Long sizeBytes
+        long sizeBytes
 ) {
 
     public static ProfileImageResult stored(
@@ -16,22 +15,8 @@ public record ProfileImageResult(
     ) {
         return new ProfileImageResult(
                 resource,
-                null,
                 contentType,
                 sizeBytes
         );
-    }
-
-    public static ProfileImageResult external(String externalUrl) {
-        return new ProfileImageResult(
-                null,
-                externalUrl,
-                null,
-                null
-        );
-    }
-
-    public boolean isExternal() {
-        return externalUrl != null;
     }
 }

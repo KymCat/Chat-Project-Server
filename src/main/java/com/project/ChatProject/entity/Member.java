@@ -35,9 +35,6 @@ public class Member extends BaseTimeEntity {
     )
     private String nickname;
 
-    @Column(name = "profile_image_url", length = 2048)
-    private String profileImageUrl;
-
     @Column(
             name = "profile_image_storage_key",
             length = 1024,
@@ -75,13 +72,11 @@ public class Member extends BaseTimeEntity {
     private Instant withdrawnAt;
 
     private static Member createMember(
-            String profileImageUrl,
             String email,
             String nickname
     ) {
         Member member = new Member();
 
-        member.profileImageUrl = profileImageUrl;
         member.profileImageStorageKey = null;
         member.profileImageContentType = null;
         member.profileImageSizeBytes = null;
@@ -101,19 +96,6 @@ public class Member extends BaseTimeEntity {
             String nickname
     ) {
         return createMember(
-                null,
-                email,
-                nickname
-        );
-    }
-
-    public static Member createWithExternalProfileImage(
-            String profileImageUrl,
-            String email,
-            String nickname
-    ) {
-        return createMember(
-                profileImageUrl,
                 email,
                 nickname
         );
@@ -132,14 +114,12 @@ public class Member extends BaseTimeEntity {
             String profileImageContentType,
             long profileImageSizeBytes
     ) {
-        this.profileImageUrl = null;
         this.profileImageStorageKey = profileImageStorageKey;
         this.profileImageContentType = profileImageContentType;
         this.profileImageSizeBytes = profileImageSizeBytes;
     }
 
     public void deleteProfileImage() {
-        this.profileImageUrl = null;
         this.profileImageStorageKey = null;
         this.profileImageContentType = null;
         this.profileImageSizeBytes = null;
@@ -149,20 +129,6 @@ public class Member extends BaseTimeEntity {
         return this.profileImageStorageKey != null;
     }
 
-    public void synchronizeExternalProfileImage(String profileImageUrl) {
-        if (hasStoredProfileImage()) {
-            return;
-        }
-
-        this.profileImageUrl = profileImageUrl;
-    }
-
-    public void applyExternalProfileImage(String profileImageUrl) {
-        this.profileImageUrl = profileImageUrl;
-        this.profileImageStorageKey = null;
-        this.profileImageContentType = null;
-        this.profileImageSizeBytes = null;
-    }
 
     public void updateStatusMessage(String statusMessage) {
         this.statusMessage = statusMessage;

@@ -51,6 +51,9 @@ profile-image:
     max-width: 4096
     max-height: 4096
     max-pixels: 16777216
+    google-download :
+        connect-timeout : 3s
+        read-timeout : 5s
 
 jwt:
     access-token-expiration: ${ACCESS_TOKEN_EXPIRATION}

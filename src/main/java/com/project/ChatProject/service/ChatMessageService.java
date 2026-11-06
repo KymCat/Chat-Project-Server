@@ -5,16 +5,22 @@ import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
+import com.project.ChatProject.dto.result.ChatMessageSaveResult;
 import com.project.ChatProject.entity.Attachment;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
+import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.entity.enums.ChatMessageType;
+import com.project.ChatProject.entity.enums.ChatRoomType;
+import com.project.ChatProject.entity.enums.FriendshipStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.AttachmentRepository;
 import com.project.ChatProject.repository.ChatMessageRepository;
+import com.project.ChatProject.repository.ChatRoomMemberRepository;
+import com.project.ChatProject.repository.FriendshipRepository;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
 import com.project.ChatProject.service.support.ParticipationLockMode;
 import lombok.RequiredArgsConstructor;
@@ -33,9 +39,11 @@ public class ChatMessageService {
     private final ChatRoomParticipationService participation;
     private final ChatMessageRepository chatMessageRepository;
     private final AttachmentRepository attachmentRepository;
+    private final ChatRoomMemberRepository chatRoomMemberRepository;
+    private final FriendshipRepository friendshipRepository;
 
     @Transactional
-    public ChatMessageEvent save(
+    public ChatMessageSaveResult save(
             Long memberId,
             ChatMessageRequest request
     ) {
@@ -49,6 +57,16 @@ public class ChatMessageService {
         Member sender = context.member();
         ChatRoom chatRoom = context.chatRoom();
 
+        Long rejoinedMemberId = null;
+
+        // Direct 채팅방 친구관계 확인 및 상대방 재참여
+        if (chatRoom.getType() == ChatRoomType.DIRECT) {
+            rejoinedMemberId = validateFriendshipAndRejoinReceiver(
+                    sender.getId(),
+                    chatRoom.getId()
+            );
+        }
+
         String content = request.content().strip();
         ChatMessage message = ChatMessage.createText(
                 chatRoom,
@@ -59,12 +77,18 @@ public class ChatMessageService {
 
         chatRoom.updateLastMessageAt(message.getCreatedAt());
 
-        return  ChatMessageEvent
-                .created(ChatMessageResponse.from(message));
+        ChatMessageEvent event = ChatMessageEvent.created(
+                ChatMessageResponse.from(message)
+        );
+
+        return ChatMessageSaveResult.of(
+                event,
+                rejoinedMemberId
+        );
     }
 
     @Transactional
-    public ChatMessageEvent saveAttachment(
+    public ChatMessageSaveResult saveAttachment(
             Long memberId,
             ChatAttachmentMessageRequest request
     ) {
@@ -74,6 +98,16 @@ public class ChatMessageService {
                         memberId,
                         ParticipationLockMode.NONE
                 );
+
+        Long rejoinedMemberId = null;
+
+        // Direct 채팅방 친구관계 확인 및 상대방 재참여
+        if (context.chatRoom().getType() == ChatRoomType.DIRECT) {
+            rejoinedMemberId = validateFriendshipAndRejoinReceiver(
+                    context.member().getId(),
+                    context.chatRoom().getId()
+            );
+        }
 
         Attachment attachment = attachmentRepository
                 .findByForUpdate(request.attachmentId())
@@ -103,8 +137,14 @@ public class ChatMessageService {
         context.chatRoom()
                 .updateLastMessageAt(message.getCreatedAt());
 
-        return ChatMessageEvent
-                .created(ChatMessageResponse.from(message));
+        ChatMessageEvent event = ChatMessageEvent.created(
+                ChatMessageResponse.from(message)
+        );
+
+        return ChatMessageSaveResult.of(
+                event,
+                rejoinedMemberId
+        );
     }
 
     @Transactional(readOnly = true)
@@ -172,7 +212,50 @@ public class ChatMessageService {
         );
     }
 
-    // === private method ==
+    // === private method ===
+
+    private Long validateFriendshipAndRejoinReceiver(
+            Long senderId,
+            Long roomId
+    ) {
+        Long receiverId = chatRoomMemberRepository
+                .findTargetMemberId(roomId, senderId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                        )
+                );
+
+        friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        senderId,
+                        receiverId,
+                        FriendshipStatus.ACCEPTED
+                )
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.FRIEND_RELATION_NOT_FOUND
+                        )
+                );
+
+        ChatRoomMember receiverMember = chatRoomMemberRepository
+                .findByChatRoomIdAndMemberIdForUpdate(
+                        roomId,
+                        receiverId
+                )
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
+                        )
+                );
+        if (receiverMember.isParticipating()) {
+            return null;
+        }
+
+        receiverMember.rejoin();
+
+        return receiverId;
+    }
 
     /**
      * 첨부파일 업로더와 현재 로그인 유저가 같은지 검증

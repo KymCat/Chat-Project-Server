@@ -6,14 +6,17 @@ import com.project.ChatProject.dto.request.ChatMessageRequest;
 import com.project.ChatProject.dto.response.AttachmentResponse;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.CursorPageResponse;
+import com.project.ChatProject.dto.result.ChatMessageSaveResult;
 import com.project.ChatProject.entity.Attachment;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
+import com.project.ChatProject.entity.Friendship;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatMessageEventType;
+import com.project.ChatProject.entity.enums.FriendshipStatus;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
@@ -21,6 +24,7 @@ import com.project.ChatProject.repository.AttachmentRepository;
 import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
+import com.project.ChatProject.repository.FriendshipRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +68,9 @@ class ChatMessageServiceTest {
     @Mock
     private AttachmentRepository attachmentRepository;
 
+    @Mock
+    private FriendshipRepository friendshipRepository;
+
     private ChatMessageService chatMessageService;
 
     @BeforeEach
@@ -77,7 +85,9 @@ class ChatMessageServiceTest {
         chatMessageService = new ChatMessageService(
                 participation,
                 chatMessageRepository,
-                attachmentRepository
+                attachmentRepository,
+                chatRoomMemberRepository,
+                friendshipRepository
         );
     }
 
@@ -109,10 +119,11 @@ class ChatMessageServiceTest {
                     return message;
                 });
 
-        ChatMessageEvent event = chatMessageService.save(
+        ChatMessageSaveResult result = chatMessageService.save(
                 MEMBER_ID,
                 new ChatMessageRequest(ROOM_ID, "  안녕하세요  ")
         );
+        ChatMessageEvent event = result.event();
 
         ArgumentCaptor<ChatMessage> messageCaptor =
                 ArgumentCaptor.forClass(ChatMessage.class);
@@ -142,6 +153,34 @@ class ChatMessageServiceTest {
                         false
                 )
         );
+        assertThat(result.rejoinedMemberId()).isNull();
+    }
+
+    @Test
+    void saveDirectMessageRejoinsReceiverAndReturnsMemberId() {
+        Instant createdAt = Instant.parse("2026-11-05T01:00:00Z");
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        Member receiver = receiver();
+        ChatRoom directRoom = directRoom();
+        ChatRoomMember senderRoomMember =
+                ChatRoomMember.createMember(directRoom, sender);
+        ChatRoomMember receiverRoomMember =
+                ChatRoomMember.createMember(directRoom, receiver);
+        receiverRoomMember.leave();
+
+        stubParticipation(sender, directRoom, senderRoomMember);
+        stubDirectReceiver(receiverRoomMember);
+        stubSavedMessage(createdAt, 103L);
+
+        ChatMessageSaveResult result = chatMessageService.save(
+                MEMBER_ID,
+                new ChatMessageRequest(ROOM_ID, "hello")
+        );
+
+        assertThat(result.rejoinedMemberId()).isEqualTo(2L);
+        assertThat(receiverRoomMember.isParticipating()).isTrue();
+        verify(chatRoomMemberRepository)
+                .findByChatRoomIdAndMemberIdForUpdate(ROOM_ID, 2L);
     }
 
     @Test
@@ -163,10 +202,11 @@ class ChatMessageServiceTest {
                 .thenReturn(Optional.of(attachment));
         stubSavedMessage(createdAt, 101L);
 
-        ChatMessageEvent event = chatMessageService.saveAttachment(
+        ChatMessageSaveResult result = chatMessageService.saveAttachment(
                 MEMBER_ID,
                 new ChatAttachmentMessageRequest(ROOM_ID, 200L)
         );
+        ChatMessageEvent event = result.event();
 
         ArgumentCaptor<ChatMessage> messageCaptor =
                 ArgumentCaptor.forClass(ChatMessage.class);
@@ -190,6 +230,78 @@ class ChatMessageServiceTest {
                         1_024L
                 )
         );
+        assertThat(result.rejoinedMemberId()).isNull();
+    }
+
+    @Test
+    void saveDirectAttachmentRejoinsReceiverAndReturnsMemberId() {
+        Instant createdAt = Instant.parse("2026-11-05T01:00:00Z");
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        Member receiver = receiver();
+        ChatRoom directRoom = directRoom();
+        ChatRoomMember senderRoomMember =
+                ChatRoomMember.createMember(directRoom, sender);
+        ChatRoomMember receiverRoomMember =
+                ChatRoomMember.createMember(directRoom, receiver);
+        receiverRoomMember.leave();
+        Attachment attachment = attachment(
+                directRoom,
+                sender,
+                "image.png",
+                "image/png"
+        );
+
+        stubParticipation(sender, directRoom, senderRoomMember);
+        stubDirectReceiver(receiverRoomMember);
+        when(attachmentRepository.findByForUpdate(200L))
+                .thenReturn(Optional.of(attachment));
+        stubSavedMessage(createdAt, 104L);
+
+        ChatMessageSaveResult result = chatMessageService.saveAttachment(
+                MEMBER_ID,
+                new ChatAttachmentMessageRequest(ROOM_ID, 200L)
+        );
+
+        assertThat(result.rejoinedMemberId()).isEqualTo(2L);
+        assertThat(receiverRoomMember.isParticipating()).isTrue();
+        assertThat(result.event().message().type())
+                .isEqualTo(ChatMessageType.IMAGE);
+    }
+
+    @Test
+    void saveDirectMessageDoesNotRejoinReceiverWithoutFriendship() {
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        Member receiver = receiver();
+        ChatRoom directRoom = directRoom();
+        ChatRoomMember senderRoomMember =
+                ChatRoomMember.createMember(directRoom, sender);
+        ChatRoomMember receiverRoomMember =
+                ChatRoomMember.createMember(directRoom, receiver);
+        receiverRoomMember.leave();
+
+        stubParticipation(sender, directRoom, senderRoomMember);
+        when(chatRoomMemberRepository.findTargetMemberId(ROOM_ID, MEMBER_ID))
+                .thenReturn(Optional.of(2L));
+        when(friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        MEMBER_ID,
+                        2L,
+                        FriendshipStatus.ACCEPTED
+                )).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> chatMessageService.save(
+                MEMBER_ID,
+                new ChatMessageRequest(ROOM_ID, "hello")
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.FRIEND_RELATION_NOT_FOUND)
+        );
+
+        assertThat(receiverRoomMember.isParticipating()).isFalse();
+        verify(chatRoomMemberRepository, never())
+                .findByChatRoomIdAndMemberIdForUpdate(ROOM_ID, 2L);
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
     }
 
     @Test
@@ -211,13 +323,13 @@ class ChatMessageServiceTest {
                 .thenReturn(Optional.of(attachment));
         stubSavedMessage(createdAt, 102L);
 
-        ChatMessageEvent event = chatMessageService.saveAttachment(
+        ChatMessageSaveResult result = chatMessageService.saveAttachment(
                 MEMBER_ID,
                 new ChatAttachmentMessageRequest(ROOM_ID, 200L)
         );
 
-        assertThat(event.message().type()).isEqualTo(ChatMessageType.FILE);
-        assertThat(event.message().attachment().originalName())
+        assertThat(result.event().message().type()).isEqualTo(ChatMessageType.FILE);
+        assertThat(result.event().message().attachment().originalName())
                 .isEqualTo("document.pdf");
     }
 
@@ -650,6 +762,22 @@ class ChatMessageServiceTest {
                 });
     }
 
+    private void stubDirectReceiver(
+            ChatRoomMember receiverRoomMember
+    ) {
+        when(chatRoomMemberRepository.findTargetMemberId(ROOM_ID, MEMBER_ID))
+                .thenReturn(Optional.of(2L));
+        when(friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        MEMBER_ID,
+                        2L,
+                        FriendshipStatus.ACCEPTED
+                )).thenReturn(Optional.of(mock(Friendship.class)));
+        when(chatRoomMemberRepository
+                .findByChatRoomIdAndMemberIdForUpdate(ROOM_ID, 2L))
+                .thenReturn(Optional.of(receiverRoomMember));
+    }
+
     private Attachment attachment(
             ChatRoom chatRoom,
             Member uploader,
@@ -707,8 +835,28 @@ class ChatMessageServiceTest {
         return member;
     }
 
+    private Member receiver() {
+        Member receiver = Member.create(
+                "receiver@example.com",
+                "상대방"
+        );
+        ReflectionTestUtils.setField(receiver, "id", 2L);
+        ReflectionTestUtils.setField(
+                receiver,
+                "emailVerifiedAt",
+                Instant.now()
+        );
+        return receiver;
+    }
+
     private ChatRoom chatRoom() {
         ChatRoom chatRoom = ChatRoom.createGroup("Backend");
+        ReflectionTestUtils.setField(chatRoom, "id", ROOM_ID);
+        return chatRoom;
+    }
+
+    private ChatRoom directRoom() {
+        ChatRoom chatRoom = ChatRoom.createDirect("1:2");
         ReflectionTestUtils.setField(chatRoom, "id", ROOM_ID);
         return chatRoom;
     }

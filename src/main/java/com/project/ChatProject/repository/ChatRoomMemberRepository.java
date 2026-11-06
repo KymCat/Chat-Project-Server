@@ -1,7 +1,9 @@
 package com.project.ChatProject.repository;
 
 import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
+import com.project.ChatProject.dto.projection.DirectChatRoomDisplayNameProjection;
 import com.project.ChatProject.entity.ChatRoomMember;
+import com.project.ChatProject.entity.enums.ChatRoomType;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -40,7 +42,6 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
                     FROM ChatRoomMember crm
                     WHERE crm.chatRoom.id = :roomId
                         AND crm.member.id = :memberId
-                        AND crm.leftAt IS NULL
                     """
     )
     Optional<ChatRoomMember> findByChatRoomIdAndMemberIdForUpdate(
@@ -89,5 +90,38 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
     )
     List<ChatRoomUnreadCountProjection> findUnreadCountsByMemberId(
             @Param("memberId") Long memberId
+    );
+
+    // 내가 속해있는 direct 채팅방, 상대방 이름 반환
+    @Query(
+            value = """
+                    SELECT  crm.chatRoom.id AS roomId,
+                            m.nickname AS nickname,
+                            m.status AS status
+                    FROM ChatRoomMember crm
+                    JOIN crm.member m
+                    WHERE crm.member.id <> :memberId
+                        AND crm.chatRoom.id IN :roomIds
+                        AND crm.chatRoom.type = :type
+                    """
+    )
+    List<DirectChatRoomDisplayNameProjection> findDirectChatRoomTargetMemberName(
+            @Param("roomIds") List<Long> roomIds,
+            @Param("memberId") Long memberId,
+            @Param("type") ChatRoomType type
+    );
+
+    // 현재 direct 채팅방의 상대방 id 조회
+    @Query(
+            value = """
+                    SELECT crm.member.id
+                    FROM ChatRoomMember crm
+                    WHERE crm.chatRoom.id = :roomId
+                        AND crm.member.id <> :senderId
+                    """
+    )
+    Optional<Long> findTargetMemberId(
+            @Param("roomId") Long roomId,
+            @Param("senderId") Long senderId
     );
 }

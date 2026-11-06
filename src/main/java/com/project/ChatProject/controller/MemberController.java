@@ -13,6 +13,7 @@ import com.project.ChatProject.service.MemberService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.net.URI;
+import java.time.Duration;
 
 @RestController
 @RequestMapping("/member")
@@ -58,22 +59,26 @@ public class MemberController {
         ProfileImageResult result =
                 memberService.getProfileImage(memberId);
 
-        if (result.isExternal()) {
-            return ResponseEntity
-                    .status(HttpStatus.FOUND)
-                    .location(URI.create(result.externalUrl()))
-                    .build();
-        }
-
         return ResponseEntity
                 .ok()
+                .cacheControl(
+                        CacheControl
+                                .maxAge(
+                                        Duration.ofHours(1)
+                                )
+                                .cachePrivate()
+                )
                 .contentType(
                         MediaType.parseMediaType(
                                 result.contentType()
                         )
                 )
-                .contentLength(result.sizeBytes())
-                .body(result.resource());
+                .contentLength(
+                        result.sizeBytes()
+                )
+                .body(
+                        result.resource()
+                );
     }
 
     @PutMapping("/me/profile-image/social")

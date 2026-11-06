@@ -83,8 +83,8 @@ public class SocialLoginService {
      * @return
      */
     private Member loginExistingSocialAccount(
-            SocialAccount account,      // 기존
-            SocialUserProfile profile,  // 최신
+            SocialAccount account,
+            SocialUserProfile profile,
             String email
     ) {
         Member member = account.getMember();
@@ -92,12 +92,12 @@ public class SocialLoginService {
 
         account.synchronizeProfile(
                 email,
-                profile.displayName(),      // 최신 정보
-                profile.profileImageUrl()   // 최신 정보
+                profile.displayName(),
+                profile.profileImageUrl()
         );
 
-        member.synchronizeExternalProfileImage(profile.profileImageUrl());
         member.updateLastLoginAt();
+
         return member;
     }
 
@@ -144,9 +144,9 @@ public class SocialLoginService {
                 profile.displayName(),
                 profile.profileImageUrl()
         );
+
         socialAccountRepository.save(account);
 
-        member.synchronizeExternalProfileImage(profile.profileImageUrl());
         member.updateLastLoginAt();
 
         return member;
@@ -163,10 +163,11 @@ public class SocialLoginService {
             String email
     ) {
         Member member =
-                Member.createWithExternalProfileImage(
-                        profile.profileImageUrl(),
+                Member.create(
                         email,
-                        createNickName(profile.displayName())
+                        createNickName(
+                                profile.displayName()
+                        )
                 );
         member.verifyEmail();
         memberRepository.save(member);

@@ -59,7 +59,7 @@ public class ChatRoomParticipationService {
     }
 
     /**
-     * 채팅방과 채팅방멤버, 멤버 엔티티 검증 및 Lock
+     * `그룹` 채팅방과 채팅방멤버, 멤버 엔티티 검증 및 Lock
      * @param roomId
      * @param memberId
      * @param lockMode
@@ -78,12 +78,19 @@ public class ChatRoomParticipationService {
         );
     }
 
-    public ChatRoomParticipationContext requireDirectParticipation(
+    /**
+     * `일대일` 채팅방과 채팅방멤버, 멤버 엔티티 검증 및 Lock
+     * @param roomId
+     * @param memberId
+     * @param lockMode
+     * @return
+     */
+    public ChatRoomParticipationContext requireDirectMembership(
             Long roomId,
             Long memberId,
             ParticipationLockMode lockMode
     ) {
-        return requireParticipation(
+        return requireMembership(
                 roomId,
                 memberId,
                 lockMode,
@@ -91,6 +98,13 @@ public class ChatRoomParticipationService {
         );
     }
 
+    /**
+     * `모든` 채팅방과 채팅방멤버, 멤버 엔티티 검증 및 Lock
+     * @param roomId
+     * @param memberId
+     * @param lockMode
+     * @return
+     */
     public ChatRoomParticipationContext requireConversationParticipation(
             Long roomId,
             Long memberId,
@@ -107,7 +121,35 @@ public class ChatRoomParticipationService {
         );
     }
 
+    /*
+        현재 채팅방에 참여 중인지 검증 (leftAt IS NULL)
+    */
     private ChatRoomParticipationContext requireParticipation(
+            Long roomId,
+            Long memberId,
+            ParticipationLockMode lockMode,
+            Set<ChatRoomType> allowedTypes
+    ) {
+        ChatRoomParticipationContext context = requireMembership(
+                roomId,
+                memberId,
+                lockMode,
+                allowedTypes
+        );
+
+        if (!context.chatRoomMember().isParticipating()) {
+            throw new CustomException(
+                    ErrorCode.CHAT_ROOM_ACCESS_DENIED
+            );
+        }
+
+        return context;
+    }
+
+    /*
+        채팅방과 채팅방멤버, 멤버 엔티티 검증 및 Lock 로직 메서드
+     */
+    private ChatRoomParticipationContext requireMembership(
             Long roomId,
             Long memberId,
             ParticipationLockMode lockMode,
@@ -117,6 +159,7 @@ public class ChatRoomParticipationService {
             case CHAT_ROOM -> findChatRoomLock(roomId);
             case CHAT_ROOM_MEMBER, NONE -> findChatRoom(roomId);
         };
+
         validateChatRoom(chatRoom, allowedTypes);
 
         Member member = findMember(memberId);
@@ -128,12 +171,6 @@ public class ChatRoomParticipationService {
             case CHAT_ROOM, NONE ->
                     findChatRoomMember(roomId, memberId);
         };
-
-        if (!chatRoomMember.isParticipating()) {
-            throw new CustomException(
-                    ErrorCode.CHAT_ROOM_ACCESS_DENIED
-            );
-        }
 
         return new ChatRoomParticipationContext(
                 chatRoom,

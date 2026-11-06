@@ -9,7 +9,9 @@ import com.project.ChatProject.storage.StoredFile;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.InputStreamSource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -45,30 +47,59 @@ public class S3FileStorage implements FileStorage {
      * 실제 서비스 흐름에서는 허용된 파일만 이곳에 도달
      */
     @Override
-    public StoredFile store(MultipartFile file, StorageCategory category) {
-        String storageKey = createStorageKey(category);
-        String originalName = resolveOriginalName(file);
-        String contentType = resolveContentType(file);
+    public StoredFile store(
+            MultipartFile file,
+            StorageCategory category
+    ) {
+        return store(
+                file,
+                resolveOriginalName(file),
+                resolveContentType(file),
+                file.getSize(),
+                category
+        );
+    }
 
-        PutObjectRequest request = PutObjectRequest.builder()
-                .bucket(properties.bucket())
-                .key(storageKey)
+    @Override
+    public StoredFile store(
+            byte[] content,
+            String originalName,
+            String contentType,
+            StorageCategory category
+    ) {
+        return store(
+                new ByteArrayResource(content),
+                originalName,
+                contentType,
+                content.length,
+                category
+        );
+    }
 
-                // S3 object의 metadata에 MIME type을 저장
-                // 실제 다운로드 응답에서는 DB에 저장된 검증 완료 contentType을 사용
-                .contentType(contentType)
-                .build();
+    private StoredFile store(
+            InputStreamSource source,
+            String originalName,
+            String contentType,
+            long sizeBytes,
+            StorageCategory category
+    ) {
+        String storageKey =
+                createStorageKey(category);
 
-        try (InputStream inputStream = file.getInputStream()) {
-            /*
-             * 파일 전체를 byte[]로 변환하지 않고 stream으로 전송
-             * 50MB 파일을 byte[]로 올리면 그만큼 Heap Memory를 사용하기 때문
-             */
+        PutObjectRequest request =
+                PutObjectRequest.builder()
+                        .bucket(properties.bucket())
+                        .key(storageKey)
+                        .contentType(contentType)
+                        .build();
+
+        try (InputStream inputStream =
+                     source.getInputStream()) {
             s3Client.putObject(
                     request,
                     RequestBody.fromInputStream(
                             inputStream,
-                            file.getSize()
+                            sizeBytes
                     )
             );
 
@@ -76,7 +107,7 @@ public class S3FileStorage implements FileStorage {
                     storageKey,
                     originalName,
                     contentType,
-                    file.getSize()
+                    sizeBytes
             );
         } catch (IOException | SdkException exception) {
             log.error(

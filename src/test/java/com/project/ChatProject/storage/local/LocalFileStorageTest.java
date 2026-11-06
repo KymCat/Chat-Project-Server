@@ -78,6 +78,27 @@ class LocalFileStorageTest {
     }
 
     @Test
+    void storeWritesByteContentAndReturnsMetadata() {
+        byte[] content = "google-profile-image".getBytes();
+
+        StoredFile storedFile = fileStorage.store(
+                content,
+                "google-profile-image",
+                "image/jpeg",
+                StorageCategory.MEMBER_PROFILE
+        );
+
+        assertThat(storedFile.storageKey())
+                .matches("member-profiles/\\d{4}/\\d{2}/\\d{2}/[0-9a-f-]{36}");
+        assertThat(storedFile.originalName())
+                .isEqualTo("google-profile-image");
+        assertThat(storedFile.contentType()).isEqualTo("image/jpeg");
+        assertThat(storedFile.sizeBytes()).isEqualTo(content.length);
+        assertThat(root.resolve(storedFile.storageKey()))
+                .hasBinaryContent(content);
+    }
+
+    @Test
     void storeUsesFallbackMetadataWhenFilenameAndContentTypeAreMissing() {
         MockMultipartFile file = new MockMultipartFile(
                 "file",

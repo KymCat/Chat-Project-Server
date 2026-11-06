@@ -31,4 +31,22 @@ public record ChatRoomResponse(
         );
 
     }
+
+    public static ChatRoomResponse ofDirect(
+            ChatRoomMember chatRoomMember,
+            long unreadCount,
+            String displayName
+    ) {
+        ChatRoom chatRoom = chatRoomMember.getChatRoom();
+
+        return new ChatRoomResponse(
+                chatRoom.getId(),
+                chatRoom.getType(),
+                displayName,
+                chatRoomMember.getRole(),
+                chatRoom.getLastMessageAt(),
+                unreadCount
+        );
+
+    }
 }

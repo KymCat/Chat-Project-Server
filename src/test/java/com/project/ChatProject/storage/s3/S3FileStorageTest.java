@@ -97,6 +97,54 @@ class S3FileStorageTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
+    void storeUploadsByteContentAndReturnsMetadata() throws Exception {
+        byte[] content = "google-profile-image".getBytes();
+
+        when(s3Client.putObject(
+                any(PutObjectRequest.class),
+                any(RequestBody.class)
+        )).thenReturn(PutObjectResponse.builder().build());
+
+        StoredFile storedFile = fileStorage.store(
+                content,
+                "google-profile-image",
+                "image/jpeg",
+                StorageCategory.MEMBER_PROFILE
+        );
+
+        ArgumentCaptor<PutObjectRequest> requestCaptor =
+                ArgumentCaptor.forClass(PutObjectRequest.class);
+        ArgumentCaptor<RequestBody> bodyCaptor =
+                ArgumentCaptor.forClass(RequestBody.class);
+
+        verify(s3Client).putObject(
+                requestCaptor.capture(),
+                bodyCaptor.capture()
+        );
+
+        PutObjectRequest request = requestCaptor.getValue();
+        RequestBody requestBody = bodyCaptor.getValue();
+
+        assertThat(request.bucket()).isEqualTo("test-bucket");
+        assertThat(request.key()).isEqualTo(storedFile.storageKey());
+        assertThat(request.contentType()).isEqualTo("image/jpeg");
+        assertThat(storedFile.storageKey())
+                .matches("member-profiles/\\d{4}/\\d{2}/\\d{2}/[0-9a-f-]{36}");
+        assertThat(storedFile.originalName())
+                .isEqualTo("google-profile-image");
+        assertThat(storedFile.contentType()).isEqualTo("image/jpeg");
+        assertThat(storedFile.sizeBytes()).isEqualTo(content.length);
+        assertThat(requestBody.contentLength()).isEqualTo(content.length);
+
+        try (InputStream inputStream =
+                     requestBody.contentStreamProvider().newStream()) {
+            assertThat(inputStream.readAllBytes())
+                    .containsExactly(content);
+        }
+    }
+
+    @Test
     void loadReturnsS3ResponseAsResource() throws Exception {
         byte[] content = "download-content".getBytes();
 

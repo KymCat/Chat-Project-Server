@@ -1,9 +1,14 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.websocket.WebSocketMemberPrincipal;
+import com.project.ChatProject.dto.event.ChatErrorEvent;
 import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.request.ChatAttachmentMessageRequest;
 import com.project.ChatProject.dto.request.ChatMessageRequest;
+import com.project.ChatProject.dto.response.DirectChatResponse;
+import com.project.ChatProject.dto.result.ChatMessageSaveResult;
+import com.project.ChatProject.exception.CustomException;
+import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ChatMessageService;
 import jakarta.validation.Valid;
@@ -33,18 +38,34 @@ public class ChatController {
         WebSocketMemberPrincipal principal
                 = resolvePrincipal(authentication);
 
-        ChatMessageEvent event =
-                chatMessageService.save(
-                        principal.memberId(),
-                        request
-                );
+        ChatMessageSaveResult result;
+        try {
+            result = chatMessageService.save(
+                    principal.memberId(),
+                    request
+            );
+        } catch (CustomException exception) {
+            if (exception.getErrorCode()
+                    != ErrorCode.FRIEND_RELATION_NOT_FOUND) {
+                throw exception;
+            }
+
+            notifyChatError(
+                    principal,
+                    request.roomId(),
+                    exception.getErrorCode()
+            );
+            return null;
+        }
 
         template.convertAndSend(
                 "/sub/msg/" + request.roomId(),
-                event
+                result.event()
         );
 
-        return event;
+        notifyRejoinedDirectMember(result);
+
+        return result.event();
     }
 
     @MessageMapping("/msg/attachment")
@@ -55,18 +76,63 @@ public class ChatController {
         WebSocketMemberPrincipal principal
                 = resolvePrincipal(authentication);
 
-        ChatMessageEvent event =
-                chatMessageService.saveAttachment(
-                        principal.memberId(),
-                        request
-                );
+        ChatMessageSaveResult result;
+        try {
+            result = chatMessageService.saveAttachment(
+                    principal.memberId(),
+                    request
+            );
+        } catch (CustomException exception) {
+            if (exception.getErrorCode()
+                    != ErrorCode.FRIEND_RELATION_NOT_FOUND) {
+                throw exception;
+            }
+
+            notifyChatError(
+                    principal,
+                    request.roomId(),
+                    exception.getErrorCode()
+            );
+            return null;
+        }
 
         template.convertAndSend(
                 "/sub/msg/" + request.roomId(),
-                event
+                result.event()
         );
 
-        return event;
+        notifyRejoinedDirectMember(result);
+
+        return result.event();
+    }
+
+    private void notifyRejoinedDirectMember(
+            ChatMessageSaveResult result
+    ) {
+        if (!result.hasRejoinedMember()) {
+            return;
+        }
+
+        template.convertAndSendToUser(
+                result.rejoinedMemberId().toString(),
+                "/queue/direct-messages",
+                DirectChatResponse.of(
+                        result.event().message().roomId(),
+                        result.event().message()
+                )
+        );
+    }
+
+    private void notifyChatError(
+            WebSocketMemberPrincipal principal,
+            Long roomId,
+            ErrorCode errorCode
+    ) {
+        template.convertAndSendToUser(
+                principal.memberId().toString(),
+                "/queue/chat-errors",
+                ChatErrorEvent.from(roomId, errorCode)
+        );
     }
 
     private WebSocketMemberPrincipal resolvePrincipal(
