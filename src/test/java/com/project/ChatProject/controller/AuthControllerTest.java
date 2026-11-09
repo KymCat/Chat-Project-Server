@@ -1,11 +1,16 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.security.AuthCookieFactory;
+import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
+import com.project.ChatProject.dto.enums.ReauthenticationType;
 import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
 import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.request.OAuthLoginCodeExchangeRequest;
+import com.project.ChatProject.dto.request.ReauthenticationPasswordRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
+import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
+import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.AuthService;
 import com.project.ChatProject.service.EmailVerificationService;
@@ -213,6 +218,85 @@ class AuthControllerTest {
         assertThat(response.getBody().success()).isTrue();
         assertThat(response.getBody().data()).isEqualTo("access-token");
         assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).isNull();
+    }
+
+    @Test
+    void getReauthenticationMethodUsesAuthenticatedMemberId() {
+        AccessTokenClaims claims = claims();
+        ReauthenticationMethodResponse method =
+                new ReauthenticationMethodResponse(
+                        ReauthenticationType.SOCIAL,
+                        SocialProvider.GOOGLE
+                );
+        when(authService.getReauthenticationMethod(1L))
+                .thenReturn(method);
+
+        ResponseEntity<ApiResponse<ReauthenticationMethodResponse>> response =
+                authController.getReauthenticationMethod(claims);
+
+        verify(authService).getReauthenticationMethod(1L);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data()).isEqualTo(method);
+    }
+
+    @Test
+    void reauthenticateWithPasswordReturnsIssuedToken() {
+        AccessTokenClaims claims = claims();
+        ReauthenticationPasswordRequest request =
+                new ReauthenticationPasswordRequest(
+                        "password123!",
+                        ReauthenticationPurpose.LOGOUT_ALL
+                );
+        when(authService.reauthenticateWithPassword(
+                1L,
+                "session-id",
+                "password123!",
+                ReauthenticationPurpose.LOGOUT_ALL
+        )).thenReturn("reauthentication-token");
+
+        ResponseEntity<ApiResponse<String>> response =
+                authController.reauthenticateWithPassword(
+                        request,
+                        claims
+                );
+
+        verify(authService).reauthenticateWithPassword(
+                1L,
+                "session-id",
+                "password123!",
+                ReauthenticationPurpose.LOGOUT_ALL
+        );
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data())
+                .isEqualTo("reauthentication-token");
+    }
+
+    @Test
+    void logoutAllSessionsConsumesTokenAndExpiresCookies() {
+        AccessTokenClaims claims = claims();
+        when(authCookieFactory.deleteSessionIdCookie())
+                .thenReturn("deleted-session-id-cookie");
+        when(authCookieFactory.deleteRefreshTokenCookie())
+                .thenReturn("deleted-refresh-token-cookie");
+
+        ResponseEntity<ApiResponse<Void>> response =
+                authController.logoutAllSessions(
+                        "reauthentication-token",
+                        claims
+                );
+
+        verify(authService).logoutAllSessions(
+                1L,
+                "session-id",
+                "reauthentication-token"
+        );
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE))
+                .containsExactly(
+                        "deleted-session-id-cookie",
+                        "deleted-refresh-token-cookie"
+                );
     }
 
     private AccessTokenClaims claims() {

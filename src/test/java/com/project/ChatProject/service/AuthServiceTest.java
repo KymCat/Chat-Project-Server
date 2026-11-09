@@ -1,9 +1,14 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
+import com.project.ChatProject.dto.enums.ReauthenticationType;
 import com.project.ChatProject.dto.request.LoginRequest;
+import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.SocialAccount;
 import com.project.ChatProject.entity.enums.MemberStatus;
+import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.jwt.AccessTokenBlacklistStore;
@@ -11,8 +16,10 @@ import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
+import com.project.ChatProject.reauth.ReauthenticationTokenStore;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
+import com.project.ChatProject.repository.SocialAccountRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -33,6 +40,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,6 +66,12 @@ class AuthServiceTest {
 
     @Mock
     private OAuthLoginCodeStore oauthLoginCodeStore;
+
+    @Mock
+    private SocialAccountRepository socialAccountRepository;
+
+    @Mock
+    private ReauthenticationTokenStore reauthenticationTokenStore;
 
     @InjectMocks
     private AuthService authService;
@@ -349,6 +363,145 @@ class AuthServiceTest {
                 "invalid-code",
                 "session-id"
         );
+    }
+
+    @Test
+    void getReauthenticationMethodReturnsPasswordForLocalMember() {
+        Member member = org.mockito.Mockito.mock(Member.class);
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(memberCredentialRepository.existsById(1L))
+                .thenReturn(true);
+
+        ReauthenticationMethodResponse response =
+                authService.getReauthenticationMethod(1L);
+
+        assertThat(response.type())
+                .isEqualTo(ReauthenticationType.PASSWORD);
+        assertThat(response.provider()).isNull();
+        verifyNoInteractions(socialAccountRepository);
+    }
+
+    @Test
+    void getReauthenticationMethodReturnsGoogleForSocialOnlyMember() {
+        Member member = org.mockito.Mockito.mock(Member.class);
+        when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
+        SocialAccount account =
+                org.mockito.Mockito.mock(SocialAccount.class);
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(memberCredentialRepository.existsById(1L))
+                .thenReturn(false);
+        when(socialAccountRepository.findByProviderAndMemberId(
+                SocialProvider.GOOGLE,
+                1L
+        )).thenReturn(Optional.of(account));
+        when(account.getProvider()).thenReturn(SocialProvider.GOOGLE);
+
+        ReauthenticationMethodResponse response =
+                authService.getReauthenticationMethod(1L);
+
+        assertThat(response.type())
+                .isEqualTo(ReauthenticationType.SOCIAL);
+        assertThat(response.provider())
+                .isEqualTo(SocialProvider.GOOGLE);
+    }
+
+    @Test
+    void reauthenticateWithPasswordIssuesTokenForMatchingPassword() {
+        when(memberCredentialRepository.getPasswordHashById(1L))
+                .thenReturn(Optional.of("password-hash"));
+        when(passwordEncoder.matches(
+                "password123!",
+                "password-hash"
+        )).thenReturn(true);
+        when(reauthenticationTokenStore.create(
+                1L,
+                "session-id",
+                ReauthenticationPurpose.LOGOUT_ALL
+        )).thenReturn("reauthentication-token");
+
+        String token = authService.reauthenticateWithPassword(
+                1L,
+                "session-id",
+                "password123!",
+                ReauthenticationPurpose.LOGOUT_ALL
+        );
+
+        assertThat(token).isEqualTo("reauthentication-token");
+    }
+
+    @Test
+    void reauthenticateWithPasswordRejectsWrongPassword() {
+        when(memberCredentialRepository.getPasswordHashById(1L))
+                .thenReturn(Optional.of("password-hash"));
+        when(passwordEncoder.matches(
+                "wrong-password",
+                "password-hash"
+        )).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                authService.reauthenticateWithPassword(
+                        1L,
+                        "session-id",
+                        "wrong-password",
+                        ReauthenticationPurpose.LOGOUT_ALL
+                )
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.INVALID_CREDENTIALS)
+        );
+
+        verifyNoInteractions(reauthenticationTokenStore);
+    }
+
+    @Test
+    void logoutAllSessionsConsumesTokenBeforeDeletingSessions() {
+        authService.logoutAllSessions(
+                1L,
+                "session-id",
+                "reauthentication-token"
+        );
+
+        InOrder inOrder = inOrder(
+                reauthenticationTokenStore,
+                refreshTokenStore
+        );
+        inOrder.verify(reauthenticationTokenStore).consume(
+                "reauthentication-token",
+                1L,
+                "session-id",
+                ReauthenticationPurpose.LOGOUT_ALL
+        );
+        inOrder.verify(refreshTokenStore).deleteAllByMemberId(1L);
+    }
+
+    @Test
+    void logoutAllSessionsPreservesSessionsWhenTokenIsInvalid() {
+        CustomException failure = new CustomException(
+                ErrorCode.INVALID_REAUTHENTICATION_TOKEN
+        );
+        doThrow(failure)
+                .when(reauthenticationTokenStore)
+                .consume(
+                        "invalid-token",
+                        1L,
+                        "session-id",
+                        ReauthenticationPurpose.LOGOUT_ALL
+                );
+
+        assertThatThrownBy(() ->
+                authService.logoutAllSessions(
+                        1L,
+                        "session-id",
+                        "invalid-token"
+                )
+        ).isSameAs(failure);
+
+        verify(refreshTokenStore, never())
+                .deleteAllByMemberId(anyLong());
     }
 
     private void assertLoginRejectedByMemberStatus(
