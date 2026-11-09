@@ -29,6 +29,7 @@ public class AuthController {
 
     private static final String SESSION_ID_COOKIE_NAME = "sessionId";
     private static final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
+    private static final String REAUTHENTICATION_TOKEN_HEADER = "X-Reauthentication-Token";
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<String>> login(
@@ -128,10 +129,17 @@ public class AuthController {
 
     @PostMapping("/logout/all")
     public ResponseEntity<ApiResponse<Void>> logoutAllSessions(
+            @RequestHeader(REAUTHENTICATION_TOKEN_HEADER) String reauthenticationToken,
             @AuthenticationPrincipal AccessTokenClaims claims
     ) {
         Long memberId = claims.memberId();
-        authService.logoutAllSessions(memberId);
+        String sessionId = claims.sessionId();
+
+        authService.logoutAllSessions(
+                memberId,
+                sessionId,
+                reauthenticationToken
+        );
 
         String delSessionIdCookie = authCookieFactory.deleteSessionIdCookie();
         String delRefreshTokenCookie = authCookieFactory.deleteRefreshTokenCookie();

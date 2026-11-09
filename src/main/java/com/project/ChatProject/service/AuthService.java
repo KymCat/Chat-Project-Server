@@ -121,7 +121,18 @@ public class AuthService {
                 );
     }
 
-    public void logoutAllSessions(Long memberId) {
+    public void logoutAllSessions(
+            Long memberId,
+            String sessionId,
+            String token
+    ) {
+        reauthenticationTokenStore.consume(
+                token,
+                memberId,
+                sessionId,
+                ReauthenticationPurpose.LOGOUT_ALL
+        );
+
         refreshTokenStore.deleteAllByMemberId(memberId);
     }
 

@@ -169,6 +169,11 @@ public enum ErrorCode {
             "AUTH-006",
             "해당하는 자격증명 정보가 존재하지 않습니다."
     ),
+    INVALID_REAUTHENTICATION_TOKEN(
+            HttpStatus.UNAUTHORIZED,
+            "AUTH-007",
+            "재인증 토큰 정보가 잘못되었습니다."
+    ),
 
     // Email Verification Exception
     EMAIL_ALREADY_VERIFIED(
