@@ -6,8 +6,10 @@ import com.project.ChatProject.oauth.GoogleOidcProfileMapper;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
 import com.project.ChatProject.oauth.SocialUserProfile;
 import com.project.ChatProject.service.AuthTokenService;
+import com.project.ChatProject.service.AuthService;
 import com.project.ChatProject.service.MemberService;
 import com.project.ChatProject.service.SocialLoginService;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,8 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.util.WebUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
@@ -34,6 +38,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private final OAuthLoginCodeStore loginCodeStore;
     private final AuthCookieFactory authCookieFactory;
     private final MemberService memberService;
+    private final AuthService authService;
 
     @Value("${oauth2.frontend-callback-uri}")
     private String frontendCallbackUri;
@@ -52,6 +57,14 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         OidcUser oidcUser = (OidcUser) oauthToken.getPrincipal();
 
         SocialUserProfile profile = switchProfile(oidcUser, registerId);
+
+        if (handleSocialReauthentication(
+                request,
+                response,
+                profile
+        )) {
+            return;
+        }
 
         // 소셜 로그인 및 토큰 발급
         Member member = socialLoginService.login(profile);
@@ -92,6 +105,63 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     }
 
     // === private method ===
+
+    private boolean handleSocialReauthentication(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            SocialUserProfile profile
+    ) throws IOException {
+        Cookie intentCookie = WebUtils.getCookie(
+                request,
+                AuthCookieFactory
+                        .REAUTHENTICATION_INTENT_COOKIE_NAME
+        );
+
+        if (intentCookie == null
+                || !StringUtils.hasText(intentCookie.getValue())) {
+            return false;
+        }
+
+        response.addHeader(
+                HttpHeaders.SET_COOKIE,
+                authCookieFactory
+                        .deleteReauthenticationIntentCookie()
+        );
+
+        String redirectUri;
+        try {
+            String reauthenticationCode =
+                    authService.completeSocialReauthentication(
+                            intentCookie.getValue(),
+                            profile
+                    );
+
+            redirectUri = UriComponentsBuilder
+                    .fromUriString(frontendCallbackUri)
+                    .queryParam(
+                            "reauthCode",
+                            reauthenticationCode
+                    )
+                    .build()
+                    .encode()
+                    .toUriString();
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Social reauthentication failed",
+                    exception
+            );
+
+            redirectUri = UriComponentsBuilder
+                    .fromUriString(frontendCallbackUri)
+                    .queryParam("reauthError", true)
+                    .build()
+                    .encode()
+                    .toUriString();
+        }
+
+        response.sendRedirect(redirectUri);
+        return true;
+    }
 
     private void initializeSocialProfileImage(
             Member member,

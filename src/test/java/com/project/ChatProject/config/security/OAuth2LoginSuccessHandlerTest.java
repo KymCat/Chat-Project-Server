@@ -7,8 +7,10 @@ import com.project.ChatProject.oauth.GoogleOidcProfileMapper;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
 import com.project.ChatProject.oauth.SocialUserProfile;
 import com.project.ChatProject.service.AuthTokenService;
+import com.project.ChatProject.service.AuthService;
 import com.project.ChatProject.service.MemberService;
 import com.project.ChatProject.service.SocialLoginService;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +52,9 @@ class OAuth2LoginSuccessHandlerTest {
 
     @Mock
     private MemberService memberService;
+
+    @Mock
+    private AuthService authService;
 
     @Mock
     private HttpServletRequest request;
@@ -224,6 +229,59 @@ class OAuth2LoginSuccessHandlerTest {
         verify(loginCodeStore, never()).create(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString()
+        );
+    }
+
+    @Test
+    void socialReauthenticationConsumesIntentAndRedirectsWithExchangeCode()
+            throws Exception {
+        SocialUserProfile profile = new SocialUserProfile(
+                SocialProvider.GOOGLE,
+                "google-user-id",
+                "user@example.com",
+                true,
+                "Google User",
+                null
+        );
+        when(authentication.getAuthorizedClientRegistrationId())
+                .thenReturn("google");
+        when(authentication.getPrincipal()).thenReturn(oidcUser);
+        when(googleOidcProfileMapper.map(oidcUser)).thenReturn(profile);
+        when(request.getCookies()).thenReturn(new Cookie[]{
+                new Cookie(
+                        AuthCookieFactory
+                                .REAUTHENTICATION_INTENT_COOKIE_NAME,
+                        "intent-id"
+                )
+        });
+        when(authCookieFactory.deleteReauthenticationIntentCookie())
+                .thenReturn("deleted-intent-cookie");
+        when(authService.completeSocialReauthentication(
+                "intent-id",
+                profile
+        )).thenReturn("reauthentication-code");
+
+        successHandler.onAuthenticationSuccess(
+                request,
+                response,
+                authentication
+        );
+
+        verify(authService).completeSocialReauthentication(
+                "intent-id",
+                profile
+        );
+        verify(response).addHeader(
+                HttpHeaders.SET_COOKIE,
+                "deleted-intent-cookie"
+        );
+        verify(response).sendRedirect(
+                "http://localhost:3000/oauth/callback"
+                        + "?reauthCode=reauthentication-code"
+        );
+        verify(socialLoginService, never()).login(profile);
+        verify(authTokenService, never()).create(
+                org.mockito.ArgumentMatchers.any()
         );
     }
 }

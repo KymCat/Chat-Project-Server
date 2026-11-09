@@ -6,6 +6,7 @@ import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.request.OAuthLoginCodeExchangeRequest;
 import com.project.ChatProject.dto.request.ReauthenticationPasswordRequest;
 import com.project.ChatProject.dto.request.SocialReauthenticationStartRequest;
+import com.project.ChatProject.dto.request.SocialReauthenticationCodeExchangeRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
@@ -208,5 +209,21 @@ public class AuthController {
                 .ok()
                 .header(HttpHeaders.SET_COOKIE, intentCookie)
                 .body(ApiResponse.success(null));
+    }
+
+    @PostMapping("/reauthentication/social/exchange")
+    public ResponseEntity<ApiResponse<String>> exchangeSocialReauthenticationCode(
+            @CookieValue(name = SESSION_ID_COOKIE_NAME) String sessionId,
+            @RequestBody @Valid SocialReauthenticationCodeExchangeRequest request
+    ) {
+        String reauthenticationToken =
+                authService.exchangeSocialReauthenticationCode(
+                        request.code(),
+                        sessionId
+                );
+
+        return ResponseEntity.ok(
+                ApiResponse.success(reauthenticationToken)
+        );
     }
 }

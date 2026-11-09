@@ -16,7 +16,11 @@ import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
+import com.project.ChatProject.oauth.SocialUserProfile;
 import com.project.ChatProject.reauth.ReauthenticationTokenStore;
+import com.project.ChatProject.reauth.SocialReauthenticationAttempt;
+import com.project.ChatProject.reauth.SocialReauthenticationAttemptStore;
+import com.project.ChatProject.reauth.SocialReauthenticationCodeStore;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import com.project.ChatProject.repository.SocialAccountRepository;
@@ -72,6 +76,12 @@ class AuthServiceTest {
 
     @Mock
     private ReauthenticationTokenStore reauthenticationTokenStore;
+
+    @Mock
+    private SocialReauthenticationAttemptStore socialReauthenticationAttemptStore;
+
+    @Mock
+    private SocialReauthenticationCodeStore socialReauthenticationCodeStore;
 
     @InjectMocks
     private AuthService authService;
@@ -504,6 +514,95 @@ class AuthServiceTest {
                 .deleteAllByMemberId(anyLong());
     }
 
+    @Test
+    void completeSocialReauthenticationIssuesExchangeCodeForLinkedAccount() {
+        SocialReauthenticationAttempt attempt =
+                socialAttempt();
+        SocialUserProfile profile = socialProfile("google-user-id");
+        SocialAccount account =
+                org.mockito.Mockito.mock(SocialAccount.class);
+
+        when(socialReauthenticationAttemptStore.consume("intent-id"))
+                .thenReturn(attempt);
+        when(refreshTokenStore.isActiveSession(1L, "session-id"))
+                .thenReturn(true);
+        when(socialAccountRepository.findByProviderAndMemberId(
+                SocialProvider.GOOGLE,
+                1L
+        )).thenReturn(Optional.of(account));
+        when(account.getProviderUserId())
+                .thenReturn("google-user-id");
+        when(reauthenticationTokenStore.create(
+                1L,
+                "session-id",
+                ReauthenticationPurpose.LOGOUT_ALL
+        )).thenReturn("reauthentication-token");
+        when(socialReauthenticationCodeStore.create(
+                "session-id",
+                "reauthentication-token"
+        )).thenReturn("reauthentication-code");
+
+        String code = authService.completeSocialReauthentication(
+                "intent-id",
+                profile
+        );
+
+        assertThat(code).isEqualTo("reauthentication-code");
+    }
+
+    @Test
+    void completeSocialReauthenticationRejectsDifferentGoogleAccount() {
+        SocialReauthenticationAttempt attempt = socialAttempt();
+        SocialUserProfile profile = socialProfile("different-google-id");
+        SocialAccount account =
+                org.mockito.Mockito.mock(SocialAccount.class);
+
+        when(socialReauthenticationAttemptStore.consume("intent-id"))
+                .thenReturn(attempt);
+        when(refreshTokenStore.isActiveSession(1L, "session-id"))
+                .thenReturn(true);
+        when(socialAccountRepository.findByProviderAndMemberId(
+                SocialProvider.GOOGLE,
+                1L
+        )).thenReturn(Optional.of(account));
+        when(account.getProviderUserId())
+                .thenReturn("google-user-id");
+
+        assertThatThrownBy(() ->
+                authService.completeSocialReauthentication(
+                        "intent-id",
+                        profile
+                )
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(
+                                ErrorCode
+                                        .INVALID_SOCIAL_REAUTHENTICATION_ATTEMPT
+                        )
+        );
+
+        verifyNoInteractions(
+                reauthenticationTokenStore,
+                socialReauthenticationCodeStore
+        );
+    }
+
+    @Test
+    void exchangeSocialReauthenticationCodeReturnsStoredToken() {
+        when(socialReauthenticationCodeStore.consume(
+                "reauthentication-code",
+                "session-id"
+        )).thenReturn(Optional.of("reauthentication-token"));
+
+        String token = authService.exchangeSocialReauthenticationCode(
+                "reauthentication-code",
+                "session-id"
+        );
+
+        assertThat(token).isEqualTo("reauthentication-token");
+    }
+
     private void assertLoginRejectedByMemberStatus(
             MemberStatus status,
             ErrorCode expectedErrorCode
@@ -571,5 +670,25 @@ class AuthServiceTest {
         when(member.getId()).thenReturn(1L);
         when(member.getStatus()).thenReturn(status);
         return member;
+    }
+
+    private SocialReauthenticationAttempt socialAttempt() {
+        return new SocialReauthenticationAttempt(
+                1L,
+                "session-id",
+                SocialProvider.GOOGLE,
+                ReauthenticationPurpose.LOGOUT_ALL
+        );
+    }
+
+    private SocialUserProfile socialProfile(String providerUserId) {
+        return new SocialUserProfile(
+                SocialProvider.GOOGLE,
+                providerUserId,
+                "user@example.com",
+                true,
+                "Google User",
+                null
+        );
     }
 }

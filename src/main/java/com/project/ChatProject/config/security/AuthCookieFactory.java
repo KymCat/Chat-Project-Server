@@ -12,6 +12,9 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class AuthCookieFactory {
 
+    public static final String REAUTHENTICATION_INTENT_COOKIE_NAME =
+            "intentId";
+
     private final RefreshTokenProperties refreshTokenProperties;
 
     @Value("${cookie.secure}")
@@ -40,10 +43,8 @@ public class AuthCookieFactory {
     }
 
     public String createReauthenticationIntentCookie(String value) {
-        String cookieName = "intentId";
-
         return createCookie(
-                cookieName,
+                REAUTHENTICATION_INTENT_COOKIE_NAME,
                 value,
                 Duration.ofMinutes(5)
         );
@@ -71,7 +72,7 @@ public class AuthCookieFactory {
 
     public String deleteReauthenticationIntentCookie() {
         return createCookie(
-                "intentId",
+                REAUTHENTICATION_INTENT_COOKIE_NAME,
                 "",
                 Duration.ZERO
         );

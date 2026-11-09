@@ -179,6 +179,16 @@ public enum ErrorCode {
             "AUTH-008",
             "사용할 수 없는 재인증 방법입니다."
     ),
+    INVALID_SOCIAL_REAUTHENTICATION_ATTEMPT(
+            HttpStatus.UNAUTHORIZED,
+            "AUTH-009",
+            "소셜 재인증 요청이 유효하지 않거나 만료되었습니다."
+    ),
+    INVALID_SOCIAL_REAUTHENTICATION_CODE(
+            HttpStatus.UNAUTHORIZED,
+            "AUTH-010",
+            "소셜 재인증 코드가 유효하지 않거나 만료되었습니다."
+    ),
 
     // Email Verification Exception
     EMAIL_ALREADY_VERIFIED(

@@ -15,8 +15,11 @@ import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
+import com.project.ChatProject.oauth.SocialUserProfile;
 import com.project.ChatProject.reauth.ReauthenticationTokenStore;
+import com.project.ChatProject.reauth.SocialReauthenticationAttempt;
 import com.project.ChatProject.reauth.SocialReauthenticationAttemptStore;
+import com.project.ChatProject.reauth.SocialReauthenticationCodeStore;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import com.project.ChatProject.repository.SocialAccountRepository;
@@ -24,9 +27,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +47,7 @@ public class AuthService {
     private final SocialAccountRepository socialAccountRepository;
     private final ReauthenticationTokenStore reauthenticationTokenStore;
     private final SocialReauthenticationAttemptStore socialReauthenticationAttemptStore;
+    private final SocialReauthenticationCodeStore socialReauthenticationCodeStore;
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
@@ -233,6 +239,86 @@ public class AuthService {
                         provider,
                         purpose
                 );
+    }
+
+    public String completeSocialReauthentication(
+            String intentId,
+            SocialUserProfile profile
+    ) {
+        SocialReauthenticationAttempt attempt =
+                socialReauthenticationAttemptStore.consume(
+                        intentId
+                );
+
+        validateSocialReauthenticationProfile(
+                attempt,
+                profile
+        );
+
+        if (!refreshTokenStore.isActiveSession(
+                attempt.memberId(),
+                attempt.sessionId()
+        )) {
+            throw invalidSocialReauthenticationAttempt();
+        }
+
+        SocialAccount account = socialAccountRepository
+                .findByProviderAndMemberId(
+                        attempt.provider(),
+                        attempt.memberId()
+                )
+                .orElseThrow(
+                        this::invalidSocialReauthenticationAttempt
+                );
+
+        if (!Objects.equals(
+                account.getProviderUserId(),
+                profile.providerUserId()
+        )) {
+            throw invalidSocialReauthenticationAttempt();
+        }
+
+        String reauthenticationToken =
+                reauthenticationTokenStore.create(
+                        attempt.memberId(),
+                        attempt.sessionId(),
+                        attempt.purpose()
+                );
+
+        return socialReauthenticationCodeStore.create(
+                attempt.sessionId(),
+                reauthenticationToken
+        );
+    }
+
+    public String exchangeSocialReauthenticationCode(
+            String code,
+            String sessionId
+    ) {
+        return socialReauthenticationCodeStore
+                .consume(code, sessionId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.INVALID_SOCIAL_REAUTHENTICATION_CODE
+                        )
+                );
+    }
+
+    private void validateSocialReauthenticationProfile(
+            SocialReauthenticationAttempt attempt,
+            SocialUserProfile profile
+    ) {
+        if (profile == null
+                || profile.provider() != attempt.provider()
+                || !StringUtils.hasText(profile.providerUserId())) {
+            throw invalidSocialReauthenticationAttempt();
+        }
+    }
+
+    private CustomException invalidSocialReauthenticationAttempt() {
+        return new CustomException(
+                ErrorCode.INVALID_SOCIAL_REAUTHENTICATION_ATTEMPT
+        );
     }
 
     private void isMemberSuspendOrWithdrawn(Member member) {
