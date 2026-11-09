@@ -777,6 +777,50 @@ class MemberServiceTest {
     }
 
     @Test
+    void editNicknameChangesMembersNickname() {
+        Member member = Member.create(
+                "veritas@example.com",
+                "기존닉네임"
+        );
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+
+        memberService.editNickname(MEMBER_ID, "새닉네임");
+
+        assertThat(member.getNickname()).isEqualTo("새닉네임");
+    }
+
+    @Test
+    void editNicknameRejectsUnknownMember() {
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                memberService.editNickname(MEMBER_ID, "새닉네임")
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.MEMBER_NOT_FOUND)
+        );
+    }
+
+    @Test
+    void editNicknameRejectsSuspendedMember() {
+        assertInactiveMemberNicknameEditRejected(
+                MemberStatus.SUSPENDED,
+                ErrorCode.MEMBER_BLOCKED
+        );
+    }
+
+    @Test
+    void editNicknameRejectsWithdrawnMember() {
+        assertInactiveMemberNicknameEditRejected(
+                MemberStatus.WITHDRAWN,
+                ErrorCode.MEMBER_WITHDRAWN
+        );
+    }
+
+    @Test
     void deleteProfileImageClearsMemberAndQueuesStoredImageDeletion() {
         Member member = mock(Member.class);
         String storageKey = "member-profiles/2026/10/26/profile-key";
@@ -866,6 +910,26 @@ class MemberServiceTest {
         );
 
         verifyNoInteractions(fileStorage);
+    }
+
+    private void assertInactiveMemberNicknameEditRejected(
+            MemberStatus status,
+            ErrorCode expectedErrorCode
+    ) {
+        Member member = mock(Member.class);
+        when(member.getStatus()).thenReturn(status);
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+
+        assertThatThrownBy(() ->
+                memberService.editNickname(MEMBER_ID, "새닉네임")
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(expectedErrorCode)
+        );
+
+        verify(member, never()).updateNickname("새닉네임");
     }
 
     private StoredFile storedProfile() {

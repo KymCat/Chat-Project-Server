@@ -137,6 +137,15 @@ public class MemberService {
     }
 
     @Transactional
+    public void editNickname(
+            Long memberId,
+            String newNickname
+    ) {
+        Member member = validateMember(memberId);
+        member.updateNickname(newNickname);
+    }
+
+    @Transactional
     public void applySocialProfileImage(
             Long memberId,
             SocialProfileProviderRequest request

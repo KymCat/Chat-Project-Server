@@ -133,4 +133,8 @@ public class Member extends BaseTimeEntity {
     public void updateStatusMessage(String statusMessage) {
         this.statusMessage = statusMessage;
     }
+
+    public void updateNickname(String newNickname) {
+        this.nickname = newNickname;
+    }
 }

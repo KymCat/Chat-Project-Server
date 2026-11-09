@@ -1,6 +1,7 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
+import com.project.ChatProject.dto.request.UpdateNicknameRequest;
 import com.project.ChatProject.dto.request.UpdateStatusMessage;
 import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.dto.response.ApiResponse;
@@ -117,6 +118,22 @@ class MemberControllerTest {
                 memberController.updateStatusMessage(request, claims);
 
         verify(memberService).updateStatusMessage(2L, null);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getBody().data()).isNull();
+    }
+
+    @Test
+    void editNicknameUsesAuthenticatedMemberId() {
+        AccessTokenClaims claims = claims();
+        UpdateNicknameRequest request =
+                new UpdateNicknameRequest("새닉네임");
+
+        ResponseEntity<ApiResponse<Void>> response =
+                memberController.editNickname(request, claims);
+
+        verify(memberService).editNickname(2L, "새닉네임");
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().success()).isTrue();

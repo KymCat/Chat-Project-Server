@@ -3,6 +3,7 @@ package com.project.ChatProject.controller;
 import com.project.ChatProject.dto.request.SignupRequest;
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.request.UpdateStatusMessage;
+import com.project.ChatProject.dto.request.UpdateNicknameRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.MemberPublicProfileResponse;
@@ -50,6 +51,21 @@ public class MemberController {
 
         return ResponseEntity
                 .ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/me/nickname")
+    public ResponseEntity<ApiResponse<Void>> editNickname(
+            @RequestBody @Valid UpdateNicknameRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        memberService.editNickname(
+                memberId,
+                request.newNickname()
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
     }
 
     @GetMapping("/{memberId}/profile-image")
