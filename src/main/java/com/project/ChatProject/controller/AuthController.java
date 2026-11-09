@@ -1,10 +1,13 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.security.AuthCookieFactory;
+import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
 import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
 import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.request.OAuthLoginCodeExchangeRequest;
+import com.project.ChatProject.dto.request.ReauthenticationPasswordRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
+import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.AuthService;
@@ -123,4 +126,51 @@ public class AuthController {
                 .ok(ApiResponse.success(accessToken));
     }
 
+    @PostMapping("/logout/all")
+    public ResponseEntity<ApiResponse<Void>> logoutAllSessions(
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        authService.logoutAllSessions(memberId);
+
+        String delSessionIdCookie = authCookieFactory.deleteSessionIdCookie();
+        String delRefreshTokenCookie = authCookieFactory.deleteRefreshTokenCookie();
+
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.SET_COOKIE, delSessionIdCookie)
+                .header(HttpHeaders.SET_COOKIE, delRefreshTokenCookie)
+                .body(ApiResponse.success(null));
+    }
+
+    @GetMapping("/reauthentication-method")
+    public ResponseEntity<ApiResponse<ReauthenticationMethodResponse>> getReauthenticationMethod(
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        ReauthenticationMethodResponse response =
+                authService.getReauthenticationMethod(memberId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/reauthentication/password")
+    public ResponseEntity<ApiResponse<String>> reauthenticateWithPassword(
+            @RequestBody @Valid ReauthenticationPasswordRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        String sessionId = claims.sessionId();
+
+        String response = authService.reauthenticateWithPassword(
+                memberId,
+                sessionId,
+                request.password(),
+                request.purpose()
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
+    }
 }

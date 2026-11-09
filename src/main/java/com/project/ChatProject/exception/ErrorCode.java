@@ -164,6 +164,11 @@ public enum ErrorCode {
             "AUTH-005",
             "해당하는 소셜 계정 정보가 존재하지 않습니다."
     ),
+    CREDENTIALS_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "AUTH-006",
+            "해당하는 자격증명 정보가 존재하지 않습니다."
+    ),
 
     // Email Verification Exception
     EMAIL_ALREADY_VERIFIED(

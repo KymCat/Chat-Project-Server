@@ -1,9 +1,13 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
 import com.project.ChatProject.dto.request.LoginRequest;
+import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.SocialAccount;
 import com.project.ChatProject.entity.enums.MemberStatus;
+import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.jwt.AccessTokenBlacklistStore;
@@ -11,8 +15,10 @@ import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
+import com.project.ChatProject.reauth.ReauthenticationTokenStore;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
+import com.project.ChatProject.repository.SocialAccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,6 +38,8 @@ public class AuthService {
     private final AccessTokenBlacklistStore accessTokenBlacklistStore;
     private final AuthTokenService authTokenService;
     private final OAuthLoginCodeStore oauthLoginCodeStore;
+    private final SocialAccountRepository socialAccountRepository;
+    private final ReauthenticationTokenStore reauthenticationTokenStore;
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
@@ -110,6 +118,68 @@ public class AuthService {
                         new CustomException(
                                 ErrorCode.INVALID_OAUTH_LOGIN_CODE
                         )
+                );
+    }
+
+    public void logoutAllSessions(Long memberId) {
+        refreshTokenStore.deleteAllByMemberId(memberId);
+    }
+
+    @Transactional(readOnly = true)
+    public ReauthenticationMethodResponse getReauthenticationMethod(Long memberId) {
+
+        Member member = memberRepository
+                .findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+        isMemberSuspendOrWithdrawn(member);
+
+        if (memberCredentialRepository.existsById(memberId)) {
+            return ReauthenticationMethodResponse.password();
+        }
+
+        SocialAccount account = socialAccountRepository
+                .findByProviderAndMemberId(
+                        SocialProvider.GOOGLE,
+                        memberId
+                )
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.SOCIAL_ACCOUNT_NOT_FOUND
+                        )
+                );
+
+        return ReauthenticationMethodResponse.social(
+                account.getProvider()
+        );
+    }
+
+    @Transactional
+    public String reauthenticateWithPassword(
+            Long memberId,
+            String sessionId,
+            String password,
+            ReauthenticationPurpose purpose
+    ) {
+        String passwordHash = memberCredentialRepository
+                .getPasswordHashById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CREDENTIALS_NOT_FOUND
+                        )
+                );
+
+        if (!passwordEncoder.matches(password, passwordHash)) {
+            throw new CustomException(
+                    ErrorCode.INVALID_CREDENTIALS
+            );
+        }
+
+        return reauthenticationTokenStore
+                .create(
+                        memberId,
+                        sessionId,
+                        purpose
                 );
     }
 
