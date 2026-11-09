@@ -16,6 +16,7 @@ import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
 import com.project.ChatProject.reauth.ReauthenticationTokenStore;
+import com.project.ChatProject.reauth.SocialReauthenticationAttemptStore;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import com.project.ChatProject.repository.SocialAccountRepository;
@@ -40,6 +41,7 @@ public class AuthService {
     private final OAuthLoginCodeStore oauthLoginCodeStore;
     private final SocialAccountRepository socialAccountRepository;
     private final ReauthenticationTokenStore reauthenticationTokenStore;
+    private final SocialReauthenticationAttemptStore socialReauthenticationAttemptStore;
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
@@ -190,6 +192,45 @@ public class AuthService {
                 .create(
                         memberId,
                         sessionId,
+                        purpose
+                );
+    }
+
+    @Transactional
+    public String startSocialReauthentication(
+            Long memberId,
+            String sessionId,
+            SocialProvider provider,
+            ReauthenticationPurpose purpose
+    ) {
+        Member member = memberRepository
+                .findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(ErrorCode.MEMBER_NOT_FOUND));
+        isMemberSuspendOrWithdrawn(member);
+
+        if (memberCredentialRepository.existsById(memberId)) {
+            throw new CustomException(
+                    ErrorCode.INVALID_REAUTHENTICATION_METHOD
+            );
+        }
+
+        socialAccountRepository
+                .findByProviderAndMemberId(
+                        provider,
+                        memberId
+                )
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.SOCIAL_ACCOUNT_NOT_FOUND
+                        )
+                );
+
+        return socialReauthenticationAttemptStore
+                .create(
+                        memberId,
+                        sessionId,
+                        provider,
                         purpose
                 );
     }

@@ -174,6 +174,11 @@ public enum ErrorCode {
             "AUTH-007",
             "재인증 토큰 정보가 잘못되었습니다."
     ),
+    INVALID_REAUTHENTICATION_METHOD(
+            HttpStatus.BAD_REQUEST,
+            "AUTH-008",
+            "사용할 수 없는 재인증 방법입니다."
+    ),
 
     // Email Verification Exception
     EMAIL_ALREADY_VERIFIED(

@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 
@@ -20,32 +19,69 @@ public class AuthCookieFactory {
 
     public String createSessionIdCookie(String value) {
         String cookieName = "sessionId";
+        Duration expiration = refreshTokenProperties.expiration();
 
-        return createCookie(cookieName, value);
+        return createCookie(
+                cookieName,
+                value,
+                expiration
+        );
     }
 
     public String createRefreshTokenCookie(String value) {
         String cookieName = "refreshToken";
+        Duration expiration = refreshTokenProperties.expiration();
 
-        return createCookie(cookieName, value);
+        return createCookie(
+                cookieName,
+                value,
+                expiration
+        );
+    }
+
+    public String createReauthenticationIntentCookie(String value) {
+        String cookieName = "intentId";
+
+        return createCookie(
+                cookieName,
+                value,
+                Duration.ofMinutes(5)
+        );
     }
 
     public String deleteSessionIdCookie() {
         String cookieName = "sessionId";
 
-        return createCookie(cookieName, "");
+        return createCookie(
+                cookieName,
+                "",
+                Duration.ZERO
+        );
     }
 
     public String deleteRefreshTokenCookie() {
         String cookieName = "refreshToken";
 
-        return createCookie(cookieName, "");
+        return createCookie(
+                cookieName,
+                "",
+                Duration.ZERO
+        );
     }
 
-    private String createCookie(String cookieName, String value) {
-        Duration expiration = StringUtils.hasLength(value)
-                ? refreshTokenProperties.expiration()
-                : Duration.ZERO;
+    public String deleteReauthenticationIntentCookie() {
+        return createCookie(
+                "intentId",
+                "",
+                Duration.ZERO
+        );
+    }
+
+    private String createCookie(
+            String cookieName,
+            String value,
+            Duration expiration
+    ) {
 
         return ResponseCookie
                 .from(

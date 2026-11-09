@@ -1,11 +1,11 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.security.AuthCookieFactory;
-import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
 import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
 import com.project.ChatProject.dto.request.LoginRequest;
 import com.project.ChatProject.dto.request.OAuthLoginCodeExchangeRequest;
 import com.project.ChatProject.dto.request.ReauthenticationPasswordRequest;
+import com.project.ChatProject.dto.request.SocialReauthenticationStartRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
@@ -18,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
 
 @RestController
 @RequestMapping("/auth")
@@ -180,5 +181,32 @@ public class AuthController {
 
         return ResponseEntity
                 .ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/reauthentication/social/start")
+    public ResponseEntity<ApiResponse<Void>> startSocialReauthentication(
+            @RequestBody @Valid SocialReauthenticationStartRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        String sessionId = claims.sessionId();
+
+        String intentId =
+                authService.startSocialReauthentication(
+                        memberId,
+                        sessionId,
+                        request.provider(),
+                        request.purpose()
+                );
+
+        String intentCookie =
+                authCookieFactory.createReauthenticationIntentCookie(
+                        intentId
+                );
+
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.SET_COOKIE, intentCookie)
+                .body(ApiResponse.success(null));
     }
 }
