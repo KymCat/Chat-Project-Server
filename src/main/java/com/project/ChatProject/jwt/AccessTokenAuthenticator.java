@@ -1,6 +1,7 @@
 package com.project.ChatProject.jwt;
 
 
+import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -15,13 +16,25 @@ public class AccessTokenAuthenticator {
 
     private final JwtProvider jwtProvider;
     private final AccessTokenBlacklistStore blacklistStore;
+    private final RefreshTokenStore refreshTokenStore;
 
     public Authentication authenticate(String accessToken) {
         AccessTokenClaims claims =
                 jwtProvider.parseAccessToken(accessToken);
 
         if (blacklistStore.exists(claims.tokenId()))
-            throw new BadCredentialsException("Blacklisted access token");
+            throw new BadCredentialsException(
+                    "Blacklisted access token"
+            );
+
+        if (!refreshTokenStore.isActiveSession(
+                claims.memberId(),
+                claims.sessionId()
+        )) {
+            throw new BadCredentialsException(
+                    "Invalid Session"
+            );
+        }
 
         return new UsernamePasswordAuthenticationToken(
                 claims,

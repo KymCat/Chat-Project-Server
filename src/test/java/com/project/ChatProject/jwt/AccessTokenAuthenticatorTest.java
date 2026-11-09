@@ -1,5 +1,6 @@
 package com.project.ChatProject.jwt;
 
+import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +13,8 @@ import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -23,13 +26,17 @@ class AccessTokenAuthenticatorTest {
     @Mock
     private AccessTokenBlacklistStore blacklistStore;
 
+    @Mock
+    private RefreshTokenStore refreshTokenStore;
+
     private AccessTokenAuthenticator authenticator;
 
     @BeforeEach
     void setUp() {
         authenticator = new AccessTokenAuthenticator(
                 jwtProvider,
-                blacklistStore
+                blacklistStore,
+                refreshTokenStore
         );
     }
 
@@ -40,6 +47,10 @@ class AccessTokenAuthenticatorTest {
                 .thenReturn(claims);
         when(blacklistStore.exists("token-id"))
                 .thenReturn(false);
+        when(refreshTokenStore.isActiveSession(
+                1L,
+                "session-id"
+        )).thenReturn(true);
 
         Authentication authentication =
                 authenticator.authenticate("access-token");
@@ -48,6 +59,10 @@ class AccessTokenAuthenticatorTest {
         assertThat(authentication.getPrincipal()).isSameAs(claims);
         assertThat(authentication.getCredentials()).isNull();
         assertThat(authentication.getAuthorities()).isEmpty();
+        verify(refreshTokenStore).isActiveSession(
+                1L,
+                "session-id"
+        );
     }
 
     @Test
@@ -63,6 +78,27 @@ class AccessTokenAuthenticatorTest {
         )
                 .isInstanceOf(BadCredentialsException.class)
                 .hasMessage("Blacklisted access token");
+
+        verifyNoInteractions(refreshTokenStore);
+    }
+
+    @Test
+    void inactiveSessionIsRejected() {
+        AccessTokenClaims claims = claims();
+        when(jwtProvider.parseAccessToken("access-token"))
+                .thenReturn(claims);
+        when(blacklistStore.exists("token-id"))
+                .thenReturn(false);
+        when(refreshTokenStore.isActiveSession(
+                1L,
+                "session-id"
+        )).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                authenticator.authenticate("access-token")
+        )
+                .isInstanceOf(BadCredentialsException.class)
+                .hasMessage("Invalid Session");
     }
 
     private AccessTokenClaims claims() {

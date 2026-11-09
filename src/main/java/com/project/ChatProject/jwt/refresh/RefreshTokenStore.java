@@ -122,4 +122,24 @@ public class RefreshTokenStore {
 
         redisTemplate.delete(memberSessionsKey);
     }
+
+    public boolean isActiveSession(
+            Long memberId,
+            String sessionId
+    ) {
+        if (memberId == null
+                || sessionId == null
+                || sessionId.isBlank()) {
+            return false;
+        }
+
+        String refreshTokenKey = createRefreshTokenKey(sessionId);
+
+        Object memberIdValue = redisTemplate
+                .opsForHash()
+                .get(refreshTokenKey, MEMBER_ID_FIELD);
+
+        return memberId.toString()
+                .equals(memberIdValue);
+    }
 }
