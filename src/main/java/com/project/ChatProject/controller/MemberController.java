@@ -1,23 +1,21 @@
 package com.project.ChatProject.controller;
 
-import com.project.ChatProject.dto.request.SignupRequest;
-import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
-import com.project.ChatProject.dto.request.UpdateStatusMessage;
-import com.project.ChatProject.dto.request.UpdateNicknameRequest;
+import com.project.ChatProject.config.security.AuthCookieFactory;
+import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
+import com.project.ChatProject.dto.request.*;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.MemberPublicProfileResponse;
 import com.project.ChatProject.dto.response.SignupResponse;
 import com.project.ChatProject.dto.result.ProfileImageResult;
+import com.project.ChatProject.dto.websocket.AuthWebSocketEvent;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.MemberService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
-import org.springframework.http.CacheControl;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,7 +26,12 @@ import java.time.Duration;
 @RequestMapping("/member")
 @RequiredArgsConstructor
 public class MemberController {
+
+    private static final String REAUTHENTICATION_TOKEN_HEADER = "X-Reauthentication-Token";
+
     private final MemberService memberService;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final AuthCookieFactory authCookieFactory;
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<MemberProfileResponse>> getProfile(
@@ -159,5 +162,38 @@ public class MemberController {
 
         return ResponseEntity
                 .ok(ApiResponse.success(null));
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @RequestHeader(REAUTHENTICATION_TOKEN_HEADER) String reauthenticationToken,
+            @RequestBody @Valid ChangePasswordRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        String sessionId = claims.sessionId();
+
+        memberService.changePassword(
+                memberId,
+                sessionId,
+                reauthenticationToken,
+                ReauthenticationPurpose.CHANGE_PASSWORD,
+                request.newPassword()
+        );
+
+        messagingTemplate.convertAndSendToUser(
+                memberId.toString(),
+                "/queue/auth",
+                AuthWebSocketEvent.forceLogout()
+        );
+
+        String delSessionIdCookie = authCookieFactory.deleteSessionIdCookie();
+        String delRefreshTokenCookie = authCookieFactory.deleteRefreshTokenCookie();
+
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.SET_COOKIE, delSessionIdCookie)
+                .header(HttpHeaders.SET_COOKIE, delRefreshTokenCookie)
+                .body(ApiResponse.success(null));
     }
 }

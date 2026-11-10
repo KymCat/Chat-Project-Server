@@ -1,12 +1,14 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.enums.ProfileRelationStatus;
+import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.MemberPublicProfileResponse;
 import com.project.ChatProject.dto.result.ProfileImageResult;
 import com.project.ChatProject.entity.Friendship;
 import com.project.ChatProject.entity.Member;
+import com.project.ChatProject.entity.MemberCredential;
 import com.project.ChatProject.entity.SocialAccount;
 import com.project.ChatProject.entity.StorageDeletionTask;
 import com.project.ChatProject.entity.enums.FriendshipStatus;
@@ -18,6 +20,8 @@ import com.project.ChatProject.profile.ProfileImageValidator;
 import com.project.ChatProject.profile.ValidatedProfileImage;
 import com.project.ChatProject.profile.google.DownloadedProfileImage;
 import com.project.ChatProject.profile.google.GoogleProfileImageClient;
+import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
+import com.project.ChatProject.reauth.ReauthenticationTokenStore;
 import com.project.ChatProject.repository.FriendshipRepository;
 import com.project.ChatProject.repository.MemberCredentialRepository;
 import com.project.ChatProject.repository.MemberRepository;
@@ -30,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ByteArrayResource;
@@ -41,6 +46,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -79,6 +85,12 @@ class MemberServiceTest {
 
     @Mock
     private FriendshipRepository friendshipRepository;
+
+    @Mock
+    private ReauthenticationTokenStore reauthenticationTokenStore;
+
+    @Mock
+    private RefreshTokenStore refreshTokenStore;
 
     @InjectMocks
     private MemberService memberService;
@@ -853,6 +865,135 @@ class MemberServiceTest {
         verify(member).deleteProfileImage();
         verify(memberRepository).saveAndFlush(member);
         verifyNoInteractions(storageDeletionTaskRepository, fileStorage);
+    }
+
+    @Test
+    void changePasswordUpdatesHashAndDeletesAllSessions() {
+        Member member = activeAuthenticatedMember();
+        MemberCredential credential = mock(MemberCredential.class);
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(memberCredentialRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(credential));
+        when(credential.getPasswordHash()).thenReturn("current-hash");
+        when(passwordEncoder.matches(
+                "newPassword123!",
+                "current-hash"
+        )).thenReturn(false);
+        when(passwordEncoder.encode("newPassword123!"))
+                .thenReturn("new-hash");
+
+        memberService.changePassword(
+                MEMBER_ID,
+                "session-id",
+                "reauthentication-token",
+                ReauthenticationPurpose.CHANGE_PASSWORD,
+                "newPassword123!"
+        );
+
+        InOrder inOrder = org.mockito.Mockito.inOrder(
+                reauthenticationTokenStore,
+                credential,
+                refreshTokenStore
+        );
+        inOrder.verify(reauthenticationTokenStore).consume(
+                "reauthentication-token",
+                MEMBER_ID,
+                "session-id",
+                ReauthenticationPurpose.CHANGE_PASSWORD
+        );
+        inOrder.verify(credential).changePassword("new-hash");
+        inOrder.verify(refreshTokenStore).deleteAllByMemberId(MEMBER_ID);
+    }
+
+    @Test
+    void changePasswordRejectsCurrentPasswordWithoutDeletingSessions() {
+        Member member = activeAuthenticatedMember();
+        MemberCredential credential = mock(MemberCredential.class);
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(memberCredentialRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(credential));
+        when(credential.getPasswordHash()).thenReturn("current-hash");
+        when(passwordEncoder.matches(
+                "currentPassword123!",
+                "current-hash"
+        )).thenReturn(true);
+
+        assertThatThrownBy(() ->
+                memberService.changePassword(
+                        MEMBER_ID,
+                        "session-id",
+                        "reauthentication-token",
+                        ReauthenticationPurpose.CHANGE_PASSWORD,
+                        "currentPassword123!"
+                )
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.SAME_CURRENT_PASSWORD)
+        );
+
+        verify(passwordEncoder, never()).encode("currentPassword123!");
+        verify(credential, never()).changePassword(anyString());
+        verifyNoInteractions(refreshTokenStore);
+    }
+
+    @Test
+    void changePasswordRejectsMemberWithoutCredentials() {
+        Member member = activeAuthenticatedMember();
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+        when(memberCredentialRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                memberService.changePassword(
+                        MEMBER_ID,
+                        "session-id",
+                        "reauthentication-token",
+                        ReauthenticationPurpose.CHANGE_PASSWORD,
+                        "newPassword123!"
+                )
+        ).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CREDENTIALS_NOT_FOUND)
+        );
+
+        verifyNoInteractions(passwordEncoder, refreshTokenStore);
+    }
+
+    @Test
+    void changePasswordStopsWhenReauthenticationTokenIsInvalid() {
+        CustomException failure = new CustomException(
+                ErrorCode.INVALID_REAUTHENTICATION_TOKEN
+        );
+        doThrow(failure)
+                .when(reauthenticationTokenStore)
+                .consume(
+                        "invalid-token",
+                        MEMBER_ID,
+                        "session-id",
+                        ReauthenticationPurpose.CHANGE_PASSWORD
+                );
+
+        assertThatThrownBy(() ->
+                memberService.changePassword(
+                        MEMBER_ID,
+                        "session-id",
+                        "invalid-token",
+                        ReauthenticationPurpose.CHANGE_PASSWORD,
+                        "newPassword123!"
+                )
+        ).isSameAs(failure);
+
+        verifyNoInteractions(
+                memberRepository,
+                memberCredentialRepository,
+                passwordEncoder,
+                refreshTokenStore
+        );
     }
 
     private MockMultipartFile profileFile() {

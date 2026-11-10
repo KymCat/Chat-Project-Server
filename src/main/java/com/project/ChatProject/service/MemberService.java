@@ -1,6 +1,7 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.enums.ProfileRelationStatus;
+import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
 import com.project.ChatProject.dto.request.SignupRequest;
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
@@ -13,10 +14,12 @@ import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.profile.ProfileImageValidator;
 import com.project.ChatProject.profile.ValidatedProfileImage;
 import com.project.ChatProject.profile.google.DownloadedProfileImage;
 import com.project.ChatProject.profile.google.GoogleProfileImageClient;
+import com.project.ChatProject.reauth.ReauthenticationTokenStore;
 import com.project.ChatProject.repository.*;
 import com.project.ChatProject.storage.FileStorage;
 import com.project.ChatProject.storage.StorageCategory;
@@ -34,6 +37,7 @@ import java.util.Locale;
 @Service
 @RequiredArgsConstructor
 public class MemberService {
+
     private final PasswordEncoder passwordEncoder;
     private final MemberRepository memberRepository;
     private final MemberCredentialRepository memberCredentialRepository;
@@ -43,6 +47,9 @@ public class MemberService {
     private final SocialAccountRepository socialAccountRepository;
     private final FriendshipRepository friendshipRepository;
     private final GoogleProfileImageClient googleProfileImageClient;
+    private final ReauthenticationTokenStore reauthenticationTokenStore;
+    private final RefreshTokenStore refreshTokenStore;
+
 
     @Transactional(readOnly = true)
     public MemberProfileResponse getProfile(Long memberId) {
@@ -287,6 +294,43 @@ public class MemberService {
                 member,
                 socialProfileImageUrl
         );
+    }
+
+    @Transactional
+    public void changePassword(
+            Long memberId,
+            String sessionId,
+            String token,
+            ReauthenticationPurpose purpose,
+            String newPassword
+    ) {
+        reauthenticationTokenStore.consume(
+                token,
+                memberId,
+                sessionId,
+                purpose
+        );
+
+        validateMember(memberId);
+        MemberCredential memberCredential = memberCredentialRepository
+                .findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CREDENTIALS_NOT_FOUND
+                        )
+                );
+
+        String passwordHash = memberCredential.getPasswordHash();
+        if (passwordEncoder.matches(newPassword, passwordHash)) {
+            throw new CustomException(
+                    ErrorCode.SAME_CURRENT_PASSWORD
+            );
+        }
+
+        String newPasswordHash = passwordEncoder.encode(newPassword);
+        memberCredential.changePassword(newPasswordHash);
+
+        refreshTokenStore.deleteAllByMemberId(memberId);
     }
 
     // === private method ===

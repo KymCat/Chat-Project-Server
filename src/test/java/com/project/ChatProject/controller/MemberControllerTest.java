@@ -1,5 +1,8 @@
 package com.project.ChatProject.controller;
 
+import com.project.ChatProject.config.security.AuthCookieFactory;
+import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
+import com.project.ChatProject.dto.request.ChangePasswordRequest;
 import com.project.ChatProject.dto.request.SocialProfileProviderRequest;
 import com.project.ChatProject.dto.request.UpdateNicknameRequest;
 import com.project.ChatProject.dto.request.UpdateStatusMessage;
@@ -8,8 +11,11 @@ import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MemberProfileResponse;
 import com.project.ChatProject.dto.response.MemberPublicProfileResponse;
 import com.project.ChatProject.dto.enums.ProfileRelationStatus;
+import com.project.ChatProject.dto.websocket.AuthWebSocketEvent;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.entity.enums.SocialProvider;
+import com.project.ChatProject.exception.CustomException;
+import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.MemberService;
 import org.junit.jupiter.api.Test;
@@ -19,15 +25,20 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,6 +46,12 @@ class MemberControllerTest {
 
     @Mock
     private MemberService memberService;
+
+    @Mock
+    private SimpMessagingTemplate messagingTemplate;
+
+    @Mock
+    private AuthCookieFactory authCookieFactory;
 
     @InjectMocks
     private MemberController memberController;
@@ -212,6 +229,77 @@ class MemberControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().success()).isTrue();
         assertThat(response.getBody().data()).isNull();
+    }
+
+    @Test
+    void changePasswordExpiresCookiesAndSendsForceLogout() {
+        AccessTokenClaims claims = claims();
+        ChangePasswordRequest request =
+                new ChangePasswordRequest("newPassword123!");
+        when(authCookieFactory.deleteSessionIdCookie())
+                .thenReturn("deleted-session-id-cookie");
+        when(authCookieFactory.deleteRefreshTokenCookie())
+                .thenReturn("deleted-refresh-token-cookie");
+
+        ResponseEntity<ApiResponse<Void>> response =
+                memberController.changePassword(
+                        "reauthentication-token",
+                        request,
+                        claims
+                );
+
+        verify(memberService).changePassword(
+                2L,
+                "session-id",
+                "reauthentication-token",
+                ReauthenticationPurpose.CHANGE_PASSWORD,
+                "newPassword123!"
+        );
+        verify(messagingTemplate).convertAndSendToUser(
+                "2",
+                "/queue/auth",
+                AuthWebSocketEvent.forceLogout()
+        );
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE))
+                .containsExactly(
+                        "deleted-session-id-cookie",
+                        "deleted-refresh-token-cookie"
+                );
+    }
+
+    @Test
+    void changePasswordDoesNotLogoutWhenServiceFails() {
+        AccessTokenClaims claims = claims();
+        ChangePasswordRequest request =
+                new ChangePasswordRequest("newPassword123!");
+        CustomException failure = new CustomException(
+                ErrorCode.INVALID_REAUTHENTICATION_TOKEN
+        );
+        doThrow(failure)
+                .when(memberService)
+                .changePassword(
+                        2L,
+                        "session-id",
+                        "invalid-token",
+                        ReauthenticationPurpose.CHANGE_PASSWORD,
+                        "newPassword123!"
+                );
+
+        assertThatThrownBy(() ->
+                memberController.changePassword(
+                        "invalid-token",
+                        request,
+                        claims
+                )
+        ).isSameAs(failure);
+
+        verifyNoInteractions(
+                messagingTemplate,
+                authCookieFactory
+        );
     }
 
     private AccessTokenClaims claims() {

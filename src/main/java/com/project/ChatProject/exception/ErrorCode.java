@@ -58,6 +58,11 @@ public enum ErrorCode {
             "MEMBER-010",
             "소셜 프로필 이미지를 가져오지 못했습니다."
     ),
+    SAME_CURRENT_PASSWORD(
+            HttpStatus.BAD_REQUEST,
+            "MEMBER-011",
+            "기존 비밀번호와 동일한 비밀번호는 사용할 수 없습니다."
+    ),
 
     // ChatRoom Exception
     CHAT_ROOM_NOT_FOUND(

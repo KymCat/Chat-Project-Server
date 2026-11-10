@@ -40,4 +40,9 @@ public class MemberCredential extends BaseCreatedTimeEntity {
     public static MemberCredential create(Member member, String passwordHash) {
         return new MemberCredential(member, passwordHash);
     }
+
+    public void changePassword(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+        this.passwordChangedAt = Instant.now();
+    }
 }
