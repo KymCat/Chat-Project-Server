@@ -10,6 +10,7 @@ import com.project.ChatProject.dto.request.SocialReauthenticationCodeExchangeReq
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
+import com.project.ChatProject.dto.websocket.AuthWebSocketEvent;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.AuthService;
 import com.project.ChatProject.service.EmailVerificationService;
@@ -17,6 +18,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,9 +27,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
     private final AuthService authService;
     private final EmailVerificationService emailVerificationService;
     private final AuthCookieFactory authCookieFactory;
+    private final SimpMessagingTemplate messagingTemplate;
 
     private static final String SESSION_ID_COOKIE_NAME = "sessionId";
     private static final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
@@ -141,6 +145,12 @@ public class AuthController {
                 memberId,
                 sessionId,
                 reauthenticationToken
+        );
+
+        messagingTemplate.convertAndSendToUser(
+                memberId.toString(),
+                "/queue/auth",
+                AuthWebSocketEvent.forceLogout()
         );
 
         String delSessionIdCookie = authCookieFactory.deleteSessionIdCookie();

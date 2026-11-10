@@ -10,6 +10,7 @@ import com.project.ChatProject.dto.request.ReauthenticationPasswordRequest;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
+import com.project.ChatProject.dto.websocket.AuthWebSocketEvent;
 import com.project.ChatProject.entity.enums.SocialProvider;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.AuthService;
@@ -21,12 +22,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,6 +46,9 @@ class AuthControllerTest {
     @Mock
     private AuthCookieFactory authCookieFactory;
 
+    @Mock
+    private SimpMessagingTemplate messagingTemplate;
+
     private AuthController authController;
 
     @BeforeEach
@@ -48,7 +56,8 @@ class AuthControllerTest {
         authController = new AuthController(
                 authService,
                 emailVerificationService,
-                authCookieFactory
+                authCookieFactory,
+                messagingTemplate
         );
     }
 
@@ -290,6 +299,11 @@ class AuthControllerTest {
                 "session-id",
                 "reauthentication-token"
         );
+        verify(messagingTemplate).convertAndSendToUser(
+                "1",
+                "/queue/auth",
+                AuthWebSocketEvent.forceLogout()
+        );
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().success()).isTrue();
         assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE))
@@ -297,6 +311,30 @@ class AuthControllerTest {
                         "deleted-session-id-cookie",
                         "deleted-refresh-token-cookie"
                 );
+    }
+
+    @Test
+    void logoutAllSessionsDoesNotSendForceLogoutWhenServiceFails() {
+        AccessTokenClaims claims = claims();
+        doThrow(new RuntimeException("logout failed"))
+                .when(authService)
+                .logoutAllSessions(
+                        1L,
+                        "session-id",
+                        "reauthentication-token"
+                );
+
+        assertThatThrownBy(() ->
+                authController.logoutAllSessions(
+                        "reauthentication-token",
+                        claims
+                )
+        ).isInstanceOf(RuntimeException.class);
+
+        verifyNoInteractions(
+                messagingTemplate,
+                authCookieFactory
+        );
     }
 
     private AccessTokenClaims claims() {
