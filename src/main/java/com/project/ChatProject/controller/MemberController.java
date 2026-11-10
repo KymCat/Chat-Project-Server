@@ -196,4 +196,34 @@ public class MemberController {
                 .header(HttpHeaders.SET_COOKIE, delRefreshTokenCookie)
                 .body(ApiResponse.success(null));
     }
+
+    @PatchMapping("/me/withdraw")
+    public ResponseEntity<ApiResponse<Void>> withdraw(
+            @RequestHeader(REAUTHENTICATION_TOKEN_HEADER) String reauthenticationToken,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        String sessionId = claims.sessionId();
+
+        memberService.withdraw(
+                memberId,
+                sessionId,
+                reauthenticationToken
+        );
+
+        messagingTemplate.convertAndSendToUser(
+                memberId.toString(),
+                "/queue/auth",
+                AuthWebSocketEvent.forceLogout()
+        );
+
+        String delSessionIdCookie = authCookieFactory.deleteSessionIdCookie();
+        String delRefreshTokenCookie = authCookieFactory.deleteRefreshTokenCookie();
+
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.SET_COOKIE, delSessionIdCookie)
+                .header(HttpHeaders.SET_COOKIE, delRefreshTokenCookie)
+                .body(ApiResponse.success(null));
+    }
 }

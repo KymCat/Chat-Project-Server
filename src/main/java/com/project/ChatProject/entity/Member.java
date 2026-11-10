@@ -137,4 +137,9 @@ public class Member extends BaseTimeEntity {
     public void updateNickname(String newNickname) {
         this.nickname = newNickname;
     }
+
+    public void withdrawMember() {
+        this.status = MemberStatus.WITHDRAWN;
+        this.withdrawnAt = Instant.now();
+    }
 }

@@ -302,6 +302,67 @@ class MemberControllerTest {
         );
     }
 
+    @Test
+    void withdrawExpiresCookiesAndSendsForceLogout() {
+        AccessTokenClaims claims = claims();
+        when(authCookieFactory.deleteSessionIdCookie())
+                .thenReturn("deleted-session-id-cookie");
+        when(authCookieFactory.deleteRefreshTokenCookie())
+                .thenReturn("deleted-refresh-token-cookie");
+
+        ResponseEntity<ApiResponse<Void>> response =
+                memberController.withdraw(
+                        "reauthentication-token",
+                        claims
+                );
+
+        verify(memberService).withdraw(
+                2L,
+                "session-id",
+                "reauthentication-token"
+        );
+        verify(messagingTemplate).convertAndSendToUser(
+                "2",
+                "/queue/auth",
+                AuthWebSocketEvent.forceLogout()
+        );
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE))
+                .containsExactly(
+                        "deleted-session-id-cookie",
+                        "deleted-refresh-token-cookie"
+                );
+    }
+
+    @Test
+    void withdrawDoesNotLogoutWhenServiceFails() {
+        AccessTokenClaims claims = claims();
+        CustomException failure = new CustomException(
+                ErrorCode.INVALID_REAUTHENTICATION_TOKEN
+        );
+        doThrow(failure)
+                .when(memberService)
+                .withdraw(
+                        2L,
+                        "session-id",
+                        "invalid-token"
+                );
+
+        assertThatThrownBy(() ->
+                memberController.withdraw(
+                        "invalid-token",
+                        claims
+                )
+        ).isSameAs(failure);
+
+        verifyNoInteractions(
+                messagingTemplate,
+                authCookieFactory
+        );
+    }
+
     private AccessTokenClaims claims() {
         return new AccessTokenClaims(
                 2L,

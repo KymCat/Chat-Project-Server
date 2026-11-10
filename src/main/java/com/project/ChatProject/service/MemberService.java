@@ -333,6 +333,25 @@ public class MemberService {
         refreshTokenStore.deleteAllByMemberId(memberId);
     }
 
+    @Transactional
+    public void withdraw(
+            Long memberId,
+            String sessionId,
+            String token
+    ) {
+        reauthenticationTokenStore.consume(
+                token,
+                memberId,
+                sessionId,
+                ReauthenticationPurpose.WITHDRAW_ACCOUNT
+        );
+
+        Member member = validateMember(memberId);
+        member.withdrawMember();
+
+        refreshTokenStore.deleteAllByMemberId(memberId);
+    }
+
     // === private method ===
 
     private void downloadAndStoreSocialProfileImage(

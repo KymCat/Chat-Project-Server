@@ -1,6 +1,9 @@
 package com.project.ChatProject.entity;
 
+import com.project.ChatProject.entity.enums.MemberStatus;
 import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,5 +52,20 @@ class MemberTest {
         assertThat(member.getProfileImageStorageKey()).isNull();
         assertThat(member.getProfileImageContentType()).isNull();
         assertThat(member.getProfileImageSizeBytes()).isNull();
+    }
+
+    @Test
+    void withdrawMemberChangesStatusAndRecordsWithdrawalTime() {
+        Member member = Member.create(
+                "member@example.com",
+                "회원"
+        );
+        Instant beforeWithdrawal = Instant.now();
+
+        member.withdrawMember();
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.WITHDRAWN);
+        assertThat(member.getWithdrawnAt())
+                .isBetween(beforeWithdrawal, Instant.now());
     }
 }

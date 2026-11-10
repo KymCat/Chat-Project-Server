@@ -996,6 +996,61 @@ class MemberServiceTest {
         );
     }
 
+    @Test
+    void withdrawChangesMemberStatusAndDeletesAllSessions() {
+        Member member = activeAuthenticatedMember();
+        when(memberRepository.findById(MEMBER_ID))
+                .thenReturn(Optional.of(member));
+
+        memberService.withdraw(
+                MEMBER_ID,
+                "session-id",
+                "reauthentication-token"
+        );
+
+        InOrder inOrder = org.mockito.Mockito.inOrder(
+                reauthenticationTokenStore,
+                member,
+                refreshTokenStore
+        );
+        inOrder.verify(reauthenticationTokenStore).consume(
+                "reauthentication-token",
+                MEMBER_ID,
+                "session-id",
+                ReauthenticationPurpose.WITHDRAW_ACCOUNT
+        );
+        inOrder.verify(member).withdrawMember();
+        inOrder.verify(refreshTokenStore).deleteAllByMemberId(MEMBER_ID);
+    }
+
+    @Test
+    void withdrawStopsWhenReauthenticationTokenIsInvalid() {
+        CustomException failure = new CustomException(
+                ErrorCode.INVALID_REAUTHENTICATION_TOKEN
+        );
+        doThrow(failure)
+                .when(reauthenticationTokenStore)
+                .consume(
+                        "invalid-token",
+                        MEMBER_ID,
+                        "session-id",
+                        ReauthenticationPurpose.WITHDRAW_ACCOUNT
+                );
+
+        assertThatThrownBy(() ->
+                memberService.withdraw(
+                        MEMBER_ID,
+                        "session-id",
+                        "invalid-token"
+                )
+        ).isSameAs(failure);
+
+        verifyNoInteractions(
+                memberRepository,
+                refreshTokenStore
+        );
+    }
+
     private MockMultipartFile profileFile() {
         return new MockMultipartFile(
                 "file",
