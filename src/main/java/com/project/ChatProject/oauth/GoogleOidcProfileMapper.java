@@ -27,10 +27,10 @@ public class GoogleOidcProfileMapper {
 
     /**
      * Google에서 받은 프로필 이미지 URL이 redirect에 사용할 수 있는
-     * 안전한 HTTPS 절대 URL인지 확인합
+     * 안전한 HTTPS 절대 URL인지 확인함
      *
      * 프로필 사진 URL이 잘못됐더라도 로그인 자체는 실패시키지 않고
-     * 프로필 사진만 없는 상태로 처리합
+     * 프로필 사진만 없는 상태로 처리함
      */
     private String resolveProfileImageUrl(String profileImageUrl) {
         if (profileImageUrl == null || profileImageUrl.isBlank()) {
@@ -40,18 +40,18 @@ public class GoogleOidcProfileMapper {
         try {
             URI uri = URI.create(profileImageUrl);
 
-            // HTTPS 절대 URL이며 host가 존재하는지 먼저 확인합니다.
+            // HTTPS 절대 URL이며 host가 존재하는지 먼저 확인
             if (!uri.isAbsolute()
                     || !"https".equalsIgnoreCase(uri.getScheme())
                     || uri.getHost() == null) {
                 return null;
             }
 
-            // host가 null이 아님을 확인한 뒤 소문자로 변환합니다.
+            // host가 null이 아님을 확인한 뒤 소문자로 변환
             String host = uri.getHost()
                     .toLowerCase(Locale.ROOT);
 
-            // googleusercontent.com과 그 하위 domain만 허용합니다.
+            // googleusercontent.com과 그 하위 domain만 허용
             boolean googleImageHost =
                     host.equals("googleusercontent.com")
                             || host.endsWith(".googleusercontent.com");
