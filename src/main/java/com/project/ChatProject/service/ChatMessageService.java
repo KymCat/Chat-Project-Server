@@ -238,16 +238,16 @@ public class ChatMessageService {
                         )
                 );
 
-        ChatRoomMember receiverMember = chatRoomMemberRepository
-                .findByChatRoomIdAndMemberIdForUpdate(
+        ChatRoomParticipationContext receiverContext = participation
+                .requireDirectMembership(
                         roomId,
-                        receiverId
-                )
-                .orElseThrow(() ->
-                        new CustomException(
-                                ErrorCode.CHAT_ROOM_ACCESS_DENIED
-                        )
+                        receiverId,
+                        ParticipationLockMode.CHAT_ROOM_MEMBER
                 );
+
+        ChatRoomMember receiverMember =
+                receiverContext.chatRoomMember();
+
         if (receiverMember.isParticipating()) {
             return null;
         }

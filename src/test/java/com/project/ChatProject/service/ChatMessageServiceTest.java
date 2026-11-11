@@ -305,6 +305,92 @@ class ChatMessageServiceTest {
     }
 
     @Test
+    void saveDirectMessageRejectsWithdrawnReceiver() {
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        Member receiver = receiver();
+        ReflectionTestUtils.setField(
+                receiver,
+                "status",
+                MemberStatus.WITHDRAWN
+        );
+        ChatRoom directRoom = directRoom();
+        ChatRoomMember senderRoomMember =
+                ChatRoomMember.createMember(directRoom, sender);
+        ChatRoomMember receiverRoomMember =
+                ChatRoomMember.createMember(directRoom, receiver);
+        receiverRoomMember.leave();
+
+        stubParticipation(sender, directRoom, senderRoomMember);
+        when(chatRoomMemberRepository.findTargetMemberId(ROOM_ID, MEMBER_ID))
+                .thenReturn(Optional.of(2L));
+        when(friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        MEMBER_ID,
+                        2L,
+                        FriendshipStatus.ACCEPTED
+                )).thenReturn(Optional.of(mock(Friendship.class)));
+        when(memberRepository.findById(2L))
+                .thenReturn(Optional.of(receiver));
+
+        assertThatThrownBy(() -> chatMessageService.save(
+                MEMBER_ID,
+                new ChatMessageRequest(ROOM_ID, "hello")
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.MEMBER_WITHDRAWN)
+        );
+
+        assertThat(receiverRoomMember.isParticipating()).isFalse();
+        verify(chatRoomMemberRepository, never())
+                .findByChatRoomIdAndMemberIdForUpdate(ROOM_ID, 2L);
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+    }
+
+    @Test
+    void saveDirectAttachmentRejectsWithdrawnReceiver() {
+        Member sender = member(MemberStatus.ACTIVE, Instant.now());
+        Member receiver = receiver();
+        ReflectionTestUtils.setField(
+                receiver,
+                "status",
+                MemberStatus.WITHDRAWN
+        );
+        ChatRoom directRoom = directRoom();
+        ChatRoomMember senderRoomMember =
+                ChatRoomMember.createMember(directRoom, sender);
+        ChatRoomMember receiverRoomMember =
+                ChatRoomMember.createMember(directRoom, receiver);
+        receiverRoomMember.leave();
+
+        stubParticipation(sender, directRoom, senderRoomMember);
+        when(chatRoomMemberRepository.findTargetMemberId(ROOM_ID, MEMBER_ID))
+                .thenReturn(Optional.of(2L));
+        when(friendshipRepository
+                .findByMemberIdAndTargetMemberIdForUpdate(
+                        MEMBER_ID,
+                        2L,
+                        FriendshipStatus.ACCEPTED
+                )).thenReturn(Optional.of(mock(Friendship.class)));
+        when(memberRepository.findById(2L))
+                .thenReturn(Optional.of(receiver));
+
+        assertThatThrownBy(() -> chatMessageService.saveAttachment(
+                MEMBER_ID,
+                new ChatAttachmentMessageRequest(ROOM_ID, 200L)
+        )).isInstanceOfSatisfying(
+                CustomException.class,
+                exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.MEMBER_WITHDRAWN)
+        );
+
+        assertThat(receiverRoomMember.isParticipating()).isFalse();
+        verify(chatRoomMemberRepository, never())
+                .findByChatRoomIdAndMemberIdForUpdate(ROOM_ID, 2L);
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+    }
+
+    @Test
     void saveAttachmentStoresNonImageAsFileMessage() {
         Instant createdAt = Instant.parse("2026-09-28T06:00:00Z");
         Member sender = member(MemberStatus.ACTIVE, Instant.now());
@@ -773,6 +859,8 @@ class ChatMessageServiceTest {
                         2L,
                         FriendshipStatus.ACCEPTED
                 )).thenReturn(Optional.of(mock(Friendship.class)));
+        when(memberRepository.findById(2L))
+                .thenReturn(Optional.of(receiverRoomMember.getMember()));
         when(chatRoomMemberRepository
                 .findByChatRoomIdAndMemberIdForUpdate(ROOM_ID, 2L))
                 .thenReturn(Optional.of(receiverRoomMember));

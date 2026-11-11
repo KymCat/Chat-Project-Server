@@ -212,6 +212,68 @@ class ChatControllerTest {
         );
     }
 
+    @Test
+    void sendNotifiesRequesterWhenDirectReceiverIsWithdrawn() {
+        ChatMessageRequest request = new ChatMessageRequest(
+                10L,
+                "안녕하세요"
+        );
+        Authentication authentication = authentication(1L, "홍길동");
+        when(chatMessageService.save(1L, request))
+                .thenThrow(new CustomException(
+                        ErrorCode.MEMBER_WITHDRAWN
+                ));
+
+        ChatMessageEvent result = chatController.send(
+                request,
+                authentication
+        );
+
+        assertThat(result).isNull();
+        verify(template, never()).convertAndSend(
+                any(String.class),
+                any(Object.class)
+        );
+        verify(template).convertAndSendToUser(
+                "1",
+                "/queue/chat-errors",
+                ChatErrorEvent.from(
+                        10L,
+                        ErrorCode.MEMBER_WITHDRAWN
+                )
+        );
+    }
+
+    @Test
+    void sendAttachmentNotifiesRequesterWhenDirectReceiverIsWithdrawn() {
+        ChatAttachmentMessageRequest request =
+                new ChatAttachmentMessageRequest(10L, 200L);
+        Authentication authentication = authentication(1L, "홍길동");
+        when(chatMessageService.saveAttachment(1L, request))
+                .thenThrow(new CustomException(
+                        ErrorCode.MEMBER_WITHDRAWN
+                ));
+
+        ChatMessageEvent result = chatController.sendAttachment(
+                request,
+                authentication
+        );
+
+        assertThat(result).isNull();
+        verify(template, never()).convertAndSend(
+                any(String.class),
+                any(Object.class)
+        );
+        verify(template).convertAndSendToUser(
+                "1",
+                "/queue/chat-errors",
+                ChatErrorEvent.from(
+                        10L,
+                        ErrorCode.MEMBER_WITHDRAWN
+                )
+        );
+    }
+
     private Authentication authentication(
             Long memberId,
             String nickname

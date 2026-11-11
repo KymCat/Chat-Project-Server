@@ -46,7 +46,9 @@ public class ChatController {
             );
         } catch (CustomException exception) {
             if (exception.getErrorCode()
-                    != ErrorCode.FRIEND_RELATION_NOT_FOUND) {
+                    != ErrorCode.FRIEND_RELATION_NOT_FOUND
+                    && exception.getErrorCode()
+                    != ErrorCode.MEMBER_WITHDRAWN) {
                 throw exception;
             }
 
@@ -84,7 +86,9 @@ public class ChatController {
             );
         } catch (CustomException exception) {
             if (exception.getErrorCode()
-                    != ErrorCode.FRIEND_RELATION_NOT_FOUND) {
+                    != ErrorCode.FRIEND_RELATION_NOT_FOUND
+                    && exception.getErrorCode()
+                    != ErrorCode.MEMBER_WITHDRAWN) {
                 throw exception;
             }
 
