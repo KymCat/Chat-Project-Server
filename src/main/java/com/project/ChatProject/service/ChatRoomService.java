@@ -187,6 +187,7 @@ public class ChatRoomService {
                 chatRoom.getId(),
                 beforeMessageId,
                 chatRoomMember.getJoinedAt(),
+                memberId,
                 size
         );
 
@@ -369,7 +370,11 @@ public class ChatRoomService {
         ChatRoomMember chatRoomMember = context.chatRoomMember();
 
         ChatMessage requestedLastMessage = chatMessageRepository
-                .findByIdAndChatRoomId(lastReadMessageId, roomId)
+                .findVisibleByIdAndChatRoomId(
+                        lastReadMessageId,
+                        roomId,
+                        memberId
+                )
                 .orElseThrow(() ->
                         new CustomException(
                                 ErrorCode.CHAT_MESSAGE_NOT_FOUND
@@ -809,6 +814,7 @@ public class ChatRoomService {
             Long chatRoomId,
             Long beforeMessageId,
             Instant joinedAt,
+            Long memberId,
             int size
     )
     {
@@ -819,7 +825,11 @@ public class ChatRoomService {
         if (beforeMessageId != null) {
             ChatMessage beforeMessage =
                     chatMessageRepository
-                            .findByIdAndChatRoomId(beforeMessageId, chatRoomId)
+                            .findVisibleByIdAndChatRoomId(
+                                    beforeMessageId,
+                                    chatRoomId,
+                                    memberId
+                            )
                             .orElseThrow(()->
                                     new CustomException(
                                             ErrorCode.CHAT_MESSAGE_NOT_FOUND
@@ -833,12 +843,14 @@ public class ChatRoomService {
                         chatRoomId,
                         beforeMessageId,
                         beforeCreatedAt,
+                        memberId,
                         joinedAt,
                         pageable
                 )
                 : chatMessageRepository.findLatestMessages(
                         chatRoomId,
                         joinedAt,
+                        memberId,
                         pageable
                 );
     }

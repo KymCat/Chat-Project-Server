@@ -634,6 +634,7 @@ class ChatMessageServiceTest {
                 ROOM_ID,
                 "Spring",
                 joinedAt,
+                MEMBER_ID,
                 PageRequest.of(0, 4)
         )).thenReturn(foundMessages);
 
@@ -655,9 +656,11 @@ class ChatMessageServiceTest {
                 ROOM_ID,
                 "Spring",
                 joinedAt,
+                MEMBER_ID,
                 PageRequest.of(0, 4)
         );
         verify(chatMessageRepository, never()).searchMessageBefore(
+                any(),
                 any(),
                 any(),
                 any(),
@@ -689,7 +692,11 @@ class ChatMessageServiceTest {
         );
 
         stubParticipation(sender, chatRoom, chatRoomMember);
-        when(chatMessageRepository.findByIdAndChatRoomId(100L, ROOM_ID))
+        when(chatMessageRepository.findVisibleByIdAndChatRoomId(
+                100L,
+                ROOM_ID,
+                MEMBER_ID
+        ))
                 .thenReturn(Optional.of(cursorMessage));
         when(chatMessageRepository.searchMessageBefore(
                 ROOM_ID,
@@ -697,6 +704,7 @@ class ChatMessageServiceTest {
                 joinedAt,
                 cursorCreatedAt,
                 100L,
+                MEMBER_ID,
                 PageRequest.of(0, 4)
         )).thenReturn(foundMessages);
 
@@ -714,8 +722,13 @@ class ChatMessageServiceTest {
                 .containsExactly(99L, 98L);
         assertThat(response.nextCursor()).isNull();
         assertThat(response.hasNext()).isFalse();
-        verify(chatMessageRepository).findByIdAndChatRoomId(100L, ROOM_ID);
+        verify(chatMessageRepository).findVisibleByIdAndChatRoomId(
+                100L,
+                ROOM_ID,
+                MEMBER_ID
+        );
         verify(chatMessageRepository, never()).searchMessage(
+                any(),
                 any(),
                 any(),
                 any(),
@@ -731,7 +744,11 @@ class ChatMessageServiceTest {
                 ChatRoomMember.createMember(chatRoom, sender);
 
         stubParticipation(sender, chatRoom, chatRoomMember);
-        when(chatMessageRepository.findByIdAndChatRoomId(999L, ROOM_ID))
+        when(chatMessageRepository.findVisibleByIdAndChatRoomId(
+                999L,
+                ROOM_ID,
+                MEMBER_ID
+        ))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> chatMessageService.searchMessages(
@@ -747,6 +764,7 @@ class ChatMessageServiceTest {
         );
 
         verify(chatMessageRepository, never()).searchMessageBefore(
+                any(),
                 any(),
                 any(),
                 any(),
@@ -779,6 +797,7 @@ class ChatMessageServiceTest {
         );
 
         verify(chatMessageRepository, never()).searchMessage(
+                any(),
                 any(),
                 any(),
                 any(),

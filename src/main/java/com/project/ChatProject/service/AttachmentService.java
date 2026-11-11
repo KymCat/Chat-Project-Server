@@ -97,7 +97,8 @@ public class AttachmentService {
         ChatMessage message = chatMessageRepository
                 .findActiveMessageByRoomIdAndAttachmentId(
                         roomId,
-                        attachmentId
+                        attachmentId,
+                        memberId
                 )
                 .orElseThrow(() ->
                         new CustomException(

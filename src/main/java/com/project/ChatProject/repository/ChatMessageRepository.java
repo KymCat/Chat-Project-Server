@@ -21,12 +21,20 @@ public interface ChatMessageRepository
                     FROM ChatMessage cm
                     WHERE cm.chatRoom.id = :chatRoomId
                         AND cm.createdAt >= :joinedAt
+                        AND NOT EXISTS (
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocked.id = :viewerId
+                                AND (mb.blocker = cm.sender OR
+                                     mb.blocker = cm.relatedMember)
+                        )
                     ORDER BY cm.createdAt DESC, cm.id DESC
                     """
     )
     List<ChatMessage> findLatestMessages(
             @Param("chatRoomId") Long chatRoomId,
             @Param("joinedAt") Instant joinedAt,
+            @Param("viewerId") Long viewerId,
             Pageable pageable
     );
 
@@ -41,6 +49,13 @@ public interface ChatMessageRepository
                                 AND cm.id < :beforeId
                             )
                         )
+                        AND NOT EXISTS (
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocked.id = :viewerId
+                                AND (mb.blocker = cm.sender OR
+                                     mb.blocker = cm.relatedMember)
+                        )
                     ORDER BY cm.createdAt DESC, cm.id DESC
                     """
     )
@@ -48,13 +63,30 @@ public interface ChatMessageRepository
             @Param("chatRoomId") Long chatRoomId,
             @Param("beforeId") Long beforeMessageId,
             @Param("beforeCreatedAt") Instant beforeCreatedAt,
+            @Param("viewerId") Long viewerId,
             @Param("joinedAt") Instant joinedAt,
             Pageable pageable
     );
 
-    Optional<ChatMessage> findByIdAndChatRoomId(
-            Long messageId,
-            Long chatRoomId
+    @Query(
+            value = """
+                    SELECT cm
+                    FROM ChatMessage cm
+                    WHERE cm.id = :id
+                        AND cm.chatRoom.id = :chatRoomId
+                        AND NOT EXISTS (
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocked.id = :viewerId
+                                AND (mb.blocker = cm.sender OR
+                                     mb.blocker = cm.relatedMember)
+                        )
+                    """
+    )
+    Optional<ChatMessage> findVisibleByIdAndChatRoomId(
+            @Param("id") Long messageId,
+            @Param("chatRoomId") Long chatRoomId,
+            @Param("viewerId") Long viewerId
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -80,11 +112,21 @@ public interface ChatMessageRepository
                     WHERE cm.chatRoom.id = :roomId
                         AND a.id = :attachmentId
                         AND cm.deletedAt IS NULL
+                        AND NOT EXISTS (
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocked.id = :viewerId
+                              AND (
+                                  mb.blocker = cm.sender
+                                  OR mb.blocker = cm.relatedMember
+                              )
+                        )
                     """
     )
     Optional<ChatMessage> findActiveMessageByRoomIdAndAttachmentId(
             @Param("roomId") Long roomId,
-            @Param("attachmentId") Long attachmentId
+            @Param("attachmentId") Long attachmentId,
+            @Param("viewerId") Long viewerId
     );
 
     // 채팅메세지 최초 검색
@@ -99,6 +141,13 @@ public interface ChatMessageRepository
                             com.project.ChatProject.entity.enums.ChatMessageType.TEXT
                         AND cm.deletedAt IS NULL
                         AND LOCATE(LOWER(:keyword), LOWER(cm.content)) > 0
+                        AND NOT EXISTS (
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocked.id = :viewerId
+                                AND (mb.blocker = cm.sender OR
+                                     mb.blocker = cm.relatedMember)
+                        )
                     ORDER BY cm.createdAt DESC, cm.id DESC
                     """
     )
@@ -106,6 +155,7 @@ public interface ChatMessageRepository
             @Param("roomId") Long roomId,
             @Param("keyword") String keyword,
             @Param("joinedAt") Instant joinedAt,
+            @Param("viewerId") Long viewerId,
             Pageable pageable
     );
 
@@ -127,6 +177,13 @@ public interface ChatMessageRepository
                                 AND cm.id < :beforeMessageId
                             )
                         )
+                        AND NOT EXISTS (
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocked.id = :viewerId
+                                AND (mb.blocker = cm.sender OR
+                                     mb.blocker = cm.relatedMember)
+                        )
                         AND LOCATE(LOWER(:keyword), LOWER(cm.content)) > 0
                     ORDER BY cm.createdAt DESC, cm.id DESC
                     """
@@ -137,6 +194,7 @@ public interface ChatMessageRepository
             @Param("joinedAt") Instant joinedAt,
             @Param("beforeCreatedAt") Instant beforeCreatedAt,
             @Param("beforeMessageId") Long beforeMessageId,
+            @Param("viewerId") Long viewerId,
             Pageable pageable
     );
 

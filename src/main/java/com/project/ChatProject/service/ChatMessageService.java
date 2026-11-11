@@ -171,12 +171,17 @@ public class ChatMessageService {
                             roomId,
                             normalizedKeyword,
                             context.chatRoomMember().getJoinedAt(),
+                            memberId,
                             PageRequest.of(0, size+1)
                     );
         }
         else {
             ChatMessage beforeMessage = chatMessageRepository
-                    .findByIdAndChatRoomId(beforeMessageId, roomId)
+                    .findVisibleByIdAndChatRoomId(
+                            beforeMessageId,
+                            roomId,
+                            memberId
+                    )
                     .orElseThrow(() ->
                             new CustomException(
                                     ErrorCode.CHAT_MESSAGE_NOT_FOUND
@@ -190,6 +195,7 @@ public class ChatMessageService {
                             context.chatRoomMember().getJoinedAt(),
                             beforeMessage.getCreatedAt(),
                             beforeMessageId,
+                            memberId,
                             PageRequest.of(0, size+1)
                     );
         }

@@ -334,7 +334,11 @@ class AttachmentServiceTest {
         Resource resource = new ByteArrayResource("image-content".getBytes());
 
         when(chatMessageRepository
-                .findActiveMessageByRoomIdAndAttachmentId(ROOM_ID, 100L))
+                .findActiveMessageByRoomIdAndAttachmentId(
+                        ROOM_ID,
+                        100L,
+                        MEMBER_ID
+                ))
                 .thenReturn(java.util.Optional.of(message));
         when(fileStorage.load(attachment.getStorageKey()))
                 .thenReturn(resource);
@@ -380,7 +384,11 @@ class AttachmentServiceTest {
     @Test
     void downloadRejectsAttachmentNotConnectedToRoomMessage() {
         when(chatMessageRepository
-                .findActiveMessageByRoomIdAndAttachmentId(ROOM_ID, 100L))
+                .findActiveMessageByRoomIdAndAttachmentId(
+                        ROOM_ID,
+                        100L,
+                        MEMBER_ID
+                ))
                 .thenReturn(java.util.Optional.empty());
 
         assertDownloadRejected(ErrorCode.ATTACHMENT_NOT_FOUND);
@@ -398,7 +406,11 @@ class AttachmentServiceTest {
                 attachment
         );
         when(chatMessageRepository
-                .findActiveMessageByRoomIdAndAttachmentId(ROOM_ID, 100L))
+                .findActiveMessageByRoomIdAndAttachmentId(
+                        ROOM_ID,
+                        100L,
+                        MEMBER_ID
+                ))
                 .thenReturn(java.util.Optional.of(message));
 
         assertDownloadRejected(ErrorCode.ATTACHMENT_NOT_FOUND);
@@ -418,7 +430,11 @@ class AttachmentServiceTest {
         CustomException failure =
                 new CustomException(ErrorCode.STORAGE_OBJECT_NOT_FOUND);
         when(chatMessageRepository
-                .findActiveMessageByRoomIdAndAttachmentId(ROOM_ID, 100L))
+                .findActiveMessageByRoomIdAndAttachmentId(
+                        ROOM_ID,
+                        100L,
+                        MEMBER_ID
+                ))
                 .thenReturn(java.util.Optional.of(message));
         when(fileStorage.load(attachment.getStorageKey()))
                 .thenThrow(failure);

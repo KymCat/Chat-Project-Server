@@ -85,6 +85,15 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
                              )
                         )
                         AND (cm.sender IS NULL OR cm.sender.id <> :memberId)
+                        AND NOT EXISTS (
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocked.id = :memberId
+                              AND (
+                                  mb.blocker = cm.sender
+                                  OR mb.blocker = cm.relatedMember
+                              )
+                        )
                     GROUP BY crm.chatRoom.id
                     """
     )

@@ -537,6 +537,7 @@ class ChatRoomServiceTest {
         when(chatMessageRepository.findLatestMessages(
                 eq(10L),
                 eq(roomMember.getJoinedAt()),
+                eq(1L),
                 any(Pageable.class)
         ))
                 .thenReturn(queriedMessages);
@@ -556,6 +557,7 @@ class ChatRoomServiceTest {
                 .findLatestMessages(
                         eq(10L),
                         eq(roomMember.getJoinedAt()),
+                        eq(1L),
                         pageableCaptor.capture()
                 );
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(4);
@@ -579,12 +581,13 @@ class ChatRoomServiceTest {
         );
 
         stubMessageAccess(member, chatRoom, roomMember);
-        when(chatMessageRepository.findByIdAndChatRoomId(104L, 10L))
+        when(chatMessageRepository.findVisibleByIdAndChatRoomId(104L, 10L, 1L))
                 .thenReturn(Optional.of(cursorMessage));
         when(chatMessageRepository.findMessages(
                 eq(10L),
                 eq(104L),
                 eq(cursorMessage.getCreatedAt()),
+                eq(1L),
                 eq(roomMember.getJoinedAt()),
                 any(Pageable.class)
         )).thenReturn(queriedMessages);
@@ -619,6 +622,7 @@ class ChatRoomServiceTest {
                 .findLatestMessages(
                         any(Long.class),
                         any(Instant.class),
+                        any(Long.class),
                         any(Pageable.class)
                 );
     }
@@ -641,6 +645,7 @@ class ChatRoomServiceTest {
         when(chatMessageRepository.findLatestMessages(
                 eq(10L),
                 eq(roomMember.getJoinedAt()),
+                eq(1L),
                 any(Pageable.class)
         )).thenReturn(List.of(deletedMessage));
 
@@ -680,7 +685,7 @@ class ChatRoomServiceTest {
         ReflectionTestUtils.setField(roomMember, "lastReadMessage", currentMessage);
 
         stubReadPositionAccess(member, chatRoom, roomMember);
-        when(chatMessageRepository.findByIdAndChatRoomId(102L, 10L))
+        when(chatMessageRepository.findVisibleByIdAndChatRoomId(102L, 10L, 1L))
                 .thenReturn(Optional.of(requestedMessage));
 
         chatRoomService.updateReadPosition(10L, 1L, 102L);
@@ -717,7 +722,7 @@ class ChatRoomServiceTest {
         ReflectionTestUtils.setField(roomMember, "lastReadMessage", currentMessage);
 
         stubReadPositionAccess(member, chatRoom, roomMember);
-        when(chatMessageRepository.findByIdAndChatRoomId(101L, 10L))
+        when(chatMessageRepository.findVisibleByIdAndChatRoomId(101L, 10L, 1L))
                 .thenReturn(Optional.of(requestedMessage));
 
         chatRoomService.updateReadPosition(10L, 1L, 101L);
@@ -744,7 +749,7 @@ class ChatRoomServiceTest {
         );
 
         stubReadPositionAccess(member, chatRoom, roomMember);
-        when(chatMessageRepository.findByIdAndChatRoomId(101L, 10L))
+        when(chatMessageRepository.findVisibleByIdAndChatRoomId(101L, 10L, 1L))
                 .thenReturn(Optional.of(requestedMessage));
 
         assertThatThrownBy(() ->
@@ -765,7 +770,7 @@ class ChatRoomServiceTest {
         ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
 
         stubMessageAccess(member, chatRoom, roomMember);
-        when(chatMessageRepository.findByIdAndChatRoomId(999L, 10L))
+        when(chatMessageRepository.findVisibleByIdAndChatRoomId(999L, 10L, 1L))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> chatRoomService.getMessages(10L, 999L, 1L, 30))
@@ -779,6 +784,7 @@ class ChatRoomServiceTest {
                 any(Long.class),
                 any(Long.class),
                 any(Instant.class),
+                any(Long.class),
                 any(Instant.class),
                 any(Pageable.class)
         );
