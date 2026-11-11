@@ -30,6 +30,10 @@ import java.util.UUID;
                 @Index(
                         name = "idx_chat_messages_room_created_at_id_desc",
                         columnList = "room_id, created_at DESC, id DESC"
+                ),
+                @Index(
+                        name = "idx_chat_messages_related_member_id",
+                        columnList = "related_member_id"
                 )
         }
 )
@@ -45,6 +49,10 @@ public class ChatMessage extends BaseCreatedTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sender_id")
     private Member sender;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_member_id")
+    private Member relatedMember;
 
     @Column(name = "client_message_id")
     private UUID clientMessageId;
@@ -71,6 +79,7 @@ public class ChatMessage extends BaseCreatedTimeEntity {
     private ChatMessage(
             ChatRoom chatRoom,
             Member sender,
+            Member relatedMember,
             UUID clientMessageId,
             ChatMessageType type,
             String content,
@@ -79,6 +88,7 @@ public class ChatMessage extends BaseCreatedTimeEntity {
     {
         this.chatRoom = chatRoom;
         this.sender = sender;
+        this.relatedMember = relatedMember;
         this.clientMessageId = clientMessageId;
         this.type = type;
         this.content = content;
@@ -105,6 +115,7 @@ public class ChatMessage extends BaseCreatedTimeEntity {
         return new ChatMessage(
                 chatRoom,
                 sender,
+                null,
                 UUID.randomUUID(),
                 ChatMessageType.TEXT,
                 content,
@@ -114,11 +125,13 @@ public class ChatMessage extends BaseCreatedTimeEntity {
 
     public static ChatMessage createSystem(
             ChatRoom chatRoom,
+            Member relatedMember,
             String content
     ) {
         return new ChatMessage(
                 chatRoom,
                 null,
+                relatedMember,
                 null,
                 ChatMessageType.SYSTEM,
                 content,
@@ -142,6 +155,7 @@ public class ChatMessage extends BaseCreatedTimeEntity {
         return new ChatMessage(
                 chatRoom,
                 sender,
+                null,
                 UUID.randomUUID(),
                 type,
                 null,

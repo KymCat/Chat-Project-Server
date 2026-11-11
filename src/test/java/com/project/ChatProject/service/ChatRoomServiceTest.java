@@ -1229,6 +1229,7 @@ class ChatRoomServiceTest {
         ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
         ChatMessage systemMessage = ChatMessage.createSystem(
                 chatRoom,
+                member,
                 "사용자님이 입장하였습니다."
         );
         ReflectionTestUtils.setField(systemMessage, "id", 100L);
@@ -1366,6 +1367,7 @@ class ChatRoomServiceTest {
         ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
         ChatMessage systemMessage = ChatMessage.createSystem(
                 chatRoom,
+                member,
                 "사용자님이 입장하였습니다."
         );
         ReflectionTestUtils.setField(systemMessage, "id", 100L);

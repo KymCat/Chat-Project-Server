@@ -155,6 +155,7 @@ public class ChatRoomService {
         ChatMessage enterMessage =
                 ChatMessage.createSystem(
                         chatRoom,
+                        member,
                         member.getNickname() + "님이 입장하였습니다."
                 );
         chatMessageRepository.save(enterMessage);
@@ -260,6 +261,7 @@ public class ChatRoomService {
 
         ChatMessage leaveMessage = ChatMessage.createSystem(
                 chatRoom,
+                member,
                 member.getNickname() + "님이 퇴장하였습니다."
         );
 
@@ -336,6 +338,7 @@ public class ChatRoomService {
         ChatMessage newOwnerMessage
                 = ChatMessage.createSystem(
                         myContext.chatRoom(),
+                        newOwnerContext.member(),
                         newOwnerContext.member().getNickname()
                                 + "님이 방장으로 위임되셨습니다."
         );
@@ -538,6 +541,7 @@ public class ChatRoomService {
 
         ChatMessage systemMessage = ChatMessage.createSystem(
                 context.chatRoom(),
+                context.member(),
                 context.member().getNickname()
                         + "님이 채팅방 이름을 '"
                         + updateName
