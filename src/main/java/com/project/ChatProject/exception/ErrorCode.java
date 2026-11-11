@@ -328,6 +328,23 @@ public enum ErrorCode {
             "자기 자신에게 친구 끊기를 할 수 없습니다."
     ),
 
+    // Member Block Exception
+    MEMBER_BLOCK_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "MEMBER_BLOCK-001",
+            "이미 차단한 회원입니다."
+    ),
+    MEMBER_BLOCK_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "MEMBER_BLOCK-002",
+            "차단 관계가 존재하지 않습니다."
+    ),
+    SELF_BLOCK_NOT_ALLOWED(
+            HttpStatus.BAD_REQUEST,
+            "MEMBER_BLOCK-003",
+            "자기 자신을 차단할 수 없습니다."
+    ),
+
     // Common Exception
     INTERNAL_SERVER_ERROR(
             HttpStatus.INTERNAL_SERVER_ERROR,
