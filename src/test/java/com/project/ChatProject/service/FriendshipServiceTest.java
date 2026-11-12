@@ -10,6 +10,7 @@ import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.FriendshipRepository;
+import com.project.ChatProject.repository.MemberBlockRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +49,9 @@ class FriendshipServiceTest {
     @Mock
     private FriendshipRepository friendshipRepository;
 
+    @Mock
+    private MemberBlockRepository memberBlockRepository;
+
     private FriendshipService friendshipService;
     private Member requester;
     private Member receiver;
@@ -56,7 +60,8 @@ class FriendshipServiceTest {
     void setUp() {
         friendshipService = new FriendshipService(
                 memberRepository,
-                friendshipRepository
+                friendshipRepository,
+                memberBlockRepository
         );
 
         requester = member(

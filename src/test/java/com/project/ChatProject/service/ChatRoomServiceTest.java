@@ -34,6 +34,7 @@ import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.ChatRoomMemberRepository;
 import com.project.ChatProject.repository.ChatRoomRepository;
 import com.project.ChatProject.repository.FriendshipRepository;
+import com.project.ChatProject.repository.MemberBlockRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import com.project.ChatProject.repository.StorageDeletionTaskRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,6 +85,9 @@ class ChatRoomServiceTest {
     @Mock
     private FriendshipRepository friendshipRepository;
 
+    @Mock
+    private MemberBlockRepository memberBlockRepository;
+
     private ChatRoomService chatRoomService;
 
     @BeforeEach
@@ -102,7 +106,8 @@ class ChatRoomServiceTest {
                 chatMessageRepository,
                 inviteLinkRepository,
                 deletionTaskRepository,
-                friendshipRepository
+                friendshipRepository,
+                memberBlockRepository
         );
     }
 
@@ -1509,7 +1514,7 @@ class ChatRoomServiceTest {
                 ChatRoomMember.createMember(chatRoom, withdrawnMember);
 
         stubMessageAccess(requester, chatRoom, requesterRoomMember);
-        when(chatRoomMemberRepository.findAllParticipatingByChatRoomId(10L))
+        when(chatRoomMemberRepository.findAllParticipatingByChatRoomId(10L, 1L))
                 .thenReturn(List.of(
                         activeRoomMember,
                         suspendedRoomMember,
@@ -1544,7 +1549,7 @@ class ChatRoomServiceTest {
                 );
 
         verify(chatRoomMemberRepository)
-                .findAllParticipatingByChatRoomId(10L);
+                .findAllParticipatingByChatRoomId(10L, 1L);
     }
 
     @Test
@@ -1567,7 +1572,10 @@ class ChatRoomServiceTest {
                 );
 
         verify(chatRoomMemberRepository, never())
-                .findAllParticipatingByChatRoomId(any(Long.class));
+                .findAllParticipatingByChatRoomId(
+                        any(Long.class),
+                        any(Long.class)
+                );
     }
 
     @Test

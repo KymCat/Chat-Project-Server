@@ -24,6 +24,7 @@ import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.reauth.ReauthenticationTokenStore;
 import com.project.ChatProject.repository.FriendshipRepository;
 import com.project.ChatProject.repository.MemberCredentialRepository;
+import com.project.ChatProject.repository.MemberBlockRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import com.project.ChatProject.repository.SocialAccountRepository;
 import com.project.ChatProject.repository.StorageDeletionTaskRepository;
@@ -85,6 +86,9 @@ class MemberServiceTest {
 
     @Mock
     private FriendshipRepository friendshipRepository;
+
+    @Mock
+    private MemberBlockRepository memberBlockRepository;
 
     @Mock
     private ReauthenticationTokenStore reauthenticationTokenStore;
@@ -303,7 +307,7 @@ class MemberServiceTest {
         when(fileStorage.load(storageKey)).thenReturn(resource);
 
         ProfileImageResult result =
-                memberService.getProfileImage(MEMBER_ID);
+                memberService.getProfileImage(MEMBER_ID, MEMBER_ID);
 
         assertThat(result.resource()).isSameAs(resource);
         assertThat(result.contentType()).isEqualTo("image/png");
@@ -318,7 +322,7 @@ class MemberServiceTest {
         when(member.getStatus()).thenReturn(MemberStatus.ACTIVE);
 
         assertThatThrownBy(() ->
-                memberService.getProfileImage(MEMBER_ID)
+                memberService.getProfileImage(MEMBER_ID, MEMBER_ID)
         ).isInstanceOfSatisfying(
                 CustomException.class,
                 exception -> assertThat(exception.getErrorCode())
@@ -344,7 +348,7 @@ class MemberServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                memberService.getProfileImage(MEMBER_ID)
+                memberService.getProfileImage(MEMBER_ID, MEMBER_ID)
         ).isInstanceOfSatisfying(
                 CustomException.class,
                 exception -> assertThat(exception.getErrorCode())
@@ -1098,7 +1102,7 @@ class MemberServiceTest {
                 .thenReturn(Optional.of(member));
 
         assertThatThrownBy(() ->
-                memberService.getProfileImage(MEMBER_ID)
+                memberService.getProfileImage(MEMBER_ID, MEMBER_ID)
         ).isInstanceOfSatisfying(
                 CustomException.class,
                 exception -> assertThat(exception.getErrorCode())

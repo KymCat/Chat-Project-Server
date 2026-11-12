@@ -165,20 +165,20 @@ class MemberControllerTest {
                 "image/png",
                 5L
         );
-        when(memberService.getProfileImage(2L)).thenReturn(result);
+        AccessTokenClaims claims = claims();
+        when(memberService.getProfileImage(2L, 2L)).thenReturn(result);
 
         ResponseEntity<Resource> response =
-                memberController.getProfileImage(2L);
+                memberController.getProfileImage(2L, claims);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getContentType())
                 .isEqualTo(MediaType.IMAGE_PNG);
         assertThat(response.getHeaders().getContentLength()).isEqualTo(5L);
         assertThat(response.getHeaders().getCacheControl())
-                .contains("max-age=3600")
-                .contains("private");
+                .isEqualTo("no-store");
         assertThat(response.getBody()).isSameAs(resource);
-        verify(memberService).getProfileImage(2L);
+        verify(memberService).getProfileImage(2L, 2L);
     }
 
     @Test
