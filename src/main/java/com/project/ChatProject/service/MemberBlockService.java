@@ -67,7 +67,7 @@ public class MemberBlockService {
     }
 
     @Transactional
-    public void unblock(
+    public MemberEvent unblock(
             Long blockerId,
             Long blockedId
     ) {
@@ -86,6 +86,8 @@ public class MemberBlockService {
                 );
 
         memberBlockRepository.delete(memberBlock);
+
+        return MemberEvent.unhidden(blockerId);
     }
 
     @Transactional(readOnly = true)

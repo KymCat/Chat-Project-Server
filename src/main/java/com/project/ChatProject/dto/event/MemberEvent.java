@@ -10,4 +10,11 @@ public record MemberEvent(
                 memberId
         );
     }
+
+    public static MemberEvent unhidden(Long memberId) {
+        return new MemberEvent(
+                MemberEventType.UNBLOCKED,
+                memberId
+        );
+    }
 }

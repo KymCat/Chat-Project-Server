@@ -51,8 +51,13 @@ public class MemberBlockController {
     ) {
         Long blockerId = claims.memberId();
 
-        memberBlockService.unblock(
+        MemberEvent event = memberBlockService.unblock(
                 blockerId,
+                targetMemberId
+        );
+
+        memberEventPublisher.publishHiddenEvent(
+                event,
                 targetMemberId
         );
 
