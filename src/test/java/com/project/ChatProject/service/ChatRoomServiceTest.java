@@ -21,10 +21,10 @@ import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.StorageDeletionTask;
 import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.entity.enums.ChatMessageType;
-import com.project.ChatProject.entity.enums.ChatMessageEventType;
+import com.project.ChatProject.dto.event.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
 import com.project.ChatProject.entity.enums.ChatRoomType;
-import com.project.ChatProject.entity.enums.ChatRoomEventType;
+import com.project.ChatProject.dto.event.ChatRoomEventType;
 import com.project.ChatProject.entity.enums.FriendshipStatus;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
@@ -169,7 +169,7 @@ class ChatRoomServiceTest {
                         member(MemberStatus.SUSPENDED, Instant.now())
                 ));
 
-        assertCreationRejected(ErrorCode.MEMBER_BLOCKED);
+        assertCreationRejected(ErrorCode.MEMBER_SUSPENDED);
     }
 
     @Test
@@ -399,7 +399,7 @@ class ChatRoomServiceTest {
                         member(MemberStatus.SUSPENDED, Instant.now())
                 ));
 
-        assertAvailableRoomsRejected(ErrorCode.MEMBER_BLOCKED);
+        assertAvailableRoomsRejected(ErrorCode.MEMBER_SUSPENDED);
     }
 
     @Test

@@ -37,6 +37,7 @@ public class ChatRoomService {
     private final ChatRoomInviteLinkRepository inviteLinkRepository;
     private final StorageDeletionTaskRepository deletionTaskRepository;
     private final FriendshipRepository friendshipRepository;
+    private final MemberBlockRepository memberBlockRepository;
 
     @Transactional
     public ChatRoomCreateResponse create(Long memberId, String name) {
@@ -291,7 +292,8 @@ public class ChatRoomService {
 
         List<ChatRoomMember> chatRoomMembers = chatRoomMemberRepository
                 .findAllParticipatingByChatRoomId(
-                        context.chatRoom().getId()
+                        context.chatRoom().getId(),
+                        memberId
                 );
 
         return chatRoomMembers.stream()
@@ -598,6 +600,13 @@ public class ChatRoomService {
                 memberId,
                 targetMemberId
         );
+
+        if (memberBlockRepository
+                .existsByBlockerIdAndBlockedId(targetMemberId, memberId)) {
+            throw new CustomException(
+                    ErrorCode.MEMBER_PROFILE_ACCESS_FORBIDDEN
+            );
+        }
 
         Optional<ChatRoom> existingRoom = chatRoomRepository
                 .findByDirectKey(directKey);

@@ -13,7 +13,7 @@ public enum ErrorCode {
             "MEMBER-001",
             "이미 존재하는 이메일입니다."
     ),
-    MEMBER_BLOCKED(
+    MEMBER_SUSPENDED(
             HttpStatus.FORBIDDEN,
             "MEMBER-002",
             "이용이 제한된 계정입니다"
@@ -343,6 +343,11 @@ public enum ErrorCode {
             HttpStatus.BAD_REQUEST,
             "MEMBER_BLOCK-003",
             "자기 자신을 차단할 수 없습니다."
+    ),
+    MEMBER_PROFILE_ACCESS_FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "MEMBER_BLOCK-004",
+            "해당 회원 정보에 접근할 수 없습니다."
     ),
 
     // Common Exception

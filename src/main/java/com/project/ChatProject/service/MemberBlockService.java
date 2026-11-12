@@ -1,5 +1,6 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.event.MemberEvent;
 import com.project.ChatProject.dto.response.BlockedMemberResponse;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.MemberBlock;
@@ -25,7 +26,7 @@ public class MemberBlockService {
     private final FriendshipRepository friendshipRepository;
 
     @Transactional
-    public void block(
+    public MemberEvent block(
             Long blockerId,
             Long blockedId
     ) {
@@ -61,6 +62,8 @@ public class MemberBlockService {
                 blockerId,
                 blockedId
         ).ifPresent(friendshipRepository::delete);
+
+        return MemberEvent.hidden(blockerId);
     }
 
     @Transactional

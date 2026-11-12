@@ -152,7 +152,7 @@ class FriendshipServiceTest {
         when(memberRepository.findById(REQUESTER_ID))
                 .thenReturn(Optional.of(requester));
 
-        assertRequestRejected(ErrorCode.MEMBER_BLOCKED);
+        assertRequestRejected(ErrorCode.MEMBER_SUSPENDED);
 
         verify(memberRepository, never()).findById(RECEIVER_ID);
         verifyNoInteractions(friendshipRepository);
@@ -728,7 +728,7 @@ class FriendshipServiceTest {
                 RECEIVER_ID
         )).thenReturn(Optional.of(request));
 
-        assertAcceptRequestRejected(ErrorCode.MEMBER_BLOCKED);
+        assertAcceptRequestRejected(ErrorCode.MEMBER_SUSPENDED);
 
         assertThat(request.getStatus())
                 .isEqualTo(FriendshipStatus.PENDING);
@@ -955,7 +955,7 @@ class FriendshipServiceTest {
         )).isInstanceOfSatisfying(
                 CustomException.class,
                 exception -> assertThat(exception.getErrorCode())
-                        .isEqualTo(ErrorCode.MEMBER_BLOCKED)
+                        .isEqualTo(ErrorCode.MEMBER_SUSPENDED)
         );
 
         verifyNoInteractions(friendshipRepository);

@@ -9,15 +9,13 @@ import com.project.ChatProject.dto.response.DirectChatResponse;
 import com.project.ChatProject.dto.result.ChatMessageSaveResult;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
-import com.project.ChatProject.jwt.AccessTokenClaims;
-import com.project.ChatProject.service.ChatEventPublisher;
+import com.project.ChatProject.publisher.ChatEventPublisher;
 import com.project.ChatProject.service.ChatMessageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.RestController;
 
 /**

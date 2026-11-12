@@ -15,7 +15,7 @@ import com.project.ChatProject.entity.Friendship;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.entity.enums.ChatMessageType;
-import com.project.ChatProject.entity.enums.ChatMessageEventType;
+import com.project.ChatProject.dto.event.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.FriendshipStatus;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
@@ -522,7 +522,7 @@ class ChatMessageServiceTest {
                         member(MemberStatus.SUSPENDED, Instant.now())
                 ));
 
-        assertSaveRejected(ErrorCode.MEMBER_BLOCKED);
+        assertSaveRejected(ErrorCode.MEMBER_SUSPENDED);
     }
 
     @Test

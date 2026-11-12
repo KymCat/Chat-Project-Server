@@ -10,6 +10,7 @@ import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.repository.FriendshipRepository;
+import com.project.ChatProject.repository.MemberBlockRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
@@ -28,6 +29,7 @@ public class FriendshipService {
 
     private final MemberRepository memberRepository;
     private final FriendshipRepository friendshipRepository;
+    private final MemberBlockRepository memberBlockRepository;
 
     @Transactional
     public void requestFriend(
@@ -42,6 +44,16 @@ public class FriendshipService {
 
         Member requester = validateMember(memberId);
         Member receiver = validateMember(targetMemberId);
+
+        if (memberBlockRepository
+                .existsByBlockerIdAndBlockedId(targetMemberId, memberId)
+                || memberBlockRepository
+                .existsByBlockerIdAndBlockedId(memberId, targetMemberId)
+        ) {
+            throw new CustomException(
+                    ErrorCode.MEMBER_PROFILE_ACCESS_FORBIDDEN
+            );
+        }
 
         // 이미 친구인지 검사
         if (friendshipRepository.existsBetweenMembersAndStatus(
@@ -278,7 +290,7 @@ public class FriendshipService {
 
         if (member.getStatus().equals(MemberStatus.SUSPENDED)) {
             throw new CustomException(
-                    ErrorCode.MEMBER_BLOCKED
+                    ErrorCode.MEMBER_SUSPENDED
             );
         }
 

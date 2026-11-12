@@ -71,22 +71,23 @@ public class MemberController {
                 .ok(ApiResponse.success(null));
     }
 
-    @GetMapping("/{memberId}/profile-image")
+    @GetMapping("/{targetMemberId}/profile-image")
     public ResponseEntity<Resource> getProfileImage(
-            @PathVariable Long memberId
+            @PathVariable Long targetMemberId,
+            @AuthenticationPrincipal AccessTokenClaims claims
     ) {
+
+        Long memberId = claims.memberId();
+
         ProfileImageResult result =
-                memberService.getProfileImage(memberId);
+                memberService.getProfileImage(
+                        memberId,
+                        targetMemberId
+                );
 
         return ResponseEntity
                 .ok()
-                .cacheControl(
-                        CacheControl
-                                .maxAge(
-                                        Duration.ofHours(1)
-                                )
-                                .cachePrivate()
-                )
+                .cacheControl(CacheControl.noStore())
                 .contentType(
                         MediaType.parseMediaType(
                                 result.contentType()

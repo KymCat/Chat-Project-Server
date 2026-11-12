@@ -1,7 +1,5 @@
 package com.project.ChatProject.dto.event;
 
-import com.project.ChatProject.entity.enums.ChatRoomEventType;
-
 public record ChatRoomEvent(
         ChatRoomEventType eventType,
         Long roomId,

@@ -291,7 +291,7 @@ public class ChatRoomParticipationService {
      */
     private void validateMember(Member member) {
         if (member.getStatus() == MemberStatus.SUSPENDED) {
-            throw new CustomException(ErrorCode.MEMBER_BLOCKED);
+            throw new CustomException(ErrorCode.MEMBER_SUSPENDED);
         }
 
         if (member.getStatus() == MemberStatus.WITHDRAWN) {

@@ -191,7 +191,7 @@ class AuthServiceTest {
     void loginRejectsSuspendedMember() {
         assertLoginRejectedByMemberStatus(
                 MemberStatus.SUSPENDED,
-                ErrorCode.MEMBER_BLOCKED
+                ErrorCode.MEMBER_SUSPENDED
         );
     }
 
@@ -321,7 +321,7 @@ class AuthServiceTest {
     void reissueRejectsSuspendedMember() {
         assertReissueRejectedByMemberStatus(
                 MemberStatus.SUSPENDED,
-                ErrorCode.MEMBER_BLOCKED
+                ErrorCode.MEMBER_SUSPENDED
         );
     }
 

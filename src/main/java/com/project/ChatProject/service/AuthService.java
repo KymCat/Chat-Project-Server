@@ -324,7 +324,7 @@ public class AuthService {
     private void isMemberSuspendOrWithdrawn(Member member) {
         if (member.getStatus() != MemberStatus.ACTIVE) {
             if (member.getStatus() == MemberStatus.SUSPENDED)
-                throw new CustomException(ErrorCode.MEMBER_BLOCKED);
+                throw new CustomException(ErrorCode.MEMBER_SUSPENDED);
 
             if (member.getStatus() == MemberStatus.WITHDRAWN)
                 throw new CustomException(ErrorCode.MEMBER_WITHDRAWN);

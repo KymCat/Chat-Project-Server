@@ -138,7 +138,7 @@ public class EmailVerificationService {
     private void validateMemberStatus(Member member) {
         if (member.getStatus() == MemberStatus.SUSPENDED) {
             throw new CustomException(
-                    ErrorCode.MEMBER_BLOCKED
+                    ErrorCode.MEMBER_SUSPENDED
             );
         }
 

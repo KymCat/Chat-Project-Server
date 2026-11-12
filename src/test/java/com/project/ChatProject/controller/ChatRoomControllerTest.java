@@ -17,7 +17,7 @@ import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.exception.GlobalExceptionHandler;
 import com.project.ChatProject.invite.InviteLinkExpiration;
-import com.project.ChatProject.service.ChatEventPublisher;
+import com.project.ChatProject.publisher.ChatEventPublisher;
 import com.project.ChatProject.service.ChatMessageService;
 import com.project.ChatProject.service.ChatRoomInviteService;
 import com.project.ChatProject.service.ChatRoomService;

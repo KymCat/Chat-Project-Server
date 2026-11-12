@@ -1,4 +1,4 @@
-package com.project.ChatProject.service;
+package com.project.ChatProject.publisher;
 
 import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.event.ChatRoomEvent;

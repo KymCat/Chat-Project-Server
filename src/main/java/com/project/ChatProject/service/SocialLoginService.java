@@ -184,7 +184,7 @@ public class SocialLoginService {
 
         if (member.getStatus().equals(MemberStatus.SUSPENDED)) {
             throw new CustomException(
-                    ErrorCode.MEMBER_BLOCKED
+                    ErrorCode.MEMBER_SUSPENDED
             );
         }
     }

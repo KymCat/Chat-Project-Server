@@ -158,7 +158,7 @@ class EmailVerificationServiceTest {
 
         assertErrorCode(
                 () -> emailVerificationService.request(1L),
-                ErrorCode.MEMBER_BLOCKED
+                ErrorCode.MEMBER_SUSPENDED
         );
 
         verify(verificationStore, never())

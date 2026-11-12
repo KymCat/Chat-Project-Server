@@ -361,7 +361,7 @@ class SocialLoginServiceTest {
         return Stream.of(
                 Arguments.of(
                         MemberStatus.SUSPENDED,
-                        ErrorCode.MEMBER_BLOCKED
+                        ErrorCode.MEMBER_SUSPENDED
                 ),
                 Arguments.of(
                         MemberStatus.WITHDRAWN,

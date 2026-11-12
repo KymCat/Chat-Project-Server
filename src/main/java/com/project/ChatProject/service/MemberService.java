@@ -49,6 +49,7 @@ public class MemberService {
     private final GoogleProfileImageClient googleProfileImageClient;
     private final ReauthenticationTokenStore reauthenticationTokenStore;
     private final RefreshTokenStore refreshTokenStore;
+    private final MemberBlockRepository memberBlockRepository;
 
 
     @Transactional(readOnly = true)
@@ -71,6 +72,13 @@ public class MemberService {
             );
         }
 
+        if (memberBlockRepository
+                .existsByBlockerIdAndBlockedId(targetMemberId, memberId)) {
+            throw new CustomException(
+                    ErrorCode.MEMBER_PROFILE_ACCESS_FORBIDDEN
+            );
+        }
+
         Member targetMember = memberRepository.findById(targetMemberId)
                 .orElseThrow(() ->
                         new CustomException(
@@ -89,9 +97,17 @@ public class MemberService {
 
     @Transactional(readOnly = true)
     public ProfileImageResult getProfileImage(
-            Long memberId
+            Long memberId,
+            Long targetMemberId
     ) {
-        Member member = memberRepository.findById(memberId)
+        if (memberBlockRepository
+                .existsByBlockerIdAndBlockedId(targetMemberId, memberId)) {
+            throw new CustomException(
+                    ErrorCode.MEMBER_PROFILE_ACCESS_FORBIDDEN
+            );
+        }
+
+        Member member = memberRepository.findById(targetMemberId)
                 .orElseThrow(() ->
                         new CustomException(
                                 ErrorCode.MEMBER_NOT_FOUND
@@ -440,7 +456,7 @@ public class MemberService {
 
         if (member.getStatus().equals(MemberStatus.SUSPENDED)) {
             throw new CustomException(
-                    ErrorCode.MEMBER_BLOCKED
+                    ErrorCode.MEMBER_SUSPENDED
             );
         }
 

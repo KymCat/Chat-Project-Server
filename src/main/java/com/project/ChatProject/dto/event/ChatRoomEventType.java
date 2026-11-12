@@ -1,4 +1,4 @@
-package com.project.ChatProject.entity.enums;
+package com.project.ChatProject.dto.event;
 
 public enum ChatRoomEventType {
     UPDATED,

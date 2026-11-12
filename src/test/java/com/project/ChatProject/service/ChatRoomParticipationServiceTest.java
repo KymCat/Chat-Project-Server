@@ -85,7 +85,7 @@ class ChatRoomParticipationServiceTest {
 
         assertErrorCode(
                 () -> participationService.requireActiveMember(MEMBER_ID),
-                ErrorCode.MEMBER_BLOCKED
+                ErrorCode.MEMBER_SUSPENDED
         );
     }
 

@@ -1,7 +1,6 @@
 package com.project.ChatProject.dto.event;
 
 import com.project.ChatProject.dto.response.ChatMessageResponse;
-import com.project.ChatProject.entity.enums.ChatMessageEventType;
 
 public record ChatMessageEvent(
         ChatMessageEventType eventType,

@@ -15,20 +15,33 @@ import java.util.Optional;
 
 public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, Long> {
 
-    // 현재 Member가 속해있는 모든 채팅방 조회
+    // 현재 Member가 속해있는 모든 채팅방의 채팅방 멤버 조회
     @Query(
-            value =
-                    """
-                    SELECT crm
-                    FROM ChatRoomMember crm
-                    JOIN FETCH crm.chatRoom cr
-                    WHERE crm.member.id = :memberId
-                        AND crm.leftAt IS NULL
-                        AND cr.deletedAt IS NULL
-                    ORDER BY COALESCE(cr.lastMessageAt, cr.createdAt) DESC
-                    """
+            value = """
+                SELECT crm
+                FROM ChatRoomMember crm
+                JOIN FETCH crm.chatRoom cr
+                WHERE crm.member.id = :memberId
+                    AND crm.leftAt IS NULL
+                    AND cr.deletedAt IS NULL
+                    AND (
+                        cr.type <>
+                            com.project.ChatProject.entity.enums.ChatRoomType.DIRECT
+                        OR NOT EXISTS (
+                            SELECT mb.id
+                            FROM MemberBlock mb, ChatRoomMember other
+                            WHERE mb.blocked.id = :memberId
+                                AND mb.blocker = other.member
+                                AND other.chatRoom = cr
+                                AND other.member.id <> :memberId
+                        )
+                    )
+                ORDER BY COALESCE(cr.lastMessageAt, cr.createdAt) DESC
+                """
     )
-    List<ChatRoomMember> findAllActiveByMemberId(@Param("memberId") Long memberId);
+    List<ChatRoomMember> findAllActiveByMemberId(
+            @Param("memberId") Long memberId
+    );
 
     Optional<ChatRoomMember> findByChatRoomIdAndMemberId(
             Long roomId,
@@ -49,19 +62,26 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
             @Param("memberId") Long memberId
     );
 
-    // 참여가능한 모든 채팅방 조회
+
+    // 해당 채팅방의 모든 참여자 id 조회 - 나를 차단한 유저제외
     @Query(
             value = """
                     SELECT crm
                     FROM ChatRoomMember crm
                     JOIN FETCH crm.member m
-                    WHERE crm.chatRoom.id = :chatRoomId
+                    WHERE crm.chatRoom.id = :roomId
                         AND crm.leftAt IS NULL
-                    ORDER BY m.id DESC
+                        AND NOT EXISTS(
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocked.id = :memberId
+                                AND mb.blocker = m
+                    )
                     """
     )
     List<ChatRoomMember> findAllParticipatingByChatRoomId(
-            @Param("chatRoomId") Long chatRoomId
+            @Param("roomId") Long chatRoomId,
+            @Param("memberId") Long memberId
     );
 
     // 채팅방별 읽지 않은 메세지 반환
@@ -112,6 +132,12 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
                     WHERE crm.member.id <> :memberId
                         AND crm.chatRoom.id IN :roomIds
                         AND crm.chatRoom.type = :type
+                        AND NOT EXISTS(
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocked.id = :memberId
+                                AND mb.blocker = m
+                        )
                     """
     )
     List<DirectChatRoomDisplayNameProjection> findDirectChatRoomTargetMemberName(

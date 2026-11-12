@@ -54,11 +54,6 @@ public class SecurityConfig {
                                 ).permitAll()
 
                                 .requestMatchers(
-                                        HttpMethod.GET,
-                                        "/member/*/profile-image"
-                                ).permitAll()
-
-                                .requestMatchers(
                                         "/ws-stomp/**",
                                         "/error"
                                 ).permitAll()

@@ -820,7 +820,7 @@ class MemberServiceTest {
     void editNicknameRejectsSuspendedMember() {
         assertInactiveMemberNicknameEditRejected(
                 MemberStatus.SUSPENDED,
-                ErrorCode.MEMBER_BLOCKED
+                ErrorCode.MEMBER_SUSPENDED
         );
     }
 
