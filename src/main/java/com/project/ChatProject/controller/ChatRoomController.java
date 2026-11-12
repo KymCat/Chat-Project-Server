@@ -6,6 +6,7 @@ import com.project.ChatProject.dto.request.*;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
+import com.project.ChatProject.service.ChatEventPublisher;
 import com.project.ChatProject.service.ChatMessageService;
 import com.project.ChatProject.service.ChatRoomInviteService;
 import com.project.ChatProject.service.ChatRoomService;
@@ -33,6 +34,7 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
     private final ChatMessageService chatMessageService;
     private final ChatRoomInviteService chatRoomInviteService;
+    private final ChatEventPublisher publisher;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ChatRoomCreateResponse>> create(
@@ -83,9 +85,9 @@ public class ChatRoomController {
         ChatMessageEvent response =
                 chatRoomService.join(memberId, roomId);
 
-        template.convertAndSend(
-                "/sub/msg/" + roomId,
-                response
+        publisher.publishMessage(
+                response,
+                memberId
         );
 
         return ResponseEntity
@@ -121,9 +123,9 @@ public class ChatRoomController {
         Long memberId = claims.memberId();
         chatRoomService.leave(roomId, memberId)
                 .ifPresent(event ->
-                        template.convertAndSend(
-                                "/sub/msg/" + roomId,
-                                event
+                        publisher.publishMessage(
+                                event,
+                                memberId
                         )
                 );
 
@@ -151,16 +153,16 @@ public class ChatRoomController {
             @AuthenticationPrincipal AccessTokenClaims claims
     ) {
         Long memberId = claims.memberId();
-        ChatMessageEvent message
+        ChatMessageEvent messageEvent
                 = chatRoomService.transferOwnership(
                         roomId,
                         memberId,
                         request.newOwnerMemberId()
                 );
 
-        template.convertAndSend(
-                "/sub/msg/" + roomId,
-                message
+        publisher.publishMessage(
+                messageEvent,
+                request.newOwnerMemberId()
         );
 
         return ResponseEntity
@@ -198,9 +200,9 @@ public class ChatRoomController {
                         memberId
                 );
 
-        template.convertAndSend(
-                "/sub/msg/" + roomId,
-                messageEvent
+        publisher.publishMessage(
+                messageEvent,
+                memberId
         );
 
         return ResponseEntity
@@ -223,9 +225,9 @@ public class ChatRoomController {
                         request.content()
                 );
 
-        template.convertAndSend(
-                "/sub/msg/" + roomId,
-                messageEvent
+        publisher.publishMessage(
+                messageEvent,
+                memberId
         );
 
         return ResponseEntity
@@ -246,14 +248,11 @@ public class ChatRoomController {
                         request.name()
                 );
 
-        template.convertAndSend(
-                "/sub/chat-rooms/" + roomId,
-                result.chatRoomEvent()
-        );
+        publisher.publishChatRoomEvent(result.chatRoomEvent());
 
-        template.convertAndSend(
-                "/sub/msg/" + roomId,
-                result.chatMessageEvent()
+        publisher.publishMessage(
+                result.chatMessageEvent(),
+                memberId
         );
 
         return ResponseEntity
@@ -269,10 +268,7 @@ public class ChatRoomController {
         ChatRoomEvent event
                 = chatRoomService.delete(roomId, memberId);
 
-        template.convertAndSend(
-                "/sub/chat-rooms/" + roomId,
-                event
-        );
+        publisher.publishChatRoomEvent(event);
 
         return ResponseEntity
                 .ok(ApiResponse.success(null));
@@ -342,9 +338,9 @@ public class ChatRoomController {
         ChatMessageEvent event
                 = chatRoomInviteService.joinInviteLink(token, memberId);
 
-        template.convertAndSend(
-                "/sub/msg/" + event.message().roomId(),
-                event
+        publisher.publishMessage(
+                event,
+                memberId
         );
 
         return ResponseEntity

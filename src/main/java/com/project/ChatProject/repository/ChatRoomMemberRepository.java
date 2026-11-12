@@ -133,4 +133,35 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
             @Param("roomId") Long roomId,
             @Param("senderId") Long senderId
     );
+
+    // 현재 채팅방에 있는 모든 회원 id 조회 - 차단유저는 제외
+    @Query(
+            value = """
+                    SELECT crm.member.id
+                    FROM ChatRoomMember crm
+                    WHERE crm.chatRoom.id = :roomId
+                        AND crm.leftAt IS NULL
+                        AND NOT EXISTS(
+                            SELECT mb.id
+                            FROM MemberBlock mb
+                            WHERE mb.blocker.id = :visibilityMemberId
+                                AND mb.blocked = crm.member
+                        )
+                    """
+    )
+    List<Long> findVisibleRecipientIds(
+            @Param("roomId") Long roomId,
+            @Param("visibilityMemberId") Long visibilityMemberId
+    );
+
+    // 현재 채팅방에 있는 모든 회원 id 조회
+    @Query(
+            value = """
+                    SELECT crm.member.id
+                    FROM ChatRoomMember crm
+                    WHERE crm.chatRoom.id = :roomId
+                        AND crm.leftAt IS NULL
+                    """
+    )
+    List<Long> findRecipientIds(@Param("roomId") Long roomId);
 }

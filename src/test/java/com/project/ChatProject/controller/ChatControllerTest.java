@@ -13,6 +13,7 @@ import com.project.ChatProject.entity.enums.ChatMessageEventType;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.service.ChatEventPublisher;
 import com.project.ChatProject.service.ChatMessageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,13 +42,17 @@ class ChatControllerTest {
     @Mock
     private ChatMessageService chatMessageService;
 
+    @Mock
+    private ChatEventPublisher publisher;
+
     private ChatController chatController;
 
     @BeforeEach
     void setUp() {
         chatController = new ChatController(
                 template,
-                chatMessageService
+                chatMessageService,
+                publisher
         );
     }
 
@@ -93,10 +98,7 @@ class ChatControllerTest {
                 1L,
                 request
         );
-        verify(template).convertAndSend(
-                "/sub/msg/10",
-                result
-        );
+        verify(publisher).publishMessage(result, 1L);
         verify(template, never()).convertAndSendToUser(
                 any(String.class),
                 any(String.class),
@@ -139,10 +141,7 @@ class ChatControllerTest {
 
         assertThat(result).isEqualTo(expectedEvent);
         verify(chatMessageService).saveAttachment(1L, request);
-        verify(template).convertAndSend(
-                "/sub/msg/10",
-                expectedEvent
-        );
+        verify(publisher).publishMessage(expectedEvent, 1L);
         verify(template).convertAndSendToUser(
                 "2",
                 "/queue/direct-messages",
@@ -168,9 +167,9 @@ class ChatControllerTest {
         );
 
         assertThat(result).isNull();
-        verify(template, never()).convertAndSend(
-                any(String.class),
-                any(Object.class)
+        verify(publisher, never()).publishMessage(
+                any(ChatMessageEvent.class),
+                any(Long.class)
         );
         verify(template).convertAndSendToUser(
                 "1",
@@ -198,9 +197,9 @@ class ChatControllerTest {
         );
 
         assertThat(result).isNull();
-        verify(template, never()).convertAndSend(
-                any(String.class),
-                any(Object.class)
+        verify(publisher, never()).publishMessage(
+                any(ChatMessageEvent.class),
+                any(Long.class)
         );
         verify(template).convertAndSendToUser(
                 "1",
@@ -230,9 +229,9 @@ class ChatControllerTest {
         );
 
         assertThat(result).isNull();
-        verify(template, never()).convertAndSend(
-                any(String.class),
-                any(Object.class)
+        verify(publisher, never()).publishMessage(
+                any(ChatMessageEvent.class),
+                any(Long.class)
         );
         verify(template).convertAndSendToUser(
                 "1",
@@ -260,9 +259,9 @@ class ChatControllerTest {
         );
 
         assertThat(result).isNull();
-        verify(template, never()).convertAndSend(
-                any(String.class),
-                any(Object.class)
+        verify(publisher, never()).publishMessage(
+                any(ChatMessageEvent.class),
+                any(Long.class)
         );
         verify(template).convertAndSendToUser(
                 "1",

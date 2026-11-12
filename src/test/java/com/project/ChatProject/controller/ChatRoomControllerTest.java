@@ -17,6 +17,7 @@ import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.exception.GlobalExceptionHandler;
 import com.project.ChatProject.invite.InviteLinkExpiration;
+import com.project.ChatProject.service.ChatEventPublisher;
 import com.project.ChatProject.service.ChatMessageService;
 import com.project.ChatProject.service.ChatRoomInviteService;
 import com.project.ChatProject.service.ChatRoomService;
@@ -67,6 +68,9 @@ class ChatRoomControllerTest {
     @Mock
     private SimpMessagingTemplate template;
 
+    @Mock
+    private ChatEventPublisher publisher;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -76,7 +80,8 @@ class ChatRoomControllerTest {
                         template,
                         chatRoomService,
                         chatMessageService,
-                        chatRoomInviteService
+                        chatRoomInviteService,
+                        publisher
                 );
 
         mockMvc = MockMvcBuilders
@@ -193,10 +198,7 @@ class ChatRoomControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(chatRoomService).join(1L, 10L);
-        verify(template).convertAndSend(
-                "/sub/msg/10",
-                event
-        );
+        verify(publisher).publishMessage(event, 1L);
     }
 
     @Test
@@ -350,10 +352,7 @@ class ChatRoomControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(chatRoomService).leave(10L, 1L);
-        verify(template).convertAndSend(
-                "/sub/msg/10",
-                event
-        );
+        verify(publisher).publishMessage(event, 1L);
     }
 
     @Test
@@ -429,10 +428,7 @@ class ChatRoomControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(chatRoomService).transferOwnership(10L, 1L, 2L);
-        verify(template).convertAndSend(
-                "/sub/msg/10",
-                event
-        );
+        verify(publisher).publishMessage(event, 2L);
     }
 
     @Test
@@ -460,10 +456,7 @@ class ChatRoomControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(chatRoomService).deleteMessage(10L, 130L, 1L);
-        verify(template).convertAndSend(
-                "/sub/msg/10",
-                event
-        );
+        verify(publisher).publishMessage(event, 1L);
     }
 
     @Test
@@ -494,10 +487,7 @@ class ChatRoomControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(chatRoomService).editMessage(10L, 130L, 1L, "수정된 메시지");
-        verify(template).convertAndSend(
-                "/sub/msg/10",
-                event
-        );
+        verify(publisher).publishMessage(event, 1L);
     }
 
     @Test
@@ -514,8 +504,7 @@ class ChatRoomControllerTest {
                 any(Long.class),
                 any(String.class)
         );
-        verify(template, never())
-                .convertAndSend(any(String.class), any(Object.class));
+        verifyNoInteractions(publisher);
     }
 
     @Test
@@ -534,8 +523,7 @@ class ChatRoomControllerTest {
                 any(Long.class),
                 any(String.class)
         );
-        verify(template, never())
-                .convertAndSend(any(String.class), any(Object.class));
+        verifyNoInteractions(publisher);
     }
 
     @Test
@@ -548,8 +536,7 @@ class ChatRoomControllerTest {
 
         verify(chatRoomService, never())
                 .transferOwnership(any(Long.class), any(Long.class), any(Long.class));
-        verify(template, never())
-                .convertAndSend(any(String.class), any(Object.class));
+        verifyNoInteractions(publisher);
     }
 
     @Test
@@ -606,8 +593,8 @@ class ChatRoomControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(chatRoomService).updateChatRoomName(10L, 1L, "새 채팅방");
-        verify(template).convertAndSend("/sub/chat-rooms/10", roomEvent);
-        verify(template).convertAndSend("/sub/msg/10", messageEvent);
+        verify(publisher).publishChatRoomEvent(roomEvent);
+        verify(publisher).publishMessage(messageEvent, 1L);
     }
 
     @Test
@@ -623,8 +610,7 @@ class ChatRoomControllerTest {
                 any(Long.class),
                 any(String.class)
         );
-        verify(template, never())
-                .convertAndSend(any(String.class), any(Object.class));
+        verifyNoInteractions(publisher);
     }
 
     @Test
@@ -639,7 +625,7 @@ class ChatRoomControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         verify(chatRoomService).delete(10L, 1L);
-        verify(template).convertAndSend("/sub/chat-rooms/10", event);
+        verify(publisher).publishChatRoomEvent(event);
     }
 
     @Test
@@ -734,7 +720,7 @@ class ChatRoomControllerTest {
 
         verify(chatRoomInviteService)
                 .joinInviteLink("invite-token", 1L);
-        verify(template).convertAndSend("/sub/msg/10", event);
+        verify(publisher).publishMessage(event, 1L);
     }
 
     @Test

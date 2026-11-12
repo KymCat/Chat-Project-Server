@@ -10,6 +10,7 @@ import com.project.ChatProject.dto.result.ChatMessageSaveResult;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
 import com.project.ChatProject.jwt.AccessTokenClaims;
+import com.project.ChatProject.service.ChatEventPublisher;
 import com.project.ChatProject.service.ChatMessageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class ChatController {
 
     private final SimpMessagingTemplate template;
     private final ChatMessageService chatMessageService;
+    private final ChatEventPublisher publisher;
 
     @MessageMapping("/msg")
     public ChatMessageEvent send(
@@ -60,9 +62,9 @@ public class ChatController {
             return null;
         }
 
-        template.convertAndSend(
-                "/sub/msg/" + request.roomId(),
-                result.event()
+        publisher.publishMessage(
+                result.event(),
+                principal.memberId()
         );
 
         notifyRejoinedDirectMember(result);
@@ -100,9 +102,9 @@ public class ChatController {
             return null;
         }
 
-        template.convertAndSend(
-                "/sub/msg/" + request.roomId(),
-                result.event()
+        publisher.publishMessage(
+                result.event(),
+                principal.memberId()
         );
 
         notifyRejoinedDirectMember(result);
