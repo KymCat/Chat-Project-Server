@@ -50,12 +50,19 @@ class MemberBlockControllerTest {
     }
 
     @Test
-    void unblockReturnsOk() {
+    void unblockReturnsOkAndPublishesVisibilityEvent() {
+        // 추가: B에게 전달되는 payload에는 다시 표시할 A의 ID가 들어간다.
+        MemberEvent event = MemberEvent.unhidden(1L);
+        when(memberBlockService.unblock(1L, 2L)).thenReturn(event);
+
         ResponseEntity<ApiResponse<Void>> response =
                 memberBlockController.unblock(2L, claims());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().success()).isTrue();
         verify(memberBlockService).unblock(1L, 2L);
+        verify(memberEventPublisher).publishHiddenEvent(event, 2L);
     }
 
     @Test

@@ -107,7 +107,7 @@ class MemberBlockServiceTest {
     }
 
     @Test
-    void unblockDeletesExistingBlock() {
+    void unblockDeletesExistingBlockAndReturnsUnhiddenMemberEvent() {
         MemberBlock memberBlock = org.mockito.Mockito.mock(MemberBlock.class);
         when(memberRepository.findById(BLOCKER_ID))
                 .thenReturn(Optional.of(org.mockito.Mockito.mock(Member.class)));
@@ -116,8 +116,11 @@ class MemberBlockServiceTest {
                 BLOCKED_ID
         )).thenReturn(Optional.of(memberBlock));
 
-        memberBlockService.unblock(BLOCKER_ID, BLOCKED_ID);
+        // 추가: 차단당했던 회원 화면에서 blocker가 다시 표시되어야 한다.
+        MemberEvent event = memberBlockService.unblock(BLOCKER_ID, BLOCKED_ID);
 
+        assertThat(event.type()).isEqualTo(MemberEventType.UNBLOCKED);
+        assertThat(event.memberId()).isEqualTo(BLOCKER_ID);
         verify(memberBlockRepository).delete(memberBlock);
     }
 }

@@ -31,4 +31,18 @@ class MemberEventPublisherTest {
                 event
         );
     }
+
+    @Test
+    void publishHiddenEventSendsUnblockedEventToPreviouslyBlockedMemberQueue() {
+        // 추가: 차단과 같은 개인 queue로 차단 해제 이벤트를 전달한다.
+        MemberEvent event = MemberEvent.unhidden(1L);
+
+        memberEventPublisher.publishHiddenEvent(event, 2L);
+
+        verify(messagingTemplate).convertAndSendToUser(
+                "2",
+                "/queue/member-visibility",
+                event
+        );
+    }
 }
