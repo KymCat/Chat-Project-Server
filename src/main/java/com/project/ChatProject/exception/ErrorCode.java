@@ -379,6 +379,13 @@ public enum ErrorCode {
             "누락된 요청 파라미터가 있습니다."
     ),
 
+    // Admin Exception
+    ADMIN_ACCESS_DENIED(
+            HttpStatus.FORBIDDEN,
+            "ADMIN-001",
+            "관리자 권한이 없습니다."
+    ),
+
     // JWT Exception
     INVALID_ACCESS_TOKEN(
             HttpStatus.UNAUTHORIZED,
