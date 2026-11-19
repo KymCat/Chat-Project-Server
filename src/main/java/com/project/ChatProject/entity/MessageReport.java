@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
         uniqueConstraints = {
                 @UniqueConstraint(
                         name = "uq_message_reports_reporter_id_message_id",
-                        columnNames = {"reporter_id, message_id"}
+                        columnNames = {"reporter_id", "message_id"}
                 )
         },
         indexes = {
