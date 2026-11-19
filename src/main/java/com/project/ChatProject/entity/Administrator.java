@@ -2,9 +2,12 @@ package com.project.ChatProject.entity;
 
 import com.project.ChatProject.entity.base.BaseCreatedTimeEntity;
 import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "administrators")
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Administrator extends BaseCreatedTimeEntity {
 
     @Id
