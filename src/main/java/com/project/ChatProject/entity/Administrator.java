@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 
 @Entity
 @Table(name = "administrators")
-public class Administrators extends BaseCreatedTimeEntity {
+public class Administrator extends BaseCreatedTimeEntity {
 
     @Id
     @Column(name = "member_id")
@@ -16,11 +16,11 @@ public class Administrators extends BaseCreatedTimeEntity {
     @JoinColumn(name = "member_id")
     private Member member;
 
-    private Administrators(Member member) {
+    private Administrator(Member member) {
         this.member = member;
     }
 
-    public static Administrators create(Member member) {
-        return new Administrators(member);
+    public static Administrator create(Member member) {
+        return new Administrator(member);
     }
 }
