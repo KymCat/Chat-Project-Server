@@ -8,6 +8,7 @@ import com.project.ChatProject.repository.AdministratorRepository;
 import com.project.ChatProject.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +34,7 @@ public class AdministratorService {
                 && member.getEmailVerifiedAt() != null;
     }
 
+    @Transactional(readOnly = true)
     public void requireAccess(Long memberId) {
         if (!hasAccess(memberId)) {
             throw new CustomException(
