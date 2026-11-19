@@ -379,6 +379,13 @@ public enum ErrorCode {
             "누락된 요청 파라미터가 있습니다."
     ),
 
+    // Report Exception
+    REPORT_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "REPORT-001",
+            "존재하지 않은 신고 내역입니다."
+    ),
+
     // Admin Exception
     ADMIN_ACCESS_DENIED(
             HttpStatus.FORBIDDEN,

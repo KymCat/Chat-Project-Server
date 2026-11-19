@@ -5,10 +5,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.Optional;
 
 public interface MessageReportRepository
         extends JpaRepository<MessageReport, Long> {
 
+    // 모든 신고내역 조회(페이지)
     @Query(
             value = """
                     SELECT mr
@@ -25,4 +29,20 @@ public interface MessageReportRepository
                     """
     )
     Page<MessageReport> findAllMessageReport(Pageable pageable);
+
+    // 신고 상세 조회
+    @Query(
+            value = """
+                    SELECT mr
+                    FROM MessageReport mr
+                    JOIN FETCH mr.reporter
+                    JOIN FETCH mr.reportedMember
+                    JOIN FETCH mr.message m
+                    LEFT JOIN FETCH m.attachment
+                    WHERE mr.id = :reportId
+                    """
+    )
+    Optional<MessageReport> findDetailById(
+            @Param("reportId") Long reportId
+    );
 }

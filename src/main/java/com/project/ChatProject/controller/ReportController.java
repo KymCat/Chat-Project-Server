@@ -1,6 +1,7 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.response.ApiResponse;
+import com.project.ChatProject.dto.response.MessageReportDetailResponse;
 import com.project.ChatProject.dto.response.MessageReportListResponse;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ReportService;
@@ -9,10 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -28,10 +26,23 @@ public class ReportController {
                     @AuthenticationPrincipal AccessTokenClaims claims
     ) {
         Long memberId = claims.memberId();
-        PagedModel<MessageReportListResponse> responses
-                = reportService.getMessageReport(memberId, page);
+        PagedModel<MessageReportListResponse> responses =
+                reportService.getMessageReports(memberId, page);
 
         return ResponseEntity
                 .ok(ApiResponse.success(responses));
+    }
+
+    @GetMapping("/{reportId}")
+    public ResponseEntity<ApiResponse<MessageReportDetailResponse>> getMessageReport(
+            @PathVariable Long reportId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        MessageReportDetailResponse response =
+                reportService.getMessageReport(memberId, reportId);
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
     }
 }
