@@ -385,6 +385,21 @@ public enum ErrorCode {
             "REPORT-001",
             "존재하지 않은 신고 내역입니다."
     ),
+    REPORT_MEMBER_ID_SAME(
+            HttpStatus.BAD_REQUEST,
+            "REPORT-002",
+            "자신의 채팅 내역은 신고할 수 없습니다."
+    ),
+    REPORT_DENIED(
+            HttpStatus.BAD_REQUEST,
+            "REPORT-003",
+            "신고할 수 없는 채팅입니다."
+    ),
+    REPORT_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "REPORT-004",
+            "이미 신고한 메시지입니다."
+    ),
 
     // Admin Exception
     ADMIN_ACCESS_DENIED(

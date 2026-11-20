@@ -45,4 +45,10 @@ public interface MessageReportRepository
     Optional<MessageReport> findDetailById(
             @Param("reportId") Long reportId
     );
+
+    // 신고자가 해당 메세지를 이미 신고했는지 확인
+    boolean existsByReporterIdAndMessageId(
+            Long reporterId,
+            Long messageId
+    );
 }

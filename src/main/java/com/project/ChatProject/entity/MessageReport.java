@@ -95,4 +95,36 @@ public class MessageReport extends BaseCreatedTimeEntity {
             nullable = false
     )
     private Member reportedMember;
+
+    private MessageReport(
+            Member reporter,
+            Member reportedMember,
+            ChatMessage message,
+            MessageReportReason reason,
+            String detail
+    ) {
+        this.message = message;
+        this.reporter = reporter;
+        this.reportedMember = reportedMember;
+        this.reason = reason;
+        this.detail = detail;
+        this.messageTypeSnapshot = message.getType();
+        this.messageContentSnapshot = message.getContent();
+    }
+
+    public static MessageReport create(
+            Member reporter,
+            Member reportedMember,
+            ChatMessage message,
+            MessageReportReason reason,
+            String detail
+    ) {
+        return new MessageReport(
+                reporter,
+                reportedMember,
+                message,
+                reason,
+                detail
+        );
+    }
 }

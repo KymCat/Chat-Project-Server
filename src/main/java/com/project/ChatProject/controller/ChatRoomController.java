@@ -10,6 +10,7 @@ import com.project.ChatProject.publisher.ChatEventPublisher;
 import com.project.ChatProject.service.ChatMessageService;
 import com.project.ChatProject.service.ChatRoomInviteService;
 import com.project.ChatProject.service.ChatRoomService;
+import com.project.ChatProject.service.ReportService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -34,6 +35,7 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
     private final ChatMessageService chatMessageService;
     private final ChatRoomInviteService chatRoomInviteService;
+    private final ReportService reportService;
     private final ChatEventPublisher publisher;
 
     @PostMapping
@@ -412,5 +414,24 @@ public class ChatRoomController {
 
         return ResponseEntity
                 .ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/{roomId}/messages/{messageId}/reports")
+    public ResponseEntity<ApiResponse<Void>> reportMessage(
+            @PathVariable Long roomId,
+            @PathVariable Long messageId,
+            @RequestBody @Valid MessageReportRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        reportService.report(
+                claims.memberId(),
+                roomId,
+                messageId,
+                request
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(null));
     }
 }

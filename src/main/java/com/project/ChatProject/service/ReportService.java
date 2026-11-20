@@ -1,12 +1,19 @@
 package com.project.ChatProject.service;
 
+import com.project.ChatProject.dto.request.MessageReportRequest;
 import com.project.ChatProject.dto.response.MessageReportDetailResponse;
 import com.project.ChatProject.dto.response.MessageReportListResponse;
-import com.project.ChatProject.entity.MessageReport;
+import com.project.ChatProject.entity.*;
+import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.MessageReportRepository;
+import com.project.ChatProject.service.support.ChatRoomParticipationContext;
+import com.project.ChatProject.service.support.ParticipationLockMode;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.web.PagedModel;
@@ -21,6 +28,8 @@ public class ReportService {
 
     private final AdministratorService administratorService;
     private final MessageReportRepository messageReportRepository;
+    private final ChatRoomParticipationService participationService;
+    private final ChatMessageRepository chatMessageRepository;
 
     @Transactional(readOnly = true)
     public PagedModel<MessageReportListResponse> getMessageReports(
@@ -58,5 +67,124 @@ public class ReportService {
                 );
 
         return MessageReportDetailResponse.of(report);
+    }
+
+    @Transactional
+    public void report(
+            Long reporterId,
+            Long roomId,
+            Long messageId,
+            MessageReportRequest request
+    ) {
+        // 신고자 검증
+        ChatRoomParticipationContext reporterContext =
+                participationService.requireConversationParticipation(
+                        roomId,
+                        reporterId,
+                        ParticipationLockMode.NONE
+                );
+
+        // 채팅 메세지 검증
+        ChatMessage chatMessage = validateChatMessage(
+                messageId,
+                reporterContext.chatRoomMember()
+        );
+
+        if (messageReportRepository.existsByReporterIdAndMessageId(
+                reporterId,
+                messageId
+        )) {
+            throw new CustomException(
+                    ErrorCode.REPORT_ALREADY_EXISTS
+            );
+        }
+
+        MessageReport messageReport = MessageReport.create(
+                reporterContext.member(),
+                chatMessage.getSender(),
+                chatMessage,
+                request.reason(),
+                request.detail()
+        );
+
+        try {
+            messageReportRepository.saveAndFlush(messageReport);
+        } catch (DataIntegrityViolationException exception) {
+            if (isDuplicateReport(exception)) {
+                throw new CustomException(
+                        ErrorCode.REPORT_ALREADY_EXISTS
+                );
+            }
+
+            throw exception;
+        }
+    }
+
+    // === Private Method ===
+
+    private boolean isDuplicateReport(
+            DataIntegrityViolationException exception
+    ) {
+        Throwable cause = exception;
+
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException constraint) {
+                return "uq_message_reports_reporter_id_message_id"
+                        .equals(constraint.getConstraintName());
+            }
+
+            cause = cause.getCause();
+        }
+
+        return false;
+    }
+
+    private ChatMessage validateChatMessage(
+            Long messageId,
+            ChatRoomMember chatRoomMember
+    ) {
+        Long roomId = chatRoomMember.getChatRoom().getId();
+        Long reporterId = chatRoomMember.getMember().getId();
+
+        ChatMessage chatMessage = chatMessageRepository
+                .findVisibleByIdAndChatRoomId(
+                        messageId,
+                        roomId,
+                        reporterId
+                )
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.CHAT_MESSAGE_NOT_FOUND
+                        )
+                );
+
+        if (chatMessage.getSender() == null
+                || chatMessage.getType() == ChatMessageType.SYSTEM) {
+            throw new CustomException(
+                    ErrorCode.REPORT_DENIED
+            );
+        }
+
+        if (chatMessage.getDeletedAt() != null) {
+            throw new CustomException(
+                    ErrorCode.REPORT_DENIED
+            );
+        }
+
+        if (chatMessage.getSender().getId().equals(reporterId)) {
+            throw new CustomException(
+                    ErrorCode.REPORT_MEMBER_ID_SAME
+            );
+        }
+
+        if (chatMessage.getCreatedAt()
+                .isBefore(chatRoomMember.getJoinedAt())
+        ) {
+            throw new CustomException(
+                    ErrorCode.CHAT_MESSAGE_NOT_FOUND
+            );
+        }
+
+        return chatMessage;
     }
 }
