@@ -2,6 +2,7 @@ package com.project.ChatProject.controller;
 
 import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.event.ChatRoomEvent;
+import com.project.ChatProject.dto.request.MessageReportRequest;
 import com.project.ChatProject.dto.response.ChatMessageResponse;
 import com.project.ChatProject.dto.response.ChatRoomInviteLinkResponse;
 import com.project.ChatProject.dto.response.ChatRoomCreateResponse;
@@ -13,6 +14,7 @@ import com.project.ChatProject.dto.response.GroupChatRoomResponse;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.ChatRoomType;
 import com.project.ChatProject.entity.enums.ChatRoomMemberRole;
+import com.project.ChatProject.entity.enums.MessageReportReason;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.exception.GlobalExceptionHandler;
@@ -21,6 +23,7 @@ import com.project.ChatProject.publisher.ChatEventPublisher;
 import com.project.ChatProject.service.ChatMessageService;
 import com.project.ChatProject.service.ChatRoomInviteService;
 import com.project.ChatProject.service.ChatRoomService;
+import com.project.ChatProject.service.ReportService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -66,6 +69,9 @@ class ChatRoomControllerTest {
     private ChatRoomInviteService chatRoomInviteService;
 
     @Mock
+    private ReportService reportService;
+
+    @Mock
     private SimpMessagingTemplate template;
 
     @Mock
@@ -81,6 +87,7 @@ class ChatRoomControllerTest {
                         chatRoomService,
                         chatMessageService,
                         chatRoomInviteService,
+                        reportService,
                         publisher
                 );
 
@@ -858,6 +865,95 @@ class ChatRoomControllerTest {
                 any(Long.class),
                 any(Long.class),
                 any(String.class)
+        );
+    }
+
+    @Test
+    void reportMessageReturnsCreatedAndDelegatesAuthenticatedMember() throws Exception {
+        mockMvc.perform(post("/chat-rooms/10/messages/100/reports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "ABUSE",
+                                  "detail": null
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+
+        verify(reportService).report(
+                1L,
+                10L,
+                100L,
+                new MessageReportRequest(
+                        MessageReportReason.ABUSE,
+                        null
+                )
+        );
+    }
+
+    @Test
+    void reportMessageRejectsMissingReason() throws Exception {
+        mockMvc.perform(post("/chat-rooms/10/messages/100/reports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"detail\":\"신고 설명\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(reportService, never()).report(
+                any(Long.class),
+                any(Long.class),
+                any(Long.class),
+                any(MessageReportRequest.class)
+        );
+    }
+
+    @Test
+    void reportMessageRejectsDetailLongerThanFiveHundredCharacters()
+            throws Exception {
+        String detail = "a".repeat(501);
+
+        mockMvc.perform(post("/chat-rooms/10/messages/100/reports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "OTHER",
+                                  "detail": "%s"
+                                }
+                                """.formatted(detail)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(reportService, never()).report(
+                any(Long.class),
+                any(Long.class),
+                any(Long.class),
+                any(MessageReportRequest.class)
+        );
+    }
+
+    @Test
+    void reportMessageAcceptsBlankDetail() throws Exception {
+        mockMvc.perform(post("/chat-rooms/10/messages/100/reports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "OTHER",
+                                  "detail": "   "
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(reportService).report(
+                1L,
+                10L,
+                100L,
+                new MessageReportRequest(
+                        MessageReportReason.OTHER,
+                        "   "
+                )
         );
     }
 
