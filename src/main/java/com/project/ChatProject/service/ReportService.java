@@ -3,7 +3,9 @@ package com.project.ChatProject.service;
 import com.project.ChatProject.dto.request.MessageReportRequest;
 import com.project.ChatProject.dto.response.MessageReportDetailResponse;
 import com.project.ChatProject.dto.response.MessageReportListResponse;
+import com.project.ChatProject.dto.result.AttachmentDownloadResult;
 import com.project.ChatProject.entity.*;
+import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.entity.enums.ChatMessageType;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
@@ -13,8 +15,10 @@ import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.MessageReportRepository;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
 import com.project.ChatProject.service.support.ParticipationLockMode;
+import com.project.ChatProject.storage.FileStorage;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.core.io.Resource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +37,7 @@ public class ReportService {
     private final ChatRoomParticipationService participationService;
     private final ChatMessageRepository chatMessageRepository;
     private final RefreshTokenStore refreshTokenStore;
+    private final FileStorage fileStorage;
 
     @Transactional(readOnly = true)
     public PagedModel<MessageReportListResponse> getMessageReports(
@@ -70,6 +75,50 @@ public class ReportService {
                 );
 
         return MessageReportDetailResponse.of(report);
+    }
+
+    @Transactional(readOnly = true)
+    public AttachmentDownloadResult getAttachment(
+            Long memberId,
+            Long reportId
+    ) {
+        administratorService.requireAccess(memberId);
+
+        MessageReport report = messageReportRepository
+                .findDetailById(reportId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.REPORT_NOT_FOUND
+                        )
+                );
+
+        ChatMessageType messageType =
+                report.getMessageTypeSnapshot();
+
+        if (messageType != ChatMessageType.IMAGE
+                && messageType != ChatMessageType.FILE) {
+            throw new CustomException(
+                    ErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED
+            );
+        }
+
+        Attachment attachment =
+                report.getMessage().getAttachment();
+
+        if (attachment == null
+                || attachment.getStatus() != AttachmentStatus.ACTIVE) {
+            throw new CustomException(
+                    ErrorCode.ATTACHMENT_NOT_FOUND
+            );
+        }
+
+        Resource resource =
+                fileStorage.load(attachment.getStorageKey());
+
+        return AttachmentDownloadResult.from(
+                attachment,
+                resource
+        );
     }
 
     @Transactional

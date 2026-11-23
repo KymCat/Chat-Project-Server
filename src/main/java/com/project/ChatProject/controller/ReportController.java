@@ -3,12 +3,17 @@ package com.project.ChatProject.controller;
 import com.project.ChatProject.dto.response.ApiResponse;
 import com.project.ChatProject.dto.response.MessageReportDetailResponse;
 import com.project.ChatProject.dto.response.MessageReportListResponse;
+import com.project.ChatProject.dto.result.AttachmentDownloadResult;
 import com.project.ChatProject.dto.websocket.AuthWebSocketEvent;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.service.ReportService;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.data.web.PagedModel;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -47,6 +52,31 @@ public class ReportController {
 
         return ResponseEntity
                 .ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{reportId}/attachment")
+    public ResponseEntity<Resource> getAttachment(
+            @PathVariable Long reportId,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        AttachmentDownloadResult result = reportService
+                .getAttachment(memberId, reportId);
+
+        return ResponseEntity
+                .ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(
+                        MediaType.parseMediaType(
+                                result.contentType()
+                        )
+                )
+                .contentLength(result.sizeBytes())
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        result.contentDisposition()
+                )
+                .body(result.resource());
     }
 
     @DeleteMapping("/{reportId}")
