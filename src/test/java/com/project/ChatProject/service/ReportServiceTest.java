@@ -1,6 +1,8 @@
 package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.request.MessageReportRequest;
+import com.project.ChatProject.dto.response.MessageReportDetailResponse;
+import com.project.ChatProject.dto.response.MessageReportListResponse;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
@@ -24,15 +26,20 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.web.PagedModel;
 
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -259,6 +266,149 @@ class ReportServiceTest {
                 MESSAGE_ID,
                 request()
         )).isSameAs(failure);
+    }
+
+    @Test
+    void getMessageReportsReturnsMappedPage() {
+        Member reporter = org.mockito.Mockito.mock(Member.class);
+        Member reportedMember = org.mockito.Mockito.mock(Member.class);
+        ChatMessage message = org.mockito.Mockito.mock(ChatMessage.class);
+        MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
+        Instant reportedAt = Instant.parse("2026-11-23T00:00:00Z");
+        PageRequest pageable = PageRequest.of(2, 20);
+
+        when(report.getId()).thenReturn(REPORT_ID);
+        when(report.getReason()).thenReturn(MessageReportReason.SPAM);
+        when(report.getReporter()).thenReturn(reporter);
+        when(report.getReportedMember()).thenReturn(reportedMember);
+        when(report.getMessage()).thenReturn(message);
+        when(report.getCreatedAt()).thenReturn(reportedAt);
+        when(reporter.getId()).thenReturn(REPORTER_ID);
+        when(reporter.getNickname()).thenReturn("신고자");
+        when(reportedMember.getId()).thenReturn(REPORTED_MEMBER_ID);
+        when(reportedMember.getNickname()).thenReturn("신고 대상");
+        when(reportedMember.getStatus()).thenReturn(MemberStatus.ACTIVE);
+        when(message.getId()).thenReturn(MESSAGE_ID);
+        when(messageReportRepository.findAllMessageReport(pageable))
+                .thenReturn(new PageImpl<>(
+                        List.of(report),
+                        pageable,
+                        41
+                ));
+
+        PagedModel<MessageReportListResponse> result =
+                reportService.getMessageReports(ADMIN_ID, 2);
+
+        assertThat(result.getContent())
+                .singleElement()
+                .satisfies(response -> {
+                    assertThat(response.reportId()).isEqualTo(REPORT_ID);
+                    assertThat(response.reason())
+                            .isEqualTo(MessageReportReason.SPAM);
+                    assertThat(response.reporterId())
+                            .isEqualTo(REPORTER_ID);
+                    assertThat(response.reportedMemberId())
+                            .isEqualTo(REPORTED_MEMBER_ID);
+                    assertThat(response.messageId()).isEqualTo(MESSAGE_ID);
+                    assertThat(response.createdAt()).isEqualTo(reportedAt);
+                });
+        assertThat(result.getMetadata().number()).isEqualTo(2);
+        assertThat(result.getMetadata().size()).isEqualTo(20);
+        assertThat(result.getMetadata().totalElements()).isEqualTo(41);
+        verify(administratorService).requireAccess(ADMIN_ID);
+        verify(messageReportRepository).findAllMessageReport(pageable);
+    }
+
+    @Test
+    void getMessageReportsStopsWhenAdministratorAccessIsDenied() {
+        CustomException failure =
+                new CustomException(ErrorCode.ADMIN_ACCESS_DENIED);
+        doThrow(failure)
+                .when(administratorService)
+                .requireAccess(ADMIN_ID);
+
+        assertThatThrownBy(() ->
+                reportService.getMessageReports(ADMIN_ID, 0)
+        ).isSameAs(failure);
+
+        verifyNoInteractions(messageReportRepository);
+    }
+
+    @Test
+    void getMessageReportReturnsMappedDetail() {
+        Member reporter = org.mockito.Mockito.mock(Member.class);
+        Member reportedMember = org.mockito.Mockito.mock(Member.class);
+        ChatRoom chatRoom = org.mockito.Mockito.mock(ChatRoom.class);
+        ChatMessage message = org.mockito.Mockito.mock(ChatMessage.class);
+        MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
+        Instant reportedAt = Instant.parse("2026-11-23T00:00:00Z");
+        Instant messageCreatedAt =
+                Instant.parse("2026-11-22T23:59:00Z");
+
+        when(messageReportRepository.findDetailById(REPORT_ID))
+                .thenReturn(Optional.of(report));
+        when(report.getId()).thenReturn(REPORT_ID);
+        when(report.getReason()).thenReturn(MessageReportReason.ABUSE);
+        when(report.getDetail()).thenReturn("상세 사유");
+        when(report.getCreatedAt()).thenReturn(reportedAt);
+        when(report.getReporter()).thenReturn(reporter);
+        when(report.getReportedMember()).thenReturn(reportedMember);
+        when(report.getMessage()).thenReturn(message);
+        when(report.getMessageTypeSnapshot()).thenReturn(ChatMessageType.TEXT);
+        when(report.getMessageContentSnapshot()).thenReturn("신고 메시지");
+        when(reporter.getId()).thenReturn(REPORTER_ID);
+        when(reporter.getNickname()).thenReturn("신고자");
+        when(reportedMember.getId()).thenReturn(REPORTED_MEMBER_ID);
+        when(reportedMember.getEmail()).thenReturn("reported@example.com");
+        when(reportedMember.getNickname()).thenReturn("신고 대상");
+        when(reportedMember.getStatus()).thenReturn(MemberStatus.ACTIVE);
+        when(message.getChatRoom()).thenReturn(chatRoom);
+        when(chatRoom.getId()).thenReturn(ROOM_ID);
+        when(message.getId()).thenReturn(MESSAGE_ID);
+        when(message.getCreatedAt()).thenReturn(messageCreatedAt);
+
+        MessageReportDetailResponse result =
+                reportService.getMessageReport(ADMIN_ID, REPORT_ID);
+
+        assertThat(result.reportId()).isEqualTo(REPORT_ID);
+        assertThat(result.reason()).isEqualTo(MessageReportReason.ABUSE);
+        assertThat(result.details()).isEqualTo("상세 사유");
+        assertThat(result.reportedAt()).isEqualTo(reportedAt);
+        assertThat(result.reporterId()).isEqualTo(REPORTER_ID);
+        assertThat(result.reportedMemberId()).isEqualTo(REPORTED_MEMBER_ID);
+        assertThat(result.roomId()).isEqualTo(ROOM_ID);
+        assertThat(result.messageId()).isEqualTo(MESSAGE_ID);
+        assertThat(result.messageType()).isEqualTo(ChatMessageType.TEXT);
+        assertThat(result.messageContent()).isEqualTo("신고 메시지");
+        assertThat(result.messageCreatedAt()).isEqualTo(messageCreatedAt);
+        assertThat(result.messageDeleted()).isFalse();
+        verify(administratorService).requireAccess(ADMIN_ID);
+    }
+
+    @Test
+    void getMessageReportRejectsMissingReport() {
+        when(messageReportRepository.findDetailById(REPORT_ID))
+                .thenReturn(Optional.empty());
+
+        assertErrorCode(
+                () -> reportService.getMessageReport(ADMIN_ID, REPORT_ID),
+                ErrorCode.REPORT_NOT_FOUND
+        );
+    }
+
+    @Test
+    void getMessageReportStopsWhenAdministratorAccessIsDenied() {
+        CustomException failure =
+                new CustomException(ErrorCode.ADMIN_ACCESS_DENIED);
+        doThrow(failure)
+                .when(administratorService)
+                .requireAccess(ADMIN_ID);
+
+        assertThatThrownBy(() ->
+                reportService.getMessageReport(ADMIN_ID, REPORT_ID)
+        ).isSameAs(failure);
+
+        verifyNoInteractions(messageReportRepository);
     }
 
     @Test

@@ -68,4 +68,17 @@ class MemberTest {
         assertThat(member.getWithdrawnAt())
                 .isBetween(beforeWithdrawal, Instant.now());
     }
+
+    @Test
+    void suspendMemberChangesStatusToSuspended() {
+        Member member = Member.create(
+                "member@example.com",
+                "회원"
+        );
+
+        member.suspendMember();
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.SUSPENDED);
+        assertThat(member.getWithdrawnAt()).isNull();
+    }
 }
