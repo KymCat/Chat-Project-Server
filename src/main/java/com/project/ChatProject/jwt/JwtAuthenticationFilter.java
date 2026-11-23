@@ -68,6 +68,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String uri = request.getRequestURI();
 
+        if (uri.startsWith("/ws-stomp")) {
+            return true;
+        }
+
+        if (!request.getMethod().equals("POST")) {
+            return false;
+        }
+
         return uri.equals("/member/signup")
                 || uri.equals("/auth/login")
                 || uri.equals("/auth/reissue");
