@@ -5,8 +5,10 @@ import com.project.ChatProject.dto.response.MessageReportDetailResponse;
 import com.project.ChatProject.dto.response.MessageReportListResponse;
 import com.project.ChatProject.entity.*;
 import com.project.ChatProject.entity.enums.ChatMessageType;
+import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.MessageReportRepository;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
@@ -30,6 +32,7 @@ public class ReportService {
     private final MessageReportRepository messageReportRepository;
     private final ChatRoomParticipationService participationService;
     private final ChatMessageRepository chatMessageRepository;
+    private final RefreshTokenStore refreshTokenStore;
 
     @Transactional(readOnly = true)
     public PagedModel<MessageReportListResponse> getMessageReports(
@@ -118,6 +121,62 @@ public class ReportService {
 
             throw exception;
         }
+    }
+
+    @Transactional
+    public void deleteReport(
+            Long memberId,
+            Long reportId
+    ) {
+        if (!administratorService.hasAccess(memberId)) {
+            throw new CustomException(
+                    ErrorCode.ADMIN_ACCESS_DENIED
+            );
+        }
+
+        MessageReport report = messageReportRepository
+                .findById(reportId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.REPORT_NOT_FOUND
+                        )
+                );
+
+        messageReportRepository.delete(report);
+    }
+
+    @Transactional
+    public Long memberSuspend(
+            Long memberId,
+            Long reportId
+    ) {
+        if (!administratorService.hasAccess(memberId)) {
+            throw new CustomException(
+                    ErrorCode.ADMIN_ACCESS_DENIED
+            );
+        }
+
+        MessageReport report = messageReportRepository
+                .findById(reportId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.REPORT_NOT_FOUND
+                        )
+                );
+
+        Member reportedMember = report.getReportedMember();
+        if (reportedMember.getStatus().equals(MemberStatus.WITHDRAWN)) {
+            throw new CustomException(
+                    ErrorCode.MEMBER_WITHDRAWN
+            );
+        }
+
+        reportedMember.suspendMember();
+
+        refreshTokenStore
+                .deleteAllByMemberId(reportedMember.getId());
+
+        return reportedMember.getId();
     }
 
     // === Private Method ===

@@ -142,4 +142,8 @@ public class Member extends BaseTimeEntity {
         this.status = MemberStatus.WITHDRAWN;
         this.withdrawnAt = Instant.now();
     }
+
+    public void suspendMember() {
+        this.status = MemberStatus.SUSPENDED;
+    }
 }
