@@ -7,9 +7,11 @@ import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.MessageReport;
 import com.project.ChatProject.entity.enums.ChatMessageType;
+import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.entity.enums.MessageReportReason;
 import com.project.ChatProject.exception.CustomException;
 import com.project.ChatProject.exception.ErrorCode;
+import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.MessageReportRepository;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
@@ -41,6 +43,8 @@ class ReportServiceTest {
 
     private static final Long REPORTER_ID = 1L;
     private static final Long REPORTED_MEMBER_ID = 2L;
+    private static final Long ADMIN_ID = 3L;
+    private static final Long REPORT_ID = 200L;
     private static final Long ROOM_ID = 10L;
     private static final Long MESSAGE_ID = 100L;
     private static final Instant JOINED_AT =
@@ -59,6 +63,9 @@ class ReportServiceTest {
 
     @Mock
     private ChatMessageRepository chatMessageRepository;
+
+    @Mock
+    private RefreshTokenStore refreshTokenStore;
 
     @InjectMocks
     private ReportService reportService;
@@ -252,6 +259,109 @@ class ReportServiceTest {
                 MESSAGE_ID,
                 request()
         )).isSameAs(failure);
+    }
+
+    @Test
+    void deleteReportDeletesExistingReport() {
+        MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
+        when(administratorService.hasAccess(ADMIN_ID)).thenReturn(true);
+        when(messageReportRepository.findById(REPORT_ID))
+                .thenReturn(Optional.of(report));
+
+        reportService.deleteReport(ADMIN_ID, REPORT_ID);
+
+        verify(messageReportRepository).delete(report);
+    }
+
+    @Test
+    void deleteReportRejectsNonAdministrator() {
+        when(administratorService.hasAccess(ADMIN_ID)).thenReturn(false);
+
+        assertErrorCode(
+                () -> reportService.deleteReport(ADMIN_ID, REPORT_ID),
+                ErrorCode.ADMIN_ACCESS_DENIED
+        );
+
+        verifyNoInteractions(messageReportRepository, refreshTokenStore);
+    }
+
+    @Test
+    void deleteReportRejectsMissingReport() {
+        when(administratorService.hasAccess(ADMIN_ID)).thenReturn(true);
+        when(messageReportRepository.findById(REPORT_ID))
+                .thenReturn(Optional.empty());
+
+        assertErrorCode(
+                () -> reportService.deleteReport(ADMIN_ID, REPORT_ID),
+                ErrorCode.REPORT_NOT_FOUND
+        );
+
+        verify(messageReportRepository, never())
+                .delete(any(MessageReport.class));
+    }
+
+    @Test
+    void memberSuspendSuspendsReportedMemberAndDeletesSessions() {
+        Member reportedMember = org.mockito.Mockito.mock(Member.class);
+        MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
+        when(administratorService.hasAccess(ADMIN_ID)).thenReturn(true);
+        when(messageReportRepository.findById(REPORT_ID))
+                .thenReturn(Optional.of(report));
+        when(report.getReportedMember()).thenReturn(reportedMember);
+        when(reportedMember.getStatus()).thenReturn(MemberStatus.ACTIVE);
+        when(reportedMember.getId()).thenReturn(REPORTED_MEMBER_ID);
+
+        Long result = reportService.memberSuspend(ADMIN_ID, REPORT_ID);
+
+        assertThat(result).isEqualTo(REPORTED_MEMBER_ID);
+        verify(reportedMember).suspendMember();
+        verify(refreshTokenStore)
+                .deleteAllByMemberId(REPORTED_MEMBER_ID);
+    }
+
+    @Test
+    void memberSuspendRejectsNonAdministrator() {
+        when(administratorService.hasAccess(ADMIN_ID)).thenReturn(false);
+
+        assertErrorCode(
+                () -> reportService.memberSuspend(ADMIN_ID, REPORT_ID),
+                ErrorCode.ADMIN_ACCESS_DENIED
+        );
+
+        verifyNoInteractions(messageReportRepository, refreshTokenStore);
+    }
+
+    @Test
+    void memberSuspendRejectsMissingReport() {
+        when(administratorService.hasAccess(ADMIN_ID)).thenReturn(true);
+        when(messageReportRepository.findById(REPORT_ID))
+                .thenReturn(Optional.empty());
+
+        assertErrorCode(
+                () -> reportService.memberSuspend(ADMIN_ID, REPORT_ID),
+                ErrorCode.REPORT_NOT_FOUND
+        );
+
+        verifyNoInteractions(refreshTokenStore);
+    }
+
+    @Test
+    void memberSuspendRejectsWithdrawnMember() {
+        Member reportedMember = org.mockito.Mockito.mock(Member.class);
+        MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
+        when(administratorService.hasAccess(ADMIN_ID)).thenReturn(true);
+        when(messageReportRepository.findById(REPORT_ID))
+                .thenReturn(Optional.of(report));
+        when(report.getReportedMember()).thenReturn(reportedMember);
+        when(reportedMember.getStatus()).thenReturn(MemberStatus.WITHDRAWN);
+
+        assertErrorCode(
+                () -> reportService.memberSuspend(ADMIN_ID, REPORT_ID),
+                ErrorCode.MEMBER_WITHDRAWN
+        );
+
+        verify(reportedMember, never()).suspendMember();
+        verifyNoInteractions(refreshTokenStore);
     }
 
     private ReportFixture reportableMessage(
