@@ -3,12 +3,15 @@ package com.project.ChatProject.service;
 import com.project.ChatProject.dto.request.MessageReportRequest;
 import com.project.ChatProject.dto.response.MessageReportDetailResponse;
 import com.project.ChatProject.dto.response.MessageReportListResponse;
+import com.project.ChatProject.dto.result.AttachmentDownloadResult;
+import com.project.ChatProject.entity.Attachment;
 import com.project.ChatProject.entity.ChatMessage;
 import com.project.ChatProject.entity.ChatRoom;
 import com.project.ChatProject.entity.ChatRoomMember;
 import com.project.ChatProject.entity.Member;
 import com.project.ChatProject.entity.MessageReport;
 import com.project.ChatProject.entity.enums.ChatMessageType;
+import com.project.ChatProject.entity.enums.AttachmentStatus;
 import com.project.ChatProject.entity.enums.MemberStatus;
 import com.project.ChatProject.entity.enums.MessageReportReason;
 import com.project.ChatProject.exception.CustomException;
@@ -18,8 +21,11 @@ import com.project.ChatProject.repository.ChatMessageRepository;
 import com.project.ChatProject.repository.MessageReportRepository;
 import com.project.ChatProject.service.support.ChatRoomParticipationContext;
 import com.project.ChatProject.service.support.ParticipationLockMode;
+import com.project.ChatProject.storage.FileStorage;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
@@ -29,6 +35,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.web.PagedModel;
+import org.springframework.core.io.Resource;
 
 import java.sql.SQLException;
 import java.time.Instant;
@@ -73,6 +80,9 @@ class ReportServiceTest {
 
     @Mock
     private RefreshTokenStore refreshTokenStore;
+
+    @Mock
+    private FileStorage fileStorage;
 
     @InjectMocks
     private ReportService reportService;
@@ -412,6 +422,111 @@ class ReportServiceTest {
     }
 
     @Test
+    void getAttachmentStopsWhenAdministratorAccessIsDenied() {
+        CustomException failure =
+                new CustomException(ErrorCode.ADMIN_ACCESS_DENIED);
+        doThrow(failure)
+                .when(administratorService)
+                .requireAccess(ADMIN_ID);
+
+        assertThatThrownBy(() ->
+                reportService.getAttachment(ADMIN_ID, REPORT_ID)
+        ).isSameAs(failure);
+
+        verifyNoInteractions(messageReportRepository, fileStorage);
+    }
+
+    @Test
+    void getAttachmentRejectsMissingReport() {
+        when(messageReportRepository.findDetailById(REPORT_ID))
+                .thenReturn(Optional.empty());
+
+        assertErrorCode(
+                () -> reportService.getAttachment(ADMIN_ID, REPORT_ID),
+                ErrorCode.REPORT_NOT_FOUND
+        );
+
+        verifyNoInteractions(fileStorage);
+    }
+
+    @Test
+    void getAttachmentRejectsMessageWithoutAttachmentType() {
+        MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
+        when(messageReportRepository.findDetailById(REPORT_ID))
+                .thenReturn(Optional.of(report));
+        when(report.getMessageTypeSnapshot()).thenReturn(ChatMessageType.TEXT);
+
+        assertErrorCode(
+                () -> reportService.getAttachment(ADMIN_ID, REPORT_ID),
+                ErrorCode.ATTACHMENT_TYPE_NOT_ALLOWED
+        );
+
+        verifyNoInteractions(fileStorage);
+    }
+
+    @Test
+    void getAttachmentRejectsMissingAttachment() {
+        MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
+        ChatMessage message = org.mockito.Mockito.mock(ChatMessage.class);
+        when(messageReportRepository.findDetailById(REPORT_ID))
+                .thenReturn(Optional.of(report));
+        when(report.getMessageTypeSnapshot()).thenReturn(ChatMessageType.IMAGE);
+        when(report.getMessage()).thenReturn(message);
+        when(message.getAttachment()).thenReturn(null);
+
+        assertErrorCode(
+                () -> reportService.getAttachment(ADMIN_ID, REPORT_ID),
+                ErrorCode.ATTACHMENT_NOT_FOUND
+        );
+
+        verifyNoInteractions(fileStorage);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = AttachmentStatus.class,
+            names = {"PENDING", "DELETED"}
+    )
+    void getAttachmentRejectsInactiveAttachment(
+            AttachmentStatus status
+    ) {
+        MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
+        ChatMessage message = org.mockito.Mockito.mock(ChatMessage.class);
+        Attachment attachment = org.mockito.Mockito.mock(Attachment.class);
+        when(messageReportRepository.findDetailById(REPORT_ID))
+                .thenReturn(Optional.of(report));
+        when(report.getMessageTypeSnapshot()).thenReturn(ChatMessageType.IMAGE);
+        when(report.getMessage()).thenReturn(message);
+        when(message.getAttachment()).thenReturn(attachment);
+        when(attachment.getStatus()).thenReturn(status);
+
+        assertErrorCode(
+                () -> reportService.getAttachment(ADMIN_ID, REPORT_ID),
+                ErrorCode.ATTACHMENT_NOT_FOUND
+        );
+
+        verifyNoInteractions(fileStorage);
+    }
+
+    @Test
+    void getAttachmentReturnsActiveImage() {
+        assertActiveAttachmentReturned(
+                ChatMessageType.IMAGE,
+                "image.png",
+                "image/png"
+        );
+    }
+
+    @Test
+    void getAttachmentReturnsActiveFile() {
+        assertActiveAttachmentReturned(
+                ChatMessageType.FILE,
+                "document.pdf",
+                "application/pdf"
+        );
+    }
+
+    @Test
     void deleteReportDeletesExistingReport() {
         MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
         when(administratorService.hasAccess(ADMIN_ID)).thenReturn(true);
@@ -573,6 +688,40 @@ class ReportServiceTest {
                 MessageReportReason.SPAM,
                 "반복 광고"
         );
+    }
+
+    private void assertActiveAttachmentReturned(
+            ChatMessageType messageType,
+            String originalName,
+            String contentType
+    ) {
+        MessageReport report = org.mockito.Mockito.mock(MessageReport.class);
+        ChatMessage message = org.mockito.Mockito.mock(ChatMessage.class);
+        Attachment attachment = org.mockito.Mockito.mock(Attachment.class);
+        Resource resource = org.mockito.Mockito.mock(Resource.class);
+        String storageKey = "chat-attachments/storage-key";
+
+        when(messageReportRepository.findDetailById(REPORT_ID))
+                .thenReturn(Optional.of(report));
+        when(report.getMessageTypeSnapshot()).thenReturn(messageType);
+        when(report.getMessage()).thenReturn(message);
+        when(message.getAttachment()).thenReturn(attachment);
+        when(attachment.getStatus()).thenReturn(AttachmentStatus.ACTIVE);
+        when(attachment.getStorageKey()).thenReturn(storageKey);
+        when(attachment.getOriginalName()).thenReturn(originalName);
+        when(attachment.getContentType()).thenReturn(contentType);
+        when(attachment.getSizeBytes()).thenReturn(123L);
+        when(fileStorage.load(storageKey)).thenReturn(resource);
+
+        AttachmentDownloadResult result =
+                reportService.getAttachment(ADMIN_ID, REPORT_ID);
+
+        assertThat(result.resource()).isSameAs(resource);
+        assertThat(result.originalName()).isEqualTo(originalName);
+        assertThat(result.contentType()).isEqualTo(contentType);
+        assertThat(result.sizeBytes()).isEqualTo(123L);
+        verify(administratorService).requireAccess(ADMIN_ID);
+        verify(fileStorage).load(storageKey);
     }
 
     private void assertReportRejected(ErrorCode expectedErrorCode) {
