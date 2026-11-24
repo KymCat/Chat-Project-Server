@@ -77,7 +77,7 @@ class FriendshipControllerTest {
                 20
         )).thenReturn(response);
 
-        mockMvc.perform(get("/friends/requests/sent")
+        mockMvc.perform(get("/api/friends/requests/sent")
                         .param("beforeFriendshipId", "100")
                         .param("size", "20"))
                 .andExpect(status().isOk())
@@ -118,7 +118,7 @@ class FriendshipControllerTest {
                 30
         )).thenReturn(response);
 
-        mockMvc.perform(get("/friends/requests/received"))
+        mockMvc.perform(get("/api/friends/requests/received"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].requestId")
@@ -139,12 +139,12 @@ class FriendshipControllerTest {
 
     @Test
     void requestListsRejectSizeOutsideAllowedRange() throws Exception {
-        mockMvc.perform(get("/friends/requests/sent")
+        mockMvc.perform(get("/api/friends/requests/sent")
                         .param("size", "0"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(get("/friends/requests/received")
+        mockMvc.perform(get("/api/friends/requests/received")
                         .param("size", "61"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
@@ -163,7 +163,7 @@ class FriendshipControllerTest {
         when(friendshipService.getFriendList(MEMBER_ID))
                 .thenReturn(List.of(friend));
 
-        mockMvc.perform(get("/friends/me"))
+        mockMvc.perform(get("/api/friends/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].memberId").value(2L))
@@ -179,7 +179,7 @@ class FriendshipControllerTest {
 
     @Test
     void acceptRequestDelegatesAuthenticatedReceiver() throws Exception {
-        mockMvc.perform(post("/friends/requests/100/accept"))
+        mockMvc.perform(post("/api/friends/requests/100/accept"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -192,7 +192,7 @@ class FriendshipControllerTest {
 
     @Test
     void deleteRequestDelegatesAuthenticatedParticipant() throws Exception {
-        mockMvc.perform(delete("/friends/requests/100"))
+        mockMvc.perform(delete("/api/friends/requests/100"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -205,7 +205,7 @@ class FriendshipControllerTest {
 
     @Test
     void unfollowDelegatesAuthenticatedMemberAndTargetMember() throws Exception {
-        mockMvc.perform(delete("/friends/unfollow/2"))
+        mockMvc.perform(delete("/api/friends/unfollow/2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());

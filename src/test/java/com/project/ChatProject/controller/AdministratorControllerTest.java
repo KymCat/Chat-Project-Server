@@ -48,7 +48,7 @@ class AdministratorControllerTest {
 
     @Test
     void requireAccessDelegatesAuthenticatedMember() throws Exception {
-        mockMvc.perform(get("/admin/access"))
+        mockMvc.perform(get("/api/admin/access"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 

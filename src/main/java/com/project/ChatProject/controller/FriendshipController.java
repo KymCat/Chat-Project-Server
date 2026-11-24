@@ -20,7 +20,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/friends")
+@RequestMapping("/api/friends")
 public class FriendshipController {
 
     private final FriendshipService friendshipService;

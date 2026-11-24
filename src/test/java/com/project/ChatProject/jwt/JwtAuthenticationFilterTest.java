@@ -112,18 +112,18 @@ class JwtAuthenticationFilterTest {
 
     @Test
     void skipsOnlyPostPublicAuthenticationEndpoints() {
-        assertThat(shouldNotFilter("POST", "/member/signup")).isTrue();
-        assertThat(shouldNotFilter("POST", "/auth/login")).isTrue();
-        assertThat(shouldNotFilter("POST", "/auth/reissue")).isTrue();
+        assertThat(shouldNotFilter("POST", "/api/member/signup")).isTrue();
+        assertThat(shouldNotFilter("POST", "/api/auth/login")).isTrue();
+        assertThat(shouldNotFilter("POST", "/api/auth/reissue")).isTrue();
 
-        assertThat(shouldNotFilter("POST", "/auth/logout")).isFalse();
-        assertThat(shouldNotFilter("POST", "/auth/email-verifications")).isFalse();
+        assertThat(shouldNotFilter("POST", "/api/auth/logout")).isFalse();
+        assertThat(shouldNotFilter("POST", "/api/auth/email-verifications")).isFalse();
         assertThat(shouldNotFilter(
                 "POST",
-                "/auth/email-verifications/confirm"
+                "/api/auth/email-verifications/confirm"
         )).isFalse();
-        assertThat(shouldNotFilter("GET", "/auth/reissue")).isFalse();
-        assertThat(shouldNotFilter("GET", "/members/me")).isFalse();
+        assertThat(shouldNotFilter("GET", "/api/auth/reissue")).isFalse();
+        assertThat(shouldNotFilter("GET", "/api/members/me")).isFalse();
     }
 
     private boolean shouldNotFilter(String method, String uri) {

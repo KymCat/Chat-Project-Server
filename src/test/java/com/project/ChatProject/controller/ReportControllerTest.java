@@ -75,7 +75,7 @@ class ReportControllerTest {
 
     @Test
     void deleteReportDelegatesAuthenticatedAdministrator() throws Exception {
-        mockMvc.perform(delete("/admin/reports/{reportId}", REPORT_ID))
+        mockMvc.perform(delete("/api/admin/reports/{reportId}", REPORT_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
@@ -89,7 +89,7 @@ class ReportControllerTest {
         when(reportService.getMessageReports(ADMIN_ID, 0))
                 .thenReturn(response);
 
-        mockMvc.perform(get("/admin/reports"))
+        mockMvc.perform(get("/api/admin/reports"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
@@ -103,7 +103,7 @@ class ReportControllerTest {
         when(reportService.getMessageReports(ADMIN_ID, 3))
                 .thenReturn(response);
 
-        mockMvc.perform(get("/admin/reports")
+        mockMvc.perform(get("/api/admin/reports")
                         .queryParam("page", "3"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
@@ -113,7 +113,7 @@ class ReportControllerTest {
 
     @Test
     void getMessageReportsRejectsNegativePage() throws Exception {
-        mockMvc.perform(get("/admin/reports")
+        mockMvc.perform(get("/api/admin/reports")
                         .queryParam("page", "-1"))
                 .andExpect(status().isBadRequest());
 
@@ -147,7 +147,7 @@ class ReportControllerTest {
         when(reportService.getMessageReport(ADMIN_ID, REPORT_ID))
                 .thenReturn(response);
 
-        mockMvc.perform(get("/admin/reports/{reportId}", REPORT_ID))
+        mockMvc.perform(get("/api/admin/reports/{reportId}", REPORT_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.reportId").value(REPORT_ID))
@@ -174,7 +174,7 @@ class ReportControllerTest {
                 .thenReturn(result);
 
         mockMvc.perform(get(
-                        "/admin/reports/{reportId}/attachment",
+                        "/api/admin/reports/{reportId}/attachment",
                         REPORT_ID
                 ))
                 .andExpect(status().isOk())
@@ -203,7 +203,7 @@ class ReportControllerTest {
                 .thenReturn(REPORTED_MEMBER_ID);
 
         mockMvc.perform(patch(
-                        "/admin/reports/{reportId}/suspension",
+                        "/api/admin/reports/{reportId}/suspension",
                         REPORT_ID
                 ))
                 .andExpect(status().isOk())

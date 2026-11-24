@@ -110,7 +110,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.create(1L, "Backend"))
                 .thenReturn(response);
 
-        mockMvc.perform(post("/chat-rooms")
+        mockMvc.perform(post("/api/chat-rooms")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"  Backend  \"}"))
                 .andExpect(status().isCreated())
@@ -126,7 +126,7 @@ class ChatRoomControllerTest {
 
     @Test
     void createRejectsBlankName() throws Exception {
-        mockMvc.perform(post("/chat-rooms")
+        mockMvc.perform(post("/api/chat-rooms")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"   \"}"))
                 .andExpect(status().isBadRequest());
@@ -139,7 +139,7 @@ class ChatRoomControllerTest {
             throws Exception {
         String name = "a".repeat(31);
 
-        mockMvc.perform(post("/chat-rooms")
+        mockMvc.perform(post("/api/chat-rooms")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"  " + name + "  \"}"))
                 .andExpect(status().isBadRequest());
@@ -165,7 +165,7 @@ class ChatRoomControllerTest {
                         )
                 ));
 
-        mockMvc.perform(get("/chat-rooms/available"))
+        mockMvc.perform(get("/api/chat-rooms/available"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.length()").value(2))
@@ -199,7 +199,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.join(1L, 10L))
                 .thenReturn(event);
 
-        mockMvc.perform(post("/chat-rooms/10/members"))
+        mockMvc.perform(post("/api/chat-rooms/10/members"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -228,7 +228,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.getMessages(10L, 100L, 1L, 20))
                 .thenReturn(response);
 
-        mockMvc.perform(get("/chat-rooms/10/messages")
+        mockMvc.perform(get("/api/chat-rooms/10/messages")
                         .param("beforeMessageId", "100")
                         .param("size", "20"))
                 .andExpect(status().isOk())
@@ -243,11 +243,11 @@ class ChatRoomControllerTest {
 
     @Test
     void getMessagesRejectsSizeOutsideAllowedRange() throws Exception {
-        mockMvc.perform(get("/chat-rooms/10/messages").param("size", "0"))
+        mockMvc.perform(get("/api/chat-rooms/10/messages").param("size", "0"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(get("/chat-rooms/10/messages").param("size", "61"))
+        mockMvc.perform(get("/api/chat-rooms/10/messages").param("size", "61"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
@@ -280,7 +280,7 @@ class ChatRoomControllerTest {
                 100L
         )).thenReturn(response);
 
-        mockMvc.perform(get("/chat-rooms/10/messages/search")
+        mockMvc.perform(get("/api/chat-rooms/10/messages/search")
                         .param("keyword", "Spring")
                         .param("size", "20")
                         .param("beforeMessageId", "100"))
@@ -303,23 +303,23 @@ class ChatRoomControllerTest {
 
     @Test
     void searchMessagesRejectsInvalidParameters() throws Exception {
-        mockMvc.perform(get("/chat-rooms/10/messages/search")
+        mockMvc.perform(get("/api/chat-rooms/10/messages/search")
                         .param("keyword", "   "))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(get("/chat-rooms/10/messages/search")
+        mockMvc.perform(get("/api/chat-rooms/10/messages/search")
                         .param("keyword", "a".repeat(101)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(get("/chat-rooms/10/messages/search")
+        mockMvc.perform(get("/api/chat-rooms/10/messages/search")
                         .param("keyword", "Spring")
                         .param("size", "0"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(get("/chat-rooms/10/messages/search")
+        mockMvc.perform(get("/api/chat-rooms/10/messages/search")
                         .param("keyword", "Spring")
                         .param("size", "61"))
                 .andExpect(status().isBadRequest())
@@ -353,7 +353,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.leave(10L, 1L))
                 .thenReturn(Optional.of(event));
 
-        mockMvc.perform(delete("/chat-rooms/10/members"))
+        mockMvc.perform(delete("/api/chat-rooms/10/members"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -367,7 +367,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.leave(10L, 1L))
                 .thenReturn(Optional.empty());
 
-        mockMvc.perform(delete("/chat-rooms/10/members"))
+        mockMvc.perform(delete("/api/chat-rooms/10/members"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -395,7 +395,7 @@ class ChatRoomControllerTest {
         );
         when(chatRoomService.getMembers(10L, 1L)).thenReturn(response);
 
-        mockMvc.perform(get("/chat-rooms/10/members"))
+        mockMvc.perform(get("/api/chat-rooms/10/members"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data[0].memberId").value(1L))
@@ -427,7 +427,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.transferOwnership(10L, 1L, 2L))
                 .thenReturn(event);
 
-        mockMvc.perform(patch("/chat-rooms/10/owner")
+        mockMvc.perform(patch("/api/chat-rooms/10/owner")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"newOwnerMemberId\":2}"))
                 .andExpect(status().isOk())
@@ -457,7 +457,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.deleteMessage(10L, 130L, 1L))
                 .thenReturn(event);
 
-        mockMvc.perform(delete("/chat-rooms/10/messages/130"))
+        mockMvc.perform(delete("/api/chat-rooms/10/messages/130"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -486,7 +486,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.editMessage(10L, 130L, 1L, "수정된 메시지"))
                 .thenReturn(event);
 
-        mockMvc.perform(patch("/chat-rooms/10/messages/130")
+        mockMvc.perform(patch("/api/chat-rooms/10/messages/130")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"수정된 메시지\"}"))
                 .andExpect(status().isOk())
@@ -499,7 +499,7 @@ class ChatRoomControllerTest {
 
     @Test
     void editMessageRejectsBlankContent() throws Exception {
-        mockMvc.perform(patch("/chat-rooms/10/messages/130")
+        mockMvc.perform(patch("/api/chat-rooms/10/messages/130")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"   \"}"))
                 .andExpect(status().isBadRequest())
@@ -518,7 +518,7 @@ class ChatRoomControllerTest {
     void editMessageRejectsContentLongerThanOneThousandCharacters() throws Exception {
         String content = "a".repeat(1001);
 
-        mockMvc.perform(patch("/chat-rooms/10/messages/130")
+        mockMvc.perform(patch("/api/chat-rooms/10/messages/130")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"" + content + "\"}"))
                 .andExpect(status().isBadRequest())
@@ -535,7 +535,7 @@ class ChatRoomControllerTest {
 
     @Test
     void transferOwnershipRejectsMissingTargetMemberId() throws Exception {
-        mockMvc.perform(patch("/chat-rooms/10/owner")
+        mockMvc.perform(patch("/api/chat-rooms/10/owner")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -548,7 +548,7 @@ class ChatRoomControllerTest {
 
     @Test
     void updateReadPositionReturnsSuccess() throws Exception {
-        mockMvc.perform(patch("/chat-rooms/10/read-position")
+        mockMvc.perform(patch("/api/chat-rooms/10/read-position")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"lastReadMessageId\":120}"))
                 .andExpect(status().isOk())
@@ -560,7 +560,7 @@ class ChatRoomControllerTest {
 
     @Test
     void updateReadPositionRejectsMissingMessageId() throws Exception {
-        mockMvc.perform(patch("/chat-rooms/10/read-position")
+        mockMvc.perform(patch("/api/chat-rooms/10/read-position")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -592,7 +592,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.updateChatRoomName(10L, 1L, "새 채팅방"))
                 .thenReturn(new ChatRoomNameUpdateResult(roomEvent, messageEvent));
 
-        mockMvc.perform(patch("/chat-rooms/10")
+        mockMvc.perform(patch("/api/chat-rooms/10")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"  새 채팅방  \"}"))
                 .andExpect(status().isOk())
@@ -606,7 +606,7 @@ class ChatRoomControllerTest {
 
     @Test
     void updateChatRoomNameRejectsBlankName() throws Exception {
-        mockMvc.perform(patch("/chat-rooms/10")
+        mockMvc.perform(patch("/api/chat-rooms/10")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"   \"}"))
                 .andExpect(status().isBadRequest())
@@ -626,7 +626,7 @@ class ChatRoomControllerTest {
         ChatRoomEvent event = ChatRoomEvent.deleted(10L, "Backend");
         when(chatRoomService.delete(10L, 1L)).thenReturn(event);
 
-        mockMvc.perform(delete("/chat-rooms/10"))
+        mockMvc.perform(delete("/api/chat-rooms/10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -649,7 +649,7 @@ class ChatRoomControllerTest {
                 InviteLinkExpiration.ONE_DAY
         )).thenReturn(response);
 
-        mockMvc.perform(post("/chat-rooms/10/invite-links")
+        mockMvc.perform(post("/api/chat-rooms/10/invite-links")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expiration\":\"ONE_DAY\"}"))
                 .andExpect(status().isOk())
@@ -667,7 +667,7 @@ class ChatRoomControllerTest {
 
     @Test
     void createInviteLinkRejectsMissingExpiration() throws Exception {
-        mockMvc.perform(post("/chat-rooms/10/invite-links")
+        mockMvc.perform(post("/api/chat-rooms/10/invite-links")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -690,7 +690,7 @@ class ChatRoomControllerTest {
         when(chatRoomInviteService.getLink(10L, 1L))
                 .thenReturn(response);
 
-        mockMvc.perform(get("/chat-rooms/10/invite-links"))
+        mockMvc.perform(get("/api/chat-rooms/10/invite-links"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.roomId").value(10L))
@@ -719,7 +719,7 @@ class ChatRoomControllerTest {
                 .thenReturn(event);
 
         mockMvc.perform(post(
-                        "/chat-rooms/invite-links/invite-token/join"
+                        "/api/chat-rooms/invite-links/invite-token/join"
                 ))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -732,7 +732,7 @@ class ChatRoomControllerTest {
 
     @Test
     void deleteInviteLinkReturnsSuccess() throws Exception {
-        mockMvc.perform(delete("/chat-rooms/10/invite-links"))
+        mockMvc.perform(delete("/api/chat-rooms/10/invite-links"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
@@ -753,7 +753,7 @@ class ChatRoomControllerTest {
                 InviteLinkExpiration.THREE_DAYS
         )).thenReturn(response);
 
-        mockMvc.perform(post("/chat-rooms/10/invite-links/reissue")
+        mockMvc.perform(post("/api/chat-rooms/10/invite-links/reissue")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expiration\":\"THREE_DAYS\"}"))
                 .andExpect(status().isOk())
@@ -773,7 +773,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.findDirectChatRoom(1L, 2L))
                 .thenReturn(DirectChatRoomResponse.found(10L));
 
-        mockMvc.perform(get("/chat-rooms/direct")
+        mockMvc.perform(get("/api/chat-rooms/direct")
                         .param("targetMemberId", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -788,7 +788,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.findDirectChatRoom(1L, 2L))
                 .thenReturn(DirectChatRoomResponse.notFound());
 
-        mockMvc.perform(get("/chat-rooms/direct")
+        mockMvc.perform(get("/api/chat-rooms/direct")
                         .param("targetMemberId", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -800,7 +800,7 @@ class ChatRoomControllerTest {
     @Test
     void findDirectChatRoomRejectsMissingTargetMemberId()
             throws Exception {
-        mockMvc.perform(get("/chat-rooms/direct"))
+        mockMvc.perform(get("/api/chat-rooms/direct"))
                 .andExpect(status().isBadRequest());
 
         verify(chatRoomService, never()).findDirectChatRoom(
@@ -827,7 +827,7 @@ class ChatRoomControllerTest {
         when(chatRoomService.sendDirectMessage(1L, 2L, "hello"))
                 .thenReturn(response);
 
-        mockMvc.perform(post("/chat-rooms/direct/message")
+        mockMvc.perform(post("/api/chat-rooms/direct/message")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -851,7 +851,7 @@ class ChatRoomControllerTest {
 
     @Test
     void sendDirectMessageRejectsBlankContent() throws Exception {
-        mockMvc.perform(post("/chat-rooms/direct/message")
+        mockMvc.perform(post("/api/chat-rooms/direct/message")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -870,7 +870,7 @@ class ChatRoomControllerTest {
 
     @Test
     void reportMessageReturnsCreatedAndDelegatesAuthenticatedMember() throws Exception {
-        mockMvc.perform(post("/chat-rooms/10/messages/100/reports")
+        mockMvc.perform(post("/api/chat-rooms/10/messages/100/reports")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -895,7 +895,7 @@ class ChatRoomControllerTest {
 
     @Test
     void reportMessageRejectsMissingReason() throws Exception {
-        mockMvc.perform(post("/chat-rooms/10/messages/100/reports")
+        mockMvc.perform(post("/api/chat-rooms/10/messages/100/reports")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"detail\":\"신고 설명\"}"))
                 .andExpect(status().isBadRequest())
@@ -914,7 +914,7 @@ class ChatRoomControllerTest {
             throws Exception {
         String detail = "a".repeat(501);
 
-        mockMvc.perform(post("/chat-rooms/10/messages/100/reports")
+        mockMvc.perform(post("/api/chat-rooms/10/messages/100/reports")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -935,7 +935,7 @@ class ChatRoomControllerTest {
 
     @Test
     void reportMessageAcceptsBlankDetail() throws Exception {
-        mockMvc.perform(post("/chat-rooms/10/messages/100/reports")
+        mockMvc.perform(post("/api/chat-rooms/10/messages/100/reports")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

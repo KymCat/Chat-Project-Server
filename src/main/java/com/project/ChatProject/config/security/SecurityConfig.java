@@ -46,11 +46,11 @@ public class SecurityConfig {
                         authorize
                                 .requestMatchers(
                                         HttpMethod.POST,
-                                        "/member/signup",
-                                        "/auth/login",
-                                        "/auth/reissue",
-                                        "/auth/oauth/exchange",
-                                        "/auth/reauthentication/social/exchange"
+                                        "/api/member/signup",
+                                        "/api/auth/login",
+                                        "/api/auth/reissue",
+                                        "/api/auth/oauth/exchange",
+                                        "/api/auth/reauthentication/social/exchange"
                                 ).permitAll()
 
                                 .requestMatchers(

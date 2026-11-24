@@ -77,7 +77,7 @@ class AttachmentControllerTest {
         when(attachmentService.upload(10L, file, 1L))
                 .thenReturn(response);
 
-        mockMvc.perform(multipart("/chat-rooms/10/attachments")
+        mockMvc.perform(multipart("/api/chat-rooms/10/attachments")
                         .file(file))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
@@ -94,7 +94,7 @@ class AttachmentControllerTest {
 
     @Test
     void uploadRejectsRequestWithoutFilePart() throws Exception {
-        mockMvc.perform(multipart("/chat-rooms/10/attachments"))
+        mockMvc.perform(multipart("/api/chat-rooms/10/attachments"))
                 .andExpect(status().isBadRequest());
 
         verify(attachmentService, never()).upload(
@@ -106,7 +106,7 @@ class AttachmentControllerTest {
 
     @Test
     void uploadRejectsNonMultipartRequest() throws Exception {
-        mockMvc.perform(post("/chat-rooms/10/attachments")
+        mockMvc.perform(post("/api/chat-rooms/10/attachments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isUnsupportedMediaType());
@@ -130,7 +130,7 @@ class AttachmentControllerTest {
         when(attachmentService.download(10L, 100L, 1L))
                 .thenReturn(result);
 
-        mockMvc.perform(get("/chat-rooms/10/attachments/100"))
+        mockMvc.perform(get("/api/chat-rooms/10/attachments/100"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.IMAGE_PNG))
                 .andExpect(content().bytes(content))
@@ -158,7 +158,7 @@ class AttachmentControllerTest {
         when(attachmentService.download(10L, 100L, 1L))
                 .thenReturn(result);
 
-        mockMvc.perform(get("/chat-rooms/10/attachments/100"))
+        mockMvc.perform(get("/api/chat-rooms/10/attachments/100"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_PDF))
                 .andExpect(content().bytes(content))

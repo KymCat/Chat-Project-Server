@@ -76,9 +76,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return false;
         }
 
-        return uri.equals("/member/signup")
-                || uri.equals("/auth/login")
-                || uri.equals("/auth/reissue");
+        return uri.equals("/api/member/signup")
+                || uri.equals("/api/auth/login")
+                || uri.equals("/api/auth/reissue");
     }
 
     private String resolveAccessToken(HttpServletRequest request) {
