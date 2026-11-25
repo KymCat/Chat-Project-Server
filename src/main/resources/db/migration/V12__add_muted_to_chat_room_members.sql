@@ -1,0 +1,2 @@
+ALTER TABLE chat_room_members
+    ADD COLUMN muted BOOLEAN NOT NULL DEFAULT FALSE;
