@@ -156,7 +156,7 @@ public class ChatRoomParticipationService {
             Set<ChatRoomType> allowedTypes
     ) {
         ChatRoom chatRoom = switch (lockMode) {
-            case CHAT_ROOM -> findChatRoomLock(roomId);
+            case CHAT_ROOM, CHAT_ROOM_AND_MEMBER -> findChatRoomLock(roomId);
             case CHAT_ROOM_MEMBER, NONE -> findChatRoom(roomId);
         };
 
@@ -166,7 +166,7 @@ public class ChatRoomParticipationService {
         validateMember(member);
 
         ChatRoomMember chatRoomMember = switch (lockMode) {
-            case CHAT_ROOM_MEMBER ->
+            case CHAT_ROOM_MEMBER, CHAT_ROOM_AND_MEMBER ->
                     findChatRoomMemberForUpdate(roomId, memberId);
             case CHAT_ROOM, NONE ->
                     findChatRoomMember(roomId, memberId);

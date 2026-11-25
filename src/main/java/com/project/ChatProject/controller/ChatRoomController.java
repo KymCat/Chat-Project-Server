@@ -434,4 +434,21 @@ public class ChatRoomController {
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(null));
     }
+
+    @PatchMapping("/{roomId}/notification-settings")
+    public ResponseEntity<ApiResponse<Void>> muteSetting(
+            @PathVariable Long roomId,
+            @RequestBody @Valid MuteRequest request,
+            @AuthenticationPrincipal AccessTokenClaims claims
+    ) {
+        Long memberId = claims.memberId();
+        chatRoomService.muteSetting(
+                roomId,
+                request,
+                memberId
+        );
+
+        return ResponseEntity
+                .ok(ApiResponse.success(null));
+    }
 }

@@ -13,6 +13,7 @@ public record ChatRoomResponse(
         String name,
         ChatRoomMemberRole role,
         Instant lastMessageAt,
+        Boolean muted,
         long unreadCount
 ) {
     public static ChatRoomResponse of(
@@ -27,6 +28,7 @@ public record ChatRoomResponse(
                 chatRoom.getName(),
                 chatRoomMember.getRole(),
                 chatRoom.getLastMessageAt(),
+                chatRoomMember.getMuted(),
                 unreadCount
         );
 
@@ -45,6 +47,7 @@ public record ChatRoomResponse(
                 displayName,
                 chatRoomMember.getRole(),
                 chatRoom.getLastMessageAt(),
+                chatRoomMember.getMuted(),
                 unreadCount
         );
 

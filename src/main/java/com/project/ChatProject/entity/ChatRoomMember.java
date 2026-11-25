@@ -59,6 +59,9 @@ public class ChatRoomMember {
     @Column(name = "left_at")
     private Instant leftAt;
 
+    @Column(name = "muted", nullable = false)
+    private Boolean muted;
+
     private ChatRoomMember(
             ChatRoom chatRoom,
             Member owner,
@@ -71,6 +74,7 @@ public class ChatRoomMember {
         this.lastReadMessage = null;
         this.joinedAt = Instant.now();
         this.leftAt = null;
+        this.muted = false;
     }
 
     public static ChatRoomMember create(ChatRoom chatRoom, Member owner) {
@@ -114,5 +118,9 @@ public class ChatRoomMember {
     public void transferOwnershipTo(ChatRoomMember newOwner) {
         this.role = ChatRoomMemberRole.MEMBER;
         newOwner.role = ChatRoomMemberRole.OWNER;
+    }
+
+    public void editMuted(boolean muted) {
+        this.muted = muted;
     }
 }

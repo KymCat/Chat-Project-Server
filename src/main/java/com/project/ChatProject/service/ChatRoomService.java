@@ -4,6 +4,7 @@ import com.project.ChatProject.dto.event.ChatMessageEvent;
 import com.project.ChatProject.dto.event.ChatRoomEvent;
 import com.project.ChatProject.dto.projection.ChatRoomUnreadCountProjection;
 import com.project.ChatProject.dto.projection.DirectChatRoomDisplayNameProjection;
+import com.project.ChatProject.dto.request.MuteRequest;
 import com.project.ChatProject.dto.response.*;
 import com.project.ChatProject.dto.result.ChatRoomNameUpdateResult;
 import com.project.ChatProject.entity.*;
@@ -224,7 +225,7 @@ public class ChatRoomService {
                 .requireConversationParticipation(
                         roomId,
                         memberId,
-                        ParticipationLockMode.CHAT_ROOM
+                        ParticipationLockMode.CHAT_ROOM_AND_MEMBER
                 );
 
         ChatRoom chatRoom = context.chatRoom();
@@ -232,24 +233,7 @@ public class ChatRoomService {
         ChatRoomMember chatRoomMember = context.chatRoomMember();
 
         if (chatRoom.getType() == ChatRoomType.DIRECT) {
-            ChatRoomMember lockedMember = chatRoomMemberRepository
-                    .findByChatRoomIdAndMemberIdForUpdate(
-                            roomId,
-                            memberId
-                    )
-                    .orElseThrow(() ->
-                            new CustomException(
-                                    ErrorCode.CHAT_ROOM_ACCESS_DENIED
-                            )
-                    );
-
-            if (!lockedMember.isParticipating()) {
-                throw new CustomException(
-                        ErrorCode.CHAT_ROOM_ACCESS_DENIED
-                );
-            }
-
-            lockedMember.leave();
+            chatRoomMember.leave();
             return Optional.empty();
         }
 
@@ -305,8 +289,8 @@ public class ChatRoomService {
     public ChatMessageEvent transferOwnership(
             Long roomId,
             Long memberId,
-            Long newOwnerMemberId)
-    {
+            Long newOwnerMemberId
+    ) {
         if (memberId.equals(newOwnerMemberId))
             throw new CustomException(
                     ErrorCode.INVALID_OWNER_TRANSFER_TARGET
@@ -316,7 +300,7 @@ public class ChatRoomService {
                 .requireParticipation(
                         roomId,
                         memberId,
-                        ParticipationLockMode.CHAT_ROOM
+                        ParticipationLockMode.CHAT_ROOM_AND_MEMBER
                 );
 
         if (myContext.chatRoomMember().getRole()
@@ -330,7 +314,7 @@ public class ChatRoomService {
                 .requireParticipation(
                         roomId,
                         newOwnerMemberId,
-                        ParticipationLockMode.NONE
+                        ParticipationLockMode.CHAT_ROOM_MEMBER
                 );
 
         // 방장 위임
@@ -699,6 +683,24 @@ public class ChatRoomService {
                 ChatMessageResponse.from(message)
         );
     }
+
+    @Transactional
+    public void muteSetting(
+            Long roomId,
+            MuteRequest request,
+            Long memberId
+    ) {
+
+        ChatRoomParticipationContext context = participation
+                .requireConversationParticipation(
+                        roomId,
+                        memberId,
+                        ParticipationLockMode.CHAT_ROOM_MEMBER
+                );
+
+        context.chatRoomMember().editMuted(request.muted());
+    }
+
     // === Private Method ===
 
     private String resolveDirectDisplayName(
