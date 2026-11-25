@@ -802,7 +802,7 @@ class ChatRoomServiceTest {
         ChatRoom chatRoom = chatRoom();
         ChatRoomMember roomMember = ChatRoomMember.createMember(chatRoom, member);
 
-        stubLockedMessageAccess(member, chatRoom, roomMember);
+        stubLockedRoomAndMembership(member, chatRoom, roomMember);
         stubSavedMessage(createdAt);
 
         ChatMessageEvent event = chatRoomService.leave(10L, 1L)
@@ -839,16 +839,7 @@ class ChatRoomServiceTest {
         ChatRoomMember roomMember =
                 ChatRoomMember.createMember(directRoom, member);
 
-        when(chatRoomRepository.findByIdForUpdate(10L))
-                .thenReturn(Optional.of(directRoom));
-        when(memberRepository.findById(1L))
-                .thenReturn(Optional.of(member));
-        when(chatRoomMemberRepository
-                .findByChatRoomIdAndMemberId(10L, 1L))
-                .thenReturn(Optional.of(roomMember));
-        when(chatRoomMemberRepository
-                .findByChatRoomIdAndMemberIdForUpdate(10L, 1L))
-                .thenReturn(Optional.of(roomMember));
+        stubLockedRoomAndMembership(member, directRoom, roomMember);
 
         Optional<ChatMessageEvent> result =
                 chatRoomService.leave(10L, 1L);
@@ -864,7 +855,7 @@ class ChatRoomServiceTest {
         ChatRoom chatRoom = chatRoom();
         ChatRoomMember owner = ChatRoomMember.create(chatRoom, member);
 
-        stubLockedMessageAccess(member, chatRoom, owner);
+        stubLockedRoomAndMembership(member, chatRoom, owner);
 
         assertThatThrownBy(() -> chatRoomService.leave(10L, 1L))
                 .isInstanceOfSatisfying(
@@ -884,7 +875,7 @@ class ChatRoomServiceTest {
         ChatRoomMember formerMember = ChatRoomMember.createMember(chatRoom, member);
         ReflectionTestUtils.setField(formerMember, "leftAt", Instant.now());
 
-        stubLockedMessageAccess(member, chatRoom, formerMember);
+        stubLockedRoomAndMembership(member, chatRoom, formerMember);
 
         assertThatThrownBy(() -> chatRoomService.leave(10L, 1L))
                 .isInstanceOfSatisfying(
@@ -919,9 +910,9 @@ class ChatRoomServiceTest {
                 .thenReturn(Optional.of(ownerMember));
         when(memberRepository.findById(2L))
                 .thenReturn(Optional.of(newOwnerMember));
-        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberIdForUpdate(10L, 1L))
                 .thenReturn(Optional.of(owner));
-        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 2L))
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberIdForUpdate(10L, 2L))
                 .thenReturn(Optional.of(newOwner));
         stubSavedMessage(createdAt);
 
@@ -982,7 +973,7 @@ class ChatRoomServiceTest {
                 .thenReturn(Optional.of(chatRoom));
         when(memberRepository.findById(1L))
                 .thenReturn(Optional.of(requester));
-        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberIdForUpdate(10L, 1L))
                 .thenReturn(Optional.of(requesterParticipation));
 
         assertThatThrownBy(() ->
@@ -998,7 +989,7 @@ class ChatRoomServiceTest {
                 .isEqualTo(ChatRoomMemberRole.MEMBER);
         verify(memberRepository, never()).findById(2L);
         verify(chatRoomMemberRepository, never())
-                .findByChatRoomIdAndMemberId(10L, 2L);
+                .findByChatRoomIdAndMemberIdForUpdate(10L, 2L);
         verify(chatMessageRepository, never()).save(any(ChatMessage.class));
     }
 
@@ -1025,9 +1016,9 @@ class ChatRoomServiceTest {
                 .thenReturn(Optional.of(ownerMember));
         when(memberRepository.findById(2L))
                 .thenReturn(Optional.of(targetMember));
-        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberIdForUpdate(10L, 1L))
                 .thenReturn(Optional.of(owner));
-        when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 2L))
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberIdForUpdate(10L, 2L))
                 .thenReturn(Optional.of(formerMember));
 
         assertThatThrownBy(() ->
@@ -2031,6 +2022,19 @@ class ChatRoomServiceTest {
         when(memberRepository.findById(1L))
                 .thenReturn(Optional.of(member));
         when(chatRoomMemberRepository.findByChatRoomIdAndMemberId(10L, 1L))
+                .thenReturn(Optional.of(roomMember));
+    }
+
+    private void stubLockedRoomAndMembership(
+            Member member,
+            ChatRoom chatRoom,
+            ChatRoomMember roomMember
+    ) {
+        when(chatRoomRepository.findByIdForUpdate(10L))
+                .thenReturn(Optional.of(chatRoom));
+        when(memberRepository.findById(1L))
+                .thenReturn(Optional.of(member));
+        when(chatRoomMemberRepository.findByChatRoomIdAndMemberIdForUpdate(10L, 1L))
                 .thenReturn(Optional.of(roomMember));
     }
 
