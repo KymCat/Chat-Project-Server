@@ -2,6 +2,7 @@ package com.project.ChatProject.service;
 
 import com.project.ChatProject.dto.enums.ReauthenticationPurpose;
 import com.project.ChatProject.dto.request.LoginRequest;
+import com.project.ChatProject.dto.response.DesktopOAuthStartResponse;
 import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.entity.Member;
@@ -14,6 +15,7 @@ import com.project.ChatProject.jwt.AccessTokenBlacklistStore;
 import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
+import com.project.ChatProject.oauth.DesktopOAuthAttemptStore;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
 import com.project.ChatProject.oauth.SocialUserProfile;
 import com.project.ChatProject.reauth.ReauthenticationTokenStore;
@@ -48,6 +50,7 @@ public class AuthService {
     private final ReauthenticationTokenStore reauthenticationTokenStore;
     private final SocialReauthenticationAttemptStore socialReauthenticationAttemptStore;
     private final SocialReauthenticationCodeStore socialReauthenticationCodeStore;
+    private final DesktopOAuthAttemptStore desktopOAuthAttemptStore;
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
@@ -303,6 +306,15 @@ public class AuthService {
                         )
                 );
     }
+
+    // Electron social login attemptId response
+    public DesktopOAuthStartResponse startDesktopOAuth(String codeChallenge) {
+        String attemptId = desktopOAuthAttemptStore.create(codeChallenge);
+
+        return DesktopOAuthStartResponse.create(attemptId);
+    }
+
+    // === Private Method ===
 
     private void validateSocialReauthenticationProfile(
             SocialReauthenticationAttempt attempt,

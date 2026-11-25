@@ -50,7 +50,8 @@ public class SecurityConfig {
                                         "/api/auth/login",
                                         "/api/auth/reissue",
                                         "/api/auth/oauth/exchange",
-                                        "/api/auth/reauthentication/social/exchange"
+                                        "/api/auth/reauthentication/social/exchange",
+                                        "/api/auth/desktop/oauth/start"
                                 ).permitAll()
 
                                 .requestMatchers(

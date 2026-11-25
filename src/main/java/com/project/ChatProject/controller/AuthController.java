@@ -1,13 +1,9 @@
 package com.project.ChatProject.controller;
 
 import com.project.ChatProject.config.security.AuthCookieFactory;
-import com.project.ChatProject.dto.request.EmailVerificationConfirmRequest;
-import com.project.ChatProject.dto.request.LoginRequest;
-import com.project.ChatProject.dto.request.OAuthLoginCodeExchangeRequest;
-import com.project.ChatProject.dto.request.ReauthenticationPasswordRequest;
-import com.project.ChatProject.dto.request.SocialReauthenticationStartRequest;
-import com.project.ChatProject.dto.request.SocialReauthenticationCodeExchangeRequest;
+import com.project.ChatProject.dto.request.*;
 import com.project.ChatProject.dto.response.ApiResponse;
+import com.project.ChatProject.dto.response.DesktopOAuthStartResponse;
 import com.project.ChatProject.dto.response.ReauthenticationMethodResponse;
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.dto.websocket.AuthWebSocketEvent;
@@ -235,5 +231,16 @@ public class AuthController {
         return ResponseEntity.ok(
                 ApiResponse.success(reauthenticationToken)
         );
+    }
+
+    @PostMapping("/desktop/oauth/start")
+    public ResponseEntity<ApiResponse<DesktopOAuthStartResponse>> startDesktopOAuth(
+            @RequestBody @Valid DesktopOAuthStartRequest request
+    ) {
+        DesktopOAuthStartResponse response =
+                authService.startDesktopOAuth(request.codeChallenge());
+
+        return ResponseEntity
+                .ok(ApiResponse.success(response));
     }
 }
