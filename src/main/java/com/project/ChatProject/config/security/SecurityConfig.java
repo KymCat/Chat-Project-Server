@@ -22,6 +22,8 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final OAuth2LoginSuccessHandler oauth2LoginSuccessHandler;
     private final OAuth2LoginFailureHandler oauth2LoginFailureHandler;
+    private final DesktopOAuthAuthorizationRequestRepository
+            desktopOAuthAuthorizationRequestRepository;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -62,10 +64,14 @@ public class SecurityConfig {
                                 .anyRequest().authenticated()
                 )
 
-                .oauth2Login(oauth2 ->
-                        oauth2
-                                .successHandler(oauth2LoginSuccessHandler)
-                                .failureHandler(oauth2LoginFailureHandler)
+                .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(endpoint -> endpoint
+                                .authorizationRequestRepository(
+                                        desktopOAuthAuthorizationRequestRepository
+                                )
+                        )
+                        .successHandler(oauth2LoginSuccessHandler)
+                        .failureHandler(oauth2LoginFailureHandler)
                 )
 
                 .addFilterBefore(
