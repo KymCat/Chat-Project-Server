@@ -53,7 +53,8 @@ public class SecurityConfig {
                                         "/api/auth/reissue",
                                         "/api/auth/oauth/exchange",
                                         "/api/auth/reauthentication/social/exchange",
-                                        "/api/auth/desktop/oauth/start"
+                                        "/api/auth/desktop/oauth/start",
+                                        "/api/auth/desktop/oauth/exchange"
                                 ).permitAll()
 
                                 .requestMatchers(

@@ -243,4 +243,27 @@ public class AuthController {
         return ResponseEntity
                 .ok(ApiResponse.success(response));
     }
+
+    @PostMapping("/desktop/oauth/exchange")
+    public ResponseEntity<ApiResponse<String>> exchangeDesktopOAuthCode(
+            @RequestBody @Valid DesktopOAuthExchangeRequest request
+    ) {
+        TokenResponse response =
+                authService.exchangeDesktopOAuthCode(
+                        request.code(),
+                        request.codeVerifier()
+                );
+
+        String accessToken = response.accessToken();
+        String sessionIdCookie =
+                authCookieFactory.createSessionIdCookie(response.sessionId());
+        String refreshTokenCookie =
+                authCookieFactory.createRefreshTokenCookie(response.refreshToken());
+
+        return ResponseEntity
+                .ok()
+                .header(HttpHeaders.SET_COOKIE, sessionIdCookie)
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookie)
+                .body(ApiResponse.success(accessToken));
+    }
 }

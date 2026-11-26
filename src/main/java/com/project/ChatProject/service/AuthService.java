@@ -16,6 +16,7 @@ import com.project.ChatProject.jwt.AccessTokenClaims;
 import com.project.ChatProject.jwt.refresh.RefreshTokenSession;
 import com.project.ChatProject.jwt.refresh.RefreshTokenStore;
 import com.project.ChatProject.oauth.DesktopOAuthAttemptStore;
+import com.project.ChatProject.oauth.DesktopOAuthCodeStore;
 import com.project.ChatProject.oauth.OAuthLoginCodeStore;
 import com.project.ChatProject.oauth.SocialUserProfile;
 import com.project.ChatProject.reauth.ReauthenticationTokenStore;
@@ -31,7 +32,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -51,6 +56,7 @@ public class AuthService {
     private final SocialReauthenticationAttemptStore socialReauthenticationAttemptStore;
     private final SocialReauthenticationCodeStore socialReauthenticationCodeStore;
     private final DesktopOAuthAttemptStore desktopOAuthAttemptStore;
+    private final DesktopOAuthCodeStore desktopOAuthCodeStore;
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
@@ -314,7 +320,44 @@ public class AuthService {
         return DesktopOAuthStartResponse.create(attemptId);
     }
 
+    public TokenResponse exchangeDesktopOAuthCode(
+            String code,
+            String codeVerifier
+    ) {
+        String codeChallenge = toCodeChallenge(codeVerifier);
+
+        Long memberId = desktopOAuthCodeStore.consume(code, codeChallenge)
+                .orElseThrow(() ->
+                        new CustomException(ErrorCode.INVALID_OAUTH_LOGIN_CODE)
+                );
+
+        Member member = memberRepository
+                .findById(memberId)
+                .orElseThrow(() ->
+                        new CustomException(
+                                ErrorCode.MEMBER_NOT_FOUND
+                        )
+                );
+
+        isMemberSuspendOrWithdrawn(member);
+
+        return authTokenService.create(member);
+    }
+
     // === Private Method ===
+
+    private String toCodeChallenge(String codeVerifier) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256")
+                    .digest(codeVerifier.getBytes(StandardCharsets.US_ASCII));
+
+            return Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", e);
+        }
+    }
 
     private void validateSocialReauthenticationProfile(
             SocialReauthenticationAttempt attempt,
