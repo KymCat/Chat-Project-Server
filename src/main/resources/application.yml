@@ -98,3 +98,4 @@ chat:
             cron: "0 * * * * *"
 oauth2:
     frontend-callback-uri: ${OAUTH2_FRONTEND_CALLBACK_URI}
+    desktop-callback-uri: ${OAUTH2_DESKTOP_CALLBACK_URI}

@@ -2,9 +2,7 @@ package com.project.ChatProject.config.security;
 
 import com.project.ChatProject.dto.response.TokenResponse;
 import com.project.ChatProject.entity.Member;
-import com.project.ChatProject.oauth.GoogleOidcProfileMapper;
-import com.project.ChatProject.oauth.OAuthLoginCodeStore;
-import com.project.ChatProject.oauth.SocialUserProfile;
+import com.project.ChatProject.oauth.*;
 import com.project.ChatProject.service.AuthTokenService;
 import com.project.ChatProject.service.AuthService;
 import com.project.ChatProject.service.MemberService;
@@ -39,9 +37,14 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private final AuthCookieFactory authCookieFactory;
     private final MemberService memberService;
     private final AuthService authService;
+    private final DesktopOAuthAttemptStore desktopOAuthAttemptStore;
+    private final DesktopOAuthCodeStore desktopOAuthCodeStore;
 
     @Value("${oauth2.frontend-callback-uri}")
     private String frontendCallbackUri;
+
+    @Value("${oauth2.desktop-callback-uri}")
+    private String desktopCallbackUri;
 
     @Override
     public void onAuthenticationSuccess(
@@ -57,6 +60,16 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         OidcUser oidcUser = (OidcUser) oauthToken.getPrincipal();
 
         SocialUserProfile profile = switchProfile(oidcUser, registerId);
+
+        String desktopAttemptId = (String) request.getAttribute(
+                DesktopOAuthAuthorizationRequestRepository
+                        .DESKTOP_ATTEMPT_ATTRIBUTE
+        );
+
+        if (desktopAttemptId != null) {
+            handleDesktopLogin(response, profile, desktopAttemptId);
+            return;
+        }
 
         if (handleSocialReauthentication(
                 request,
@@ -105,6 +118,44 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     }
 
     // === private method ===
+
+    private void handleDesktopLogin(
+            HttpServletResponse response,
+            SocialUserProfile profile,
+            String attemptId
+    ) throws IOException {
+
+        String codeChallenge = desktopOAuthAttemptStore
+                .consume(attemptId)
+                .orElse(null);
+
+        if (codeChallenge == null) {
+            response.sendError(
+                    HttpServletResponse.SC_BAD_REQUEST,
+                    "데스크톱 로그인 요청이 만료되었거나 이미 사용되었습니다."
+            );
+            return;
+        }
+
+        Member member = socialLoginService.login(profile);
+        initializeSocialProfileImage(member, profile);
+
+        String code = desktopOAuthCodeStore.create(
+                member.getId(),
+                codeChallenge
+        );
+
+        String redirectUri = UriComponentsBuilder
+                .fromUriString(desktopCallbackUri)
+                .queryParam("code", code)
+                .build()
+                .encode()
+                .toUriString();
+
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+        response.setHeader("Referrer-Policy", "no-referrer");
+        response.sendRedirect(redirectUri);
+    }
 
     private boolean handleSocialReauthentication(
             HttpServletRequest request,
